@@ -386,6 +386,12 @@ class FileUtils {
     FindClose(hFind);
 #endif
   }
+
+  static std::string concat_path(const std::string& root, const std::string& child) {
+    std::stringstream new_path;
+    new_path << root << get_separator() << child;
+    return new_path.str();
+  }
 };
 
 } /* namespace file */
