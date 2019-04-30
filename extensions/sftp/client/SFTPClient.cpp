@@ -231,26 +231,41 @@ bool SFTPClient::connect() {
     size_t hostkey_len = 0U;
     int type = LIBSSH2_HOSTKEY_TYPE_UNKNOWN;
     const char *hostkey = libssh2_session_hostkey(ssh_session_, &hostkey_len, &type);
-    int keybit = type == LIBSSH2_HOSTKEY_TYPE_RSA ? LIBSSH2_KNOWNHOST_KEY_SSHRSA : LIBSSH2_KNOWNHOST_KEY_SSHDSS;
+    if (hostkey == nullptr) {
+      // TODO
+    }
+    int keybit = 0;
+    switch (type) {
+      case LIBSSH2_HOSTKEY_TYPE_RSA:
+        keybit = LIBSSH2_KNOWNHOST_KEY_SSHRSA;
+        break;
+      case LIBSSH2_HOSTKEY_TYPE_DSS:
+        keybit = LIBSSH2_KNOWNHOST_KEY_SSHDSS;
+        break;
+      default:
+        keybit = LIBSSH2_KNOWNHOST_KEY_UNKNOWN;
+        break;
+    }
     int keycheck_result = libssh2_knownhost_checkp(ssh_known_hosts_,
                             hostname_.c_str(),
-                            -1 /* port */,
+                            -1 /*port*/,
                             hostkey, hostkey_len,
-                            LIBSSH2_KNOWNHOST_TYPE_PLAIN|
-                            LIBSSH2_KNOWNHOST_KEYENC_RAW|
+                            LIBSSH2_KNOWNHOST_TYPE_PLAIN |
+                            LIBSSH2_KNOWNHOST_KEYENC_RAW |
                             keybit,
                             nullptr /*host*/);
     switch (keycheck_result) {
       case LIBSSH2_KNOWNHOST_CHECK_FAILURE:
       case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND:
       case LIBSSH2_KNOWNHOST_CHECK_MISMATCH:
-        logger_->log_warn("Host key verification failed: %d", keycheck_result); // TODO
+        logger_->log_warn("Host key verification failed for %s: %d", hostname_.c_str(), keycheck_result); // TODO
         if (strict_host_checking_) {
           return false;
         } else {
         }
         break;
       case LIBSSH2_KNOWNHOST_CHECK_MATCH:
+        logger_->log_debug("Host key verification succeeded for %s", hostname_.c_str());
         break;
     }
   } else {

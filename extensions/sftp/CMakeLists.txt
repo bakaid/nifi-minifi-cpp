@@ -20,11 +20,9 @@
 find_package(CURL REQUIRED)
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
-#include_directories(protocols client processors sitetosite)
-include_directories(client)
+include_directories(client processors)
 
-#file(GLOB SOURCES  "*.cpp" "protocols/*.cpp" "client/*.cpp" "processors/*.cpp" "sitetosite/*.cpp")
-file(GLOB SOURCES  "*.cpp" "client/*.cpp")
+file(GLOB SOURCES  "*.cpp" "client/*.cpp" "processors/*.cpp")
 
 if (USE_CURL_NSS)
     message("Using NSS")
@@ -52,10 +50,6 @@ if (CURL_FOUND)
 	endif()
 endif ()
 
-# Include UUID
-find_package(UUID REQUIRED)
-#set(LINK_FLAGS ${LINK_FLAGS} "-Wl,-whole-archive")
-
 # Include OpenSSL
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
@@ -68,12 +62,12 @@ find_package(LibSSH2 REQUIRED)
 include_directories(${LIBSSH2_INCLUDE_DIR})
 target_link_libraries(minifi-sftp ${LIBSSH2_LIBRARY})
 
+# Include zlib
 find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
 target_link_libraries (minifi-sftp ${ZLIB_LIBRARIES})
+
 if (WIN32)
-
-
 message("${OPENSSL_LIBRARIES}")
 	set (WIN32_ARCHIVES "")
 		foreach(OPENSSL_LIB ${OPENSSL_LIBRARIES})
