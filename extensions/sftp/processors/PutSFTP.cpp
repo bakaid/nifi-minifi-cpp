@@ -29,6 +29,7 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -219,11 +220,244 @@ PutSFTP::~PutSFTP() {
 }
 
 void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
+  std::string value;
+  if (!context->getProperty(CreateDirectory.getName(), value)) {
+    logger_->log_error("Create Directory attribute is missing or invalid");
+  } else {
+    utils::StringUtils::StringToBool(value, create_directory_);
+  }
+  if (context->getProperty(DisableDirectoryListing.getName(), value)) {
+    utils::StringUtils::StringToBool(value, disable_directory_listing_);
+  }
+  if (!context->getProperty(BatchSize.getName(), value)) {
+    logger_->log_error("Batch Size attribute is missing or invalid");
+  } else {
+    core::Property::StringToInt(value, batch_size_);
+  }
+  if (!context->getProperty(ConnectionTimeout.getName(), value)) {
+    logger_->log_error("Connection Timeout attribute is missing or invalid");
+  } else {
+    core::TimeUnit unit;
+    if (!core::Property::StringToTime(value, connection_timeout_, unit) || !core::Property::ConvertTimeUnitToMS(connection_timeout_, unit, connection_timeout_)) {
+      logger_->log_error("Connection Timeout attribute is invalid");
+    }
+  }
+  if (!context->getProperty(DataTimeout.getName(), value)) {
+    logger_->log_error("Data Timeout attribute is missing or invalid");
+  } else {
+    core::TimeUnit unit;
+    if (!core::Property::StringToTime(value, data_timeout_, unit) || !core::Property::ConvertTimeUnitToMS(data_timeout_, unit, data_timeout_)) {
+      logger_->log_error("Data Timeout attribute is invalid");
+    }
+  }
+  context->getProperty(ConflictResolution.getName(), conflict_resolution_);
+  if (context->getProperty(RejectZeroByte.getName(), value)) {
+    utils::StringUtils::StringToBool(value, reject_zero_byte_);
+  }
+  if (context->getProperty(DotRename.getName(), value)) {
+    utils::StringUtils::StringToBool(value, dot_rename_);
+  }
+  context->getProperty(HostKeyFile.getName(), host_key_file_);
+  if (!context->getProperty(StrictHostKeyChecking.getName(), value)) {
+    logger_->log_error("Strict Host Key Checking attribute is missing or invalid");
+  } else {
+    core::Property::StringToInt(value, strict_host_checking_);
+  }
+  if (!context->getProperty(UseCompression.getName(), value)) {
+    logger_->log_error("Use Compression attribute is missing or invalid");
+  } else {
+    core::Property::StringToInt(value, use_compression_);
+  }
+  context->getProperty(ProxyType.getName(), proxy_type_);
 }
 
+PutSFTP::ReadCallback::ReadCallback(const std::string& target_path,
+                                    utils::SFTPClient& client,
+                                    const std::string& conflict_resolution)
+    : logger_(logging::LoggerFactory<PutSFTP::ReadCallback>::getLogger())
+    , write_succeeded_(false)
+    , target_path_(target_path)
+    , client_(client)
+    , conflict_resolution_(conflict_resolution) {
+}
+
+PutSFTP::ReadCallback::~ReadCallback() {
+}
+
+int64_t PutSFTP::ReadCallback::process(std::shared_ptr<io::BaseStream> stream) {
+  if (!client_.putFile(target_path_, *stream, conflict_resolution_ == "REPLACE" /*overwrite*/)) {
+    return -1;
+  }
+  write_succeeded_ = true;
+  return stream->getSize();
+}
+
+bool PutSFTP::ReadCallback::commit() {
+  return true;
+}
 
 void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-  std::shared_ptr<FlowFileRecord> flowFile = std::static_pointer_cast<FlowFileRecord>(session->get());
+  std::shared_ptr<FlowFileRecord> flow_file = std::static_pointer_cast<FlowFileRecord>(session->get());
+  if (flow_file == nullptr) {
+    return;
+  }
+  std::string filename;
+  flow_file->getKeyedAttribute(FILENAME, filename);
+
+  /* Parse possibly flowfile-dependent properties */
+  std::string hostname;
+  uint16_t port = 0U;
+  std::string username;
+  std::string password;
+  std::string private_key_path;
+  std::string private_key_passphrase;
+  std::string remote_path;
+  std::string temp_file_name;
+  int64_t last_modified_time = 0U;
+  uint32_t permissions = 0U;
+  uint64_t remote_owner = 0U;
+  uint64_t remote_group = 0U;
+  std::string proxy_host;
+  uint16_t proxy_port = 0U;
+  std::string proxy_username;
+  std::string proxy_password;
+
+  std::string value;
+  if (!context->getProperty(Hostname, hostname, flow_file)) {
+    logger_->log_error("Hostname attribute is missing");
+    context->yield();
+    return;
+  }
+  if (!context->getProperty(Port, value, flow_file)) {
+    logger_->log_error("Port attribute is missing or invalid");
+    context->yield();
+    return;
+  } else {
+    int port_tmp;
+    if (!core::Property::StringToInt(value, port_tmp) ||
+        port_tmp < std::numeric_limits<uint16_t>::min() ||
+        port_tmp > std::numeric_limits<uint16_t>::max()) {
+      logger_->log_error("Port attribute is invalid");
+      context->yield();
+    } else {
+      port = static_cast<uint16_t>(port_tmp);
+    }
+  }
+  if (!context->getProperty(Username, username, flow_file)) {
+    logger_->log_error("Username attribute is missing");
+    context->yield();
+    return;
+  }
+  context->getProperty(Password, password, flow_file);
+  context->getProperty(PrivateKeyPath, private_key_path, flow_file);
+  context->getProperty(PrivateKeyPassphrase, private_key_passphrase, flow_file);
+  context->getProperty(Password, password, flow_file);
+  context->getProperty(RemotePath, remote_path, flow_file);
+  context->getProperty(TempFilename, temp_file_name, flow_file);
+  if (context->getProperty(LastModifiedTime, value, flow_file)) {
+    // TODO: parse datetime and differentiate between not set and Unix epoch
+  }
+  if (context->getProperty(Permissions, value, flow_file)) {
+    // TODO: parse permissions and differentiate between not set and ---------
+  }
+  if (context->getProperty(RemoteOwner, value, flow_file)) {
+    // TODO: parse owner and differentiate between not set and root
+  }
+  if (context->getProperty(RemoteGroup, value, flow_file)) {
+    // TODO: parse owner and differentiate between not set and group 0
+  }
+  context->getProperty(ProxyHost, proxy_host, flow_file);
+  if (context->getProperty(ProxyPort, value, flow_file)) {
+    int port_tmp;
+    if (!core::Property::StringToInt(value, port_tmp) ||
+        port_tmp < std::numeric_limits<uint16_t>::min() ||
+        port_tmp > std::numeric_limits<uint16_t>::max()) {
+      logger_->log_error("Proxy Port attribute is invalid");
+      context->yield();
+    } else {
+      proxy_port = static_cast<uint16_t>(port_tmp);
+    }
+  }
+  context->getProperty(HttpProxyUsername, proxy_username, flow_file);
+  context->getProperty(HttpProxyPassword, proxy_password, flow_file);
+
+  /* Create and setup SFTPClient */
+  utils::SFTPClient client(hostname, port, username);
+  if (!IsNullOrEmpty(host_key_file_)) {
+    if (!client.setHostKeyFile(host_key_file_, strict_host_checking_)) {
+      logger_->log_error("Cannot set host key file");
+      context->yield();
+    }
+  }
+  if (!IsNullOrEmpty(password)) {
+    client.setPasswordAuthenticationCredentials(password);
+  }
+  if (!IsNullOrEmpty(private_key_path)) {
+    client.setPublicKeyAuthenticationCredentials(private_key_path, private_key_passphrase);
+  }
+  if (proxy_type_ != PROXY_TYPE_DIRECT) {
+    utils::HTTPProxy proxy;
+    proxy.host = proxy_host;
+    proxy.port = proxy_port;
+    proxy.username = proxy_username;
+    proxy.password = proxy_password;
+    if (!client.setProxy(proxy_type_ == PROXY_TYPE_HTTP ? utils::SFTPClient::ProxyType::Http : utils::SFTPClient::ProxyType::Socks, proxy)) {
+      logger_->log_error("Cannot set proxy");
+      context->yield();
+    }
+  }
+  if (!client.setConnectionTimeout(connection_timeout_)) {
+    logger_->log_error("Cannot set connection timeout");
+    context->yield();
+  }
+  client.setDataTimeout(data_timeout_);
+  if (!client.setSendKeepAlive(use_keepalive_on_timeout_)) {
+    logger_->log_error("Cannot set keepalive on timeout");
+    context->yield();
+  }
+  if (!client.setUseCompression(use_compression_)) {
+    logger_->log_error("Cannot set compression");
+    context->yield();
+  }
+
+  /* Connect to SFTP server */
+  if (!client.connect()) {
+    logger_->log_error("Cannot connect to SFTP server");
+    context->yield();
+  }
+
+  /* Create remote directory if needed */
+  bool should_create_directory = disable_directory_listing_;
+  if (!disable_directory_listing_) {
+    // TODO: stat or list the directory to see if it exists, set should_create_directory to true if it does not
+  }
+  if (should_create_directory) {
+    client.createDirectoryHierarchy(remote_path);
+    if (!disable_directory_listing_) {
+      // TODO: check whether the creation was successful
+    }
+  }
+
+  /* Upload file */
+  std::stringstream target_path;
+  target_path << remote_path << "/";
+  if (!IsNullOrEmpty(temp_file_name)) {
+    target_path << temp_file_name;
+  } else if (dot_rename_) {
+    target_path << "." << filename;
+  } else {
+    target_path << filename;
+  }
+  logger_->log_debug("The target path is %s", target_path.str().c_str());
+
+  ReadCallback read_callback(target_path.str(), client, conflict_resolution_);
+  session->read(flow_file, &read_callback);
+
+  if (read_callback.commit()) {
+    session->transfer(flow_file, Success);
+  } else {
+    session->transfer(flow_file, Failure);
+  }
 }
 
 } /* namespace processors */

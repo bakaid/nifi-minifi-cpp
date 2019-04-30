@@ -18,7 +18,6 @@
 #include "SFTPClient.h"
 #include <memory>
 #include <set>
-#include <cstring>
 #include <vector>
 #include <string>
 #include <exception>
@@ -26,6 +25,7 @@
 #include <iomanip>
 #include "utils/StringUtils.h"
 #include "utils/ScopeGuard.h"
+#include "utils/StringUtils.h"
 
 namespace org {
 namespace apache {
@@ -286,7 +286,7 @@ bool SFTPClient::connect() {
 
   /* Getting possible authentication methods */
   bool authenticated = false;
-  std::set <std::string> auth_methods;
+  std::set<std::string> auth_methods;
   char* userauthlist = libssh2_userauth_list(ssh_session_, username_.c_str(), strlen(username_.c_str()));
   if (userauthlist == nullptr) {
     if (libssh2_userauth_authenticated(ssh_session_) == 1) {
@@ -297,11 +297,8 @@ bool SFTPClient::connect() {
       return false;
     }
   } else {
-    char *method = strtok(userauthlist, ",");
-    while (method != nullptr) {
-      auth_methods.emplace(method);
-      method = strtok(nullptr, ",");
-    }
+    auto methods_split = utils::StringUtils::split(userauthlist, ",");
+    auth_methods.insert(std::make_move_iterator(methods_split.begin()), std::make_move_iterator(methods_split.end()));
   }
 
   /* Authenticating */
