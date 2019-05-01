@@ -113,6 +113,8 @@ class SFTPClient {
   bool listDirectory(const std::string& path, bool follow_symlinks,
       std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>>& children_result);
 
+  bool stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFTP_ATTRIBUTES& result);
+
  protected:
 
   std::shared_ptr<logging::Logger> logger_;

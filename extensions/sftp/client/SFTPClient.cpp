@@ -280,7 +280,7 @@ bool SFTPClient::connect() {
           fingerprint_hex << ":";
         }
       }
-      logger_->log_info("SHA1 host key fingerprint for %s is %s", uri.str().c_str(), fingerprint_hex.str().c_str());
+      logger_->log_debug("SHA1 host key fingerprint for %s is %s", uri.str().c_str(), fingerprint_hex.str().c_str());
     }
   }
 
@@ -439,31 +439,28 @@ bool SFTPClient::rename(const std::string& source_path, const std::string& targe
   return true;
 }
 
-// TODO: what if there is no ending /
 bool SFTPClient::createDirectoryHierarchy(const std::string& path) {
   if (path.empty() || path[0] != '/') {
     return false;
   }
-  size_t pos = 1U;
-  while ((pos = path.find('/', pos)) != std::string::npos) {
-    /* Skip //-s in path */
-    if (path[pos] == '/') {
-      pos++;
-      continue;
-    }
-    int res = libssh2_sftp_mkdir_ex(sftp_session_, path.c_str(), pos, 0755);
+  auto elements = utils::StringUtils::split(path, "/");
+  std::stringstream dir;
+  dir << "/";
+  for (const auto& element : elements) {
+    dir << "/" << element;
+    auto current_dir = dir.str();
+    int res = libssh2_sftp_mkdir_ex(sftp_session_, current_dir.c_str(), current_dir.length(), 0755);
     if (res < 0) {
       auto err = libssh2_sftp_last_error(sftp_session_);
       if (err != LIBSSH2_FX_FILE_ALREADY_EXISTS &&
           err != LIBSSH2_FX_FAILURE &&
           err != LIBSSH2_FX_PERMISSION_DENIED) {
-        logger_->log_error("Failed to create remote directory \"%s\", error: %s", path.substr(0, pos).c_str(), sftp_strerror(err));
+        logger_->log_error("Failed to create remote directory \"%s\", error: %s", current_dir.c_str(), sftp_strerror(err));
         return false;
       } else {
-        logger_->log_debug("Non-fatal failure to create remote directory \"%s\", error: %s", path.substr(0, pos).c_str(), sftp_strerror(err));
+        logger_->log_debug("Non-fatal failure to create remote directory \"%s\", error: %s", current_dir.c_str(), sftp_strerror(err));
       }
     }
-    pos++;
   }
   return true;
 }
@@ -516,8 +513,27 @@ bool SFTPClient::listDirectory(const std::string& path, bool follow_symlinks,
     } else if (ret == 0) {
       break;
     }
+    if (follow_symlinks && attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && LIBSSH2_SFTP_S_ISLNK(attrs.permissions)) {
+      auto orig_attrs = attrs;
+      if (!this->stat(path, true /*follow_symlinks*/, attrs)) {
+        logger_->log_debug("Failed to stat directory child \"%s/%s\", error: %s", path.c_str(), filename.data(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
+        attrs = orig_attrs;
+      }
+    }
     children_result.emplace_back(std::string(filename.data()), std::string(longentry.data()), std::move(attrs));
   } while (true);
+  return true;
+}
+
+bool SFTPClient::stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFTP_ATTRIBUTES& result) {
+  if (libssh2_sftp_stat_ex(sftp_session_,
+                            path.c_str(),
+                            path.length(),
+                            follow_symlinks ? LIBSSH2_SFTP_STAT : LIBSSH2_SFTP_LSTAT,
+                            &result) != 0) {
+    logger_->log_debug("Failed to stat remote path \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
+    return false;
+  }
   return true;
 }
 

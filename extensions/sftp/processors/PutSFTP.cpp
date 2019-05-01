@@ -313,9 +313,13 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   std::string private_key_passphrase;
   std::string remote_path;
   std::string temp_file_name;
+  bool last_modified_time_set = false;
   int64_t last_modified_time = 0U;
+  bool permissions_set = false;
   uint32_t permissions = 0U;
+  bool remote_owner_set = false;
   uint64_t remote_owner = 0U;
+  bool remote_group_set = false;
   uint64_t remote_group = 0U;
   std::string proxy_host;
   uint16_t proxy_port = 0U;
@@ -339,6 +343,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         port_tmp > std::numeric_limits<uint16_t>::max()) {
       logger_->log_error("Port attribute is invalid");
       context->yield();
+      return;
     } else {
       port = static_cast<uint16_t>(port_tmp);
     }
@@ -353,18 +358,29 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   context->getProperty(PrivateKeyPassphrase, private_key_passphrase, flow_file);
   context->getProperty(Password, password, flow_file);
   context->getProperty(RemotePath, remote_path, flow_file);
+  while (remote_path.size() > 1U && remote_path.back() == '/') {
+    remote_path.resize(remote_path.size() - 1);
+  }
   context->getProperty(TempFilename, temp_file_name, flow_file);
   if (context->getProperty(LastModifiedTime, value, flow_file)) {
-    // TODO: parse datetime and differentiate between not set and Unix epoch
+    if (core::Property::StringToDateTime(value, last_modified_time)) {
+      last_modified_time_set = true;
+    }
   }
   if (context->getProperty(Permissions, value, flow_file)) {
-    // TODO: parse permissions and differentiate between not set and ---------
+    if (core::Property::StringToPermissions(value, permissions)) {
+      permissions_set = true;
+    }
   }
   if (context->getProperty(RemoteOwner, value, flow_file)) {
-    // TODO: parse owner and differentiate between not set and root
+    if (core::Property::StringToInt(value, remote_owner)) {
+      remote_owner_set = true;
+    }
   }
   if (context->getProperty(RemoteGroup, value, flow_file)) {
-    // TODO: parse owner and differentiate between not set and group 0
+    if (core::Property::StringToInt(value, remote_group)) {
+      remote_group_set = true;
+    }
   }
   context->getProperty(ProxyHost, proxy_host, flow_file);
   if (context->getProperty(ProxyPort, value, flow_file)) {
@@ -374,6 +390,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         port_tmp > std::numeric_limits<uint16_t>::max()) {
       logger_->log_error("Proxy Port attribute is invalid");
       context->yield();
+      return;
     } else {
       proxy_port = static_cast<uint16_t>(port_tmp);
     }
@@ -387,6 +404,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     if (!client.setHostKeyFile(host_key_file_, strict_host_checking_)) {
       logger_->log_error("Cannot set host key file");
       context->yield();
+      return;
     }
   }
   if (!IsNullOrEmpty(password)) {
@@ -404,37 +422,63 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     if (!client.setProxy(proxy_type_ == PROXY_TYPE_HTTP ? utils::SFTPClient::ProxyType::Http : utils::SFTPClient::ProxyType::Socks, proxy)) {
       logger_->log_error("Cannot set proxy");
       context->yield();
+      return;
     }
   }
   if (!client.setConnectionTimeout(connection_timeout_)) {
     logger_->log_error("Cannot set connection timeout");
     context->yield();
+    return;
   }
   client.setDataTimeout(data_timeout_);
   if (!client.setSendKeepAlive(use_keepalive_on_timeout_)) {
     logger_->log_error("Cannot set keepalive on timeout");
     context->yield();
+    return;
   }
   if (!client.setUseCompression(use_compression_)) {
     logger_->log_error("Cannot set compression");
     context->yield();
+    return;
   }
 
   /* Connect to SFTP server */
   if (!client.connect()) {
     logger_->log_error("Cannot connect to SFTP server");
     context->yield();
+    return;
   }
 
   /* Create remote directory if needed */
   bool should_create_directory = disable_directory_listing_;
   if (!disable_directory_listing_) {
-    // TODO: stat or list the directory to see if it exists, set should_create_directory to true if it does not
+    LIBSSH2_SFTP_ATTRIBUTES attrs;
+    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs)) {
+      logger_->log_error("Cannot stat %s", remote_path.c_str());
+      should_create_directory = true;
+    } else {
+      if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+        logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
+        context->yield();
+        return;
+      }
+    }
   }
   if (should_create_directory) {
     client.createDirectoryHierarchy(remote_path);
     if (!disable_directory_listing_) {
-      // TODO: check whether the creation was successful
+      LIBSSH2_SFTP_ATTRIBUTES attrs;
+      if (!client.stat(remote_path, true /*follow_symlinks*/, attrs)) {
+        logger_->log_error("Could not create remote directory %s", remote_path.c_str());
+        context->yield();
+        return;
+      } else {
+        if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+          logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
+          context->yield();
+          return;
+        }
+      }
     }
   }
 
