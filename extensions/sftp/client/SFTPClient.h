@@ -113,7 +113,24 @@ class SFTPClient {
   bool listDirectory(const std::string& path, bool follow_symlinks,
       std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>>& children_result);
 
-  bool stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFTP_ATTRIBUTES& result);
+  bool stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFTP_ATTRIBUTES& result, bool& file_not_exists);
+
+  static const uint32_t SFTP_ATTRIBUTE_PERMISSIONS = 0x00000001;
+  static const uint32_t SFTP_ATTRIBUTE_UID         = 0x00000002;
+  static const uint32_t SFTP_ATTRIBUTE_GID         = 0x00000004;
+  static const uint32_t SFTP_ATTRIBUTE_MTIME       = 0x00000008;
+  static const uint32_t SFTP_ATTRIBUTE_ATIME       = 0x00000010;
+  struct SFTPAttributes {
+    uint32_t flags;
+
+    uint32_t permissions;
+    uint64_t uid;
+    uint64_t gid;
+    int64_t mtime;
+    int64_t atime;
+  };
+
+  bool setAttributes(const std::string& path, const SFTPAttributes& attrs);
 
  protected:
 

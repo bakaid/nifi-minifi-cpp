@@ -120,7 +120,7 @@ core::Property PutSFTP::LastModifiedTime(
                                                                                   "Format must be yyyy-MM-dd'T'HH:mm:ssZ. "
                                                                                   "You may also use expression language such as ${file.lastModifiedTime}. "
                                                                                   "If the value is invalid, the processor will not be invalid but will fail to change lastModifiedTime of the file.")
-        ->isRequired(false)->build()); // TODO: timestamp validation
+        ->isRequired(false)->build());
 core::Property PutSFTP::Permissions(
     core::PropertyBuilder::createProperty("Permissions")->withDescription("The permissions to assign to the file after transferring it. "
                                                                           "Format must be either UNIX rwxrwxrwx with a - in place of denied permissions (e.g. rw-r--r--) or an octal number (e.g. 644). "
@@ -285,7 +285,7 @@ PutSFTP::ReadCallback::~ReadCallback() {
 }
 
 int64_t PutSFTP::ReadCallback::process(std::shared_ptr<io::BaseStream> stream) {
-  if (!client_.putFile(target_path_, *stream, conflict_resolution_ == "REPLACE" /*overwrite*/)) {
+  if (!client_.putFile(target_path_, *stream, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
     return -1;
   }
   write_succeeded_ = true;
@@ -293,7 +293,7 @@ int64_t PutSFTP::ReadCallback::process(std::shared_ptr<io::BaseStream> stream) {
 }
 
 bool PutSFTP::ReadCallback::commit() {
-  return true;
+  return write_succeeded_;
 }
 
 void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
@@ -301,10 +301,9 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   if (flow_file == nullptr) {
     return;
   }
-  std::string filename;
-  flow_file->getKeyedAttribute(FILENAME, filename);
 
-  /* Parse possibly flowfile-dependent properties */
+  /* Parse possibly FlowFile-dependent properties */
+  std::string filename;
   std::string hostname;
   uint16_t port = 0U;
   std::string username;
@@ -325,6 +324,8 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   uint16_t proxy_port = 0U;
   std::string proxy_username;
   std::string proxy_password;
+
+  flow_file->getKeyedAttribute(FILENAME, filename);
 
   std::string value;
   if (!context->getProperty(Hostname, hostname, flow_file)) {
@@ -449,17 +450,73 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     return;
   }
 
+  /* Try to detect conflicts if needed */
+  std::string resolved_filename = filename;
+  if (conflict_resolution_ != CONFLICT_RESOLUTION_NONE) {
+    LIBSSH2_SFTP_ATTRIBUTES attrs;
+    bool file_not_exists;
+    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+      if (!file_not_exists) {
+        session->transfer(flow_file, Failure); // TODO
+        return;
+      }
+    } else {
+      if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+        session->transfer(flow_file, Reject);
+        return;
+      }
+      if (conflict_resolution_ == CONFLICT_RESOLUTION_IGNORE) {
+        session->transfer(flow_file, Success);
+        return;
+      } else if (conflict_resolution_ == CONFLICT_RESOLUTION_REJECT) {
+        session->transfer(flow_file, Reject);
+        return;
+      } else if (conflict_resolution_ == CONFLICT_RESOLUTION_FAIL) {
+        session->transfer(flow_file, Failure);
+        return;
+      } else if (conflict_resolution_ == CONFLICT_RESOLUTION_RENAME) {
+        std::string possible_resolved_filename;
+        bool unique_name_generated = false;
+        for (int i = 1; i < 100; i++) {
+          std::stringstream possible_resolved_filename_ss;
+          possible_resolved_filename_ss << i << "." << filename;
+          possible_resolved_filename = possible_resolved_filename_ss.str();
+          auto possible_resolved_path = remote_path + "/" + possible_resolved_filename;
+          bool file_not_exists;
+          if (!client.stat(possible_resolved_path.c_str(), true /*follow_symlinks*/, attrs, file_not_exists)) {
+            if (file_not_exists) {
+              unique_name_generated = true;
+              break;
+            } else {
+              session->transfer(flow_file, Failure); // TODO
+              return;
+            }
+          }
+        }
+        if (unique_name_generated) {
+          resolved_filename = std::move(possible_resolved_filename);
+        } else {
+          session->transfer(flow_file, Reject);
+          return;
+        }
+      }
+    }
+  }
+
   /* Create remote directory if needed */
   bool should_create_directory = disable_directory_listing_;
   if (!disable_directory_listing_) {
     LIBSSH2_SFTP_ATTRIBUTES attrs;
-    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs)) {
-      logger_->log_error("Cannot stat %s", remote_path.c_str());
+    bool file_not_exists;
+    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+      if (!file_not_exists) {
+        logger_->log_error("Cannot stat %s", remote_path.c_str());
+      }
       should_create_directory = true;
     } else {
       if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
         logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
-        context->yield();
+        session->transfer(flow_file, Failure);
         return;
       }
     }
@@ -468,14 +525,20 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     client.createDirectoryHierarchy(remote_path);
     if (!disable_directory_listing_) {
       LIBSSH2_SFTP_ATTRIBUTES attrs;
-      if (!client.stat(remote_path, true /*follow_symlinks*/, attrs)) {
-        logger_->log_error("Could not create remote directory %s", remote_path.c_str());
-        context->yield();
+      bool file_not_exists;
+      if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+        if (file_not_exists) {
+          logger_->log_error("Could not create remote directory %s", remote_path.c_str());
+          session->transfer(flow_file, Failure);
+        } else {
+          logger_->log_error("Cannot stat %s", remote_path.c_str());
+          context->yield();
+        }
         return;
       } else {
-        if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+        if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
           logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
-          context->yield();
+          session->transfer(flow_file, Failure);
           return;
         }
       }
@@ -483,25 +546,73 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   }
 
   /* Upload file */
-  std::stringstream target_path;
-  target_path << remote_path << "/";
+  std::stringstream target_path_ss;
+  target_path_ss << remote_path << "/";
   if (!IsNullOrEmpty(temp_file_name)) {
-    target_path << temp_file_name;
+    target_path_ss << temp_file_name;
   } else if (dot_rename_) {
-    target_path << "." << filename;
+    target_path_ss << "." << resolved_filename;
   } else {
-    target_path << filename;
+    target_path_ss << resolved_filename;
   }
-  logger_->log_debug("The target path is %s", target_path.str().c_str());
+  auto target_path = target_path_ss.str();
+  std::stringstream final_target_path_ss;
+  final_target_path_ss << remote_path << "/" << resolved_filename;
+  auto final_target_path = final_target_path_ss.str();
+  logger_->log_debug("The target path is %s, final target path is %s", target_path.c_str(), final_target_path.c_str());
 
-  ReadCallback read_callback(target_path.str(), client, conflict_resolution_);
+  ReadCallback read_callback(target_path.c_str(), client, conflict_resolution_);
   session->read(flow_file, &read_callback);
 
-  if (read_callback.commit()) {
-    session->transfer(flow_file, Success);
-  } else {
+  if (!read_callback.commit()) {
     session->transfer(flow_file, Failure);
+    return;
   }
+
+  /* Move file to its final place */
+  if (target_path != final_target_path) {
+    if (!client.rename(target_path, final_target_path, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
+      logger_->log_error("Failed to move temporary file %s to final path %s", target_path, final_target_path);
+      if (!client.removeFile(target_path)) {
+        logger_->log_error("Failed to remove temporary file %s", target_path);
+      }
+      session->transfer(flow_file, Failure);
+      return;
+    }
+  }
+
+  /* Set file attributes if needed */
+  if (last_modified_time_set ||
+      permissions_set ||
+      remote_owner_set ||
+      remote_group_set) {
+    utils::SFTPClient::SFTPAttributes attrs;
+    attrs.flags = 0U;
+    if (last_modified_time_set) {
+      attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_MTIME | utils::SFTPClient::SFTP_ATTRIBUTE_ATIME;
+      attrs.mtime = last_modified_time;
+      attrs.atime = last_modified_time; // TODO
+    }
+    if (permissions_set) {
+      attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_PERMISSIONS;
+      attrs.permissions = permissions;
+    }
+    if (remote_owner_set) {
+      attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_UID;
+      attrs.uid = remote_owner;
+    }
+    if (remote_group_set) {
+      attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_GID;
+      attrs.gid = remote_group;
+    }
+    if (!client.setAttributes(final_target_path, attrs)) {
+      logger_->log_error("Failed to set file attributes for %s", target_path);
+      session->transfer(flow_file, Failure); // TODO: shall this be fatal? If yes, we should also delete here.
+      return;
+    }
+  }
+
+  session->transfer(flow_file, Success);
 }
 
 } /* namespace processors */

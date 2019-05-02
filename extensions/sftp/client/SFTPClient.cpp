@@ -166,7 +166,7 @@ bool SFTPClient::setProxy(ProxyType type, const utils::HTTPProxy& proxy) {
 }
 
 bool SFTPClient::setConnectionTimeout(int64_t timeout) {
-  if (curl_easy_setopt(easy_, CURLOPT_CONNECTTIMEOUT, timeout) != CURLE_OK) {
+  if (curl_easy_setopt(easy_, CURLOPT_CONNECTTIMEOUT_MS, timeout) != CURLE_OK) {
     return false;
   }
   return true;
@@ -515,7 +515,8 @@ bool SFTPClient::listDirectory(const std::string& path, bool follow_symlinks,
     }
     if (follow_symlinks && attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && LIBSSH2_SFTP_S_ISLNK(attrs.permissions)) {
       auto orig_attrs = attrs;
-      if (!this->stat(path, true /*follow_symlinks*/, attrs)) {
+      bool file_not_exists;
+      if (!this->stat(path, true /*follow_symlinks*/, attrs, file_not_exists)) {
         logger_->log_debug("Failed to stat directory child \"%s/%s\", error: %s", path.c_str(), filename.data(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
         attrs = orig_attrs;
       }
@@ -525,15 +526,66 @@ bool SFTPClient::listDirectory(const std::string& path, bool follow_symlinks,
   return true;
 }
 
-bool SFTPClient::stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFTP_ATTRIBUTES& result) {
+bool SFTPClient::stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFTP_ATTRIBUTES& result, bool& file_not_exists) {
+  file_not_exists = false;
   if (libssh2_sftp_stat_ex(sftp_session_,
                             path.c_str(),
                             path.length(),
                             follow_symlinks ? LIBSSH2_SFTP_STAT : LIBSSH2_SFTP_LSTAT,
                             &result) != 0) {
-    logger_->log_debug("Failed to stat remote path \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
+    auto error = libssh2_sftp_last_error(sftp_session_);
+    if (error == LIBSSH2_FX_NO_SUCH_FILE) {
+      file_not_exists = true;
+    }
+    logger_->log_debug("Failed to stat remote path \"%s\", error: %s", path.c_str(), sftp_strerror(error));
+    return false; // TODO: can we differentiate file not exists from other errors?
+  }
+  return true;
+}
+
+bool SFTPClient::setAttributes(const std::string& path, const SFTPAttributes& input) {
+  LIBSSH2_SFTP_ATTRIBUTES attrs;
+  memset(&attrs, 0x00, sizeof(attrs));
+  if ((!!(input.flags & SFTP_ATTRIBUTE_UID) != !!(input.flags & SFTP_ATTRIBUTE_GID)) ||
+      (!!(input.flags & SFTP_ATTRIBUTE_MTIME) != !!(input.flags & SFTP_ATTRIBUTE_ATIME))) {
+    /* Because we can only set these attributes in pairs, we must stat first to learn the other */
+    bool file_not_exists;
+    if (!this->stat(path, false /*follow_symlinks*/, attrs, file_not_exists)) {
+      // TODO: log
+      return false;
+    }
+  }
+  attrs.flags = 0U;
+  if (input.flags & SFTP_ATTRIBUTE_PERMISSIONS) {
+    attrs.flags |= LIBSSH2_SFTP_ATTR_PERMISSIONS;
+    attrs.permissions = input.permissions;
+  }
+  if (input.flags & SFTP_ATTRIBUTE_UID) {
+    attrs.flags |= LIBSSH2_SFTP_ATTR_UIDGID;
+    attrs.uid = input.uid;
+  }
+  if (input.flags & SFTP_ATTRIBUTE_GID) {
+    attrs.flags |= LIBSSH2_SFTP_ATTR_UIDGID;
+    attrs.gid = input.gid;
+  }
+  if (input.flags & SFTP_ATTRIBUTE_MTIME) {
+    attrs.flags |= LIBSSH2_SFTP_ATTR_ACMODTIME;
+    attrs.mtime = input.mtime;
+  }
+  if (input.flags & SFTP_ATTRIBUTE_ATIME) {
+    attrs.flags |= LIBSSH2_SFTP_ATTR_ACMODTIME;
+    attrs.atime = input.atime;
+  }
+
+  if (libssh2_sftp_stat_ex(sftp_session_,
+                           path.c_str(),
+                           path.length(),
+                           LIBSSH2_SFTP_SETSTAT,
+                           &attrs) != 0) {
+    logger_->log_debug("Failed to setstat on remote path \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
     return false;
   }
+
   return true;
 }
 

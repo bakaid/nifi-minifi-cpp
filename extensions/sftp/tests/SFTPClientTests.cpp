@@ -45,21 +45,31 @@
 
 
 TEST_CASE("SFTPClientTest", "[sftptest]") {
-  LogTestController::getInstance().setInfo<minifi::FlowController>();
   LogTestController::getInstance().setDebug<minifi::utils::SFTPClient>();
 
-  org::apache::nifi::minifi::utils::SFTPClient sftp_client("localhost", 22, "test");
-  assert(sftp_client.setVerbose());
+  utils::SFTPClient sftp_client("localhost", 22, "test");
+  REQUIRE(true == sftp_client.setVerbose());
+  utils::HTTPProxy proxy;
+  proxy.host = "localhost";
+  proxy.port = 3128;
+  REQUIRE(true == sftp_client.setProxy(utils::SFTPClient::ProxyType::Http, proxy));
   sftp_client.setPasswordAuthenticationCredentials("<redacted>");
+  sftp_client.setPublicKeyAuthenticationCredentials("/Users/danielbakai/.ssh/id_rsa", "");
+//  assert(sftp_client.setHostKeyFile("/tmp/known_hosts", false /*strict_host_checking*/));
 
-  assert(sftp_client.connect());
+REQUIRE(true == sftp_client.connect());
 
   std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> children;
-  assert(sftp_client.listDirectory("/Users/test/", false /*follow_symlinks*/, children));
+  REQUIRE(true == sftp_client.listDirectory("/Users/test/", false /*follow_symlinks*/, children));
   for (const auto& child : children) {
     std::cerr << std::get<0>(child) << ", dir: " << static_cast<bool>(LIBSSH2_SFTP_S_ISDIR(std::get<2>(child).permissions))
         << ", link: " << static_cast<bool>(LIBSSH2_SFTP_S_ISLNK(std::get<2>(child).permissions)) << std::endl;
   }
+
+  LIBSSH2_SFTP_ATTRIBUTES attrs;
+  bool file_not_exists;
+  REQUIRE(false == sftp_client.stat("/Users/test/foobar", false /*follow_symlinks*/, attrs, file_not_exists));
+  REQUIRE(true == file_not_exists);
 
   LogTestController::getInstance().reset();
 }
