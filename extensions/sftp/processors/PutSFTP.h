@@ -64,7 +64,6 @@ class PutSFTP : public core::Processor {
       : Processor(name, uuid),
         logger_(logging::LoggerFactory<PutSFTP>::getLogger()),
         create_directory_(false),
-        disable_directory_listing_(false),
         batch_size_(0),
         connection_timeout_(0),
         data_timeout_(0),
@@ -115,6 +114,10 @@ class PutSFTP : public core::Processor {
   static core::Relationship Reject;
   static core::Relationship Failure;
 
+  virtual bool supportsDynamicProperties() override {
+    return true;
+  }
+
   virtual void onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) override;
   virtual void initialize() override;
   virtual void onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) override;
@@ -140,7 +143,6 @@ class PutSFTP : public core::Processor {
   std::shared_ptr<logging::Logger> logger_;
 
   bool create_directory_;
-  bool disable_directory_listing_;
   int batch_size_;
   int64_t connection_timeout_;
   int64_t data_timeout_;

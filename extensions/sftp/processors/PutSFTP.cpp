@@ -228,9 +228,6 @@ void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, c
   } else {
     utils::StringUtils::StringToBool(value, create_directory_);
   }
-  if (context->getProperty(DisableDirectoryListing.getName(), value)) {
-    utils::StringUtils::StringToBool(value, disable_directory_listing_);
-  }
   if (!context->getProperty(BatchSize.getName(), value)) {
     logger_->log_error("Batch Size attribute is missing or invalid");
   } else {
@@ -313,6 +310,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   std::string private_key_path;
   std::string private_key_passphrase;
   std::string remote_path;
+  bool disable_directory_listing = false;
   std::string temp_file_name;
   bool last_modified_time_set = false;
   int64_t last_modified_time = 0U;
@@ -344,7 +342,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     if (!core::Property::StringToInt(value, port_tmp) ||
         port_tmp < std::numeric_limits<uint16_t>::min() ||
         port_tmp > std::numeric_limits<uint16_t>::max()) {
-      logger_->log_error("Port attribute is invalid");
+      logger_->log_error("Port attribute \"%s\" is invalid", value);
       context->yield();
       return;
     } else {
@@ -361,9 +359,14 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   context->getProperty(PrivateKeyPassphrase, private_key_passphrase, flow_file);
   context->getProperty(Password, password, flow_file);
   context->getProperty(RemotePath, remote_path, flow_file);
+  if (context->getDynamicProperty(DisableDirectoryListing.getName(), value)) {
+    utils::StringUtils::StringToBool(value, disable_directory_listing);
+  }
+  /* Remove trailing slashes */
   while (remote_path.size() > 1U && remote_path.back() == '/') {
     remote_path.resize(remote_path.size() - 1);
   }
+  /* Empty path means current directory, so we change it to '.' s*/
   if (remote_path.empty()) {
     remote_path = ".";
   }
@@ -403,6 +406,13 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   }
   context->getProperty(HttpProxyUsername, proxy_username, flow_file);
   context->getProperty(HttpProxyPassword, proxy_password, flow_file);
+
+  /* Reject zero-byte files if needed */
+  if (reject_zero_byte_ && flow_file->getSize() == 0U) {
+    logger_->log_debug("Rejecting %s because it is zero bytes", filename);
+    session->transfer(flow_file, Reject);
+    return;
+  }
 
   /* Create and setup SFTPClient */
   utils::SFTPClient client(hostname, port, username);
@@ -465,21 +475,26 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     bool file_not_exists;
     if (!client.stat(target_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
       if (!file_not_exists) {
-        session->transfer(flow_file, Failure); // TODO
+        logger_->log_error("Failed to stat %s", target_path.c_str());
+        session->transfer(flow_file, Failure);
         return;
       }
     } else {
       if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+        logger_->log_error("Rejecting %s because a directory with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
         return;
       }
       if (conflict_resolution_ == CONFLICT_RESOLUTION_IGNORE) {
+        logger_->log_debug("Routing %s to SUCCESS despite a file with the same name already existing", filename.c_str());
         session->transfer(flow_file, Success);
         return;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_REJECT) {
+        logger_->log_debug("Routing %s to REJECT because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
         return;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_FAIL) {
+        logger_->log_debug("Routing %s to FAILURE because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Failure);
         return;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_RENAME) {
@@ -491,19 +506,22 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
           possible_resolved_filename = possible_resolved_filename_ss.str();
           auto possible_resolved_path = remote_path + "/" + possible_resolved_filename;
           bool file_not_exists;
-          if (!client.stat(possible_resolved_path.c_str(), true /*follow_symlinks*/, attrs, file_not_exists)) {
+          if (!client.stat(possible_resolved_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
             if (file_not_exists) {
               unique_name_generated = true;
               break;
             } else {
-              session->transfer(flow_file, Failure); // TODO
+              logger_->log_error("Failed to stat %s", possible_resolved_path.c_str());
+              session->transfer(flow_file, Failure);
               return;
             }
           }
         }
         if (unique_name_generated) {
+          logger_->log_debug("Resolved %s to %s", possible_resolved_filename.c_str());
           resolved_filename = std::move(possible_resolved_filename);
         } else {
+          logger_->log_error("Rejecting %s because a unique name could not be determined after 99 attempts", filename.c_str());
           session->transfer(flow_file, Reject);
           return;
         }
@@ -512,13 +530,13 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   }
 
   /* Create remote directory if needed */
-  bool should_create_directory = disable_directory_listing_;
-  if (!disable_directory_listing_) {
+  bool should_create_directory = disable_directory_listing;
+  if (!disable_directory_listing) {
     LIBSSH2_SFTP_ATTRIBUTES attrs;
     bool file_not_exists;
     if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
       if (!file_not_exists) {
-        logger_->log_error("Cannot stat %s", remote_path.c_str());
+        logger_->log_error("Failed to stat %s", remote_path.c_str());
       }
       should_create_directory = true;
     } else {
@@ -531,7 +549,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   }
   if (should_create_directory) {
     client.createDirectoryHierarchy(remote_path);
-    if (!disable_directory_listing_) {
+    if (!disable_directory_listing) {
       LIBSSH2_SFTP_ATTRIBUTES attrs;
       bool file_not_exists;
       if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
@@ -539,7 +557,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
           logger_->log_error("Could not create remote directory %s", remote_path.c_str());
           session->transfer(flow_file, Failure);
         } else {
-          logger_->log_error("Cannot stat %s", remote_path.c_str());
+          logger_->log_error("Failed to stat %s", remote_path.c_str());
           context->yield();
         }
         return;
