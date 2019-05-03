@@ -440,14 +440,17 @@ bool SFTPClient::rename(const std::string& source_path, const std::string& targe
 }
 
 bool SFTPClient::createDirectoryHierarchy(const std::string& path) {
-  if (path.empty() || path[0] != '/') {
+  if (path.empty()) {
     return false;
   }
+  bool absolute = path[0] == '/';
   auto elements = utils::StringUtils::split(path, "/");
   std::stringstream dir;
-  dir << "/";
+  if (absolute) {
+    dir << "/";
+  }
   for (const auto& element : elements) {
-    dir << "/" << element;
+    dir << element << "/";
     auto current_dir = dir.str();
     int res = libssh2_sftp_mkdir_ex(sftp_session_, current_dir.c_str(), current_dir.length(), 0755);
     if (res < 0) {

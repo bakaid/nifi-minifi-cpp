@@ -53,28 +53,30 @@ namespace minifi {
 namespace processors {
 
 core::Property PutSFTP::Hostname(
-    core::PropertyBuilder::createProperty("Hostname")->withDescription("The fully qualified hostname or IP address of the remote system")->build());
+    core::PropertyBuilder::createProperty("Hostname")->withDescription("The fully qualified hostname or IP address of the remote system")
+        ->supportsExpressionLanguage(true)->build());
 core::Property PutSFTP::Port(
     core::PropertyBuilder::createProperty("Port")->withDescription("The port that the remote system is listening on for file transfers")
-        ->withDefaultValue<int>(22)->build());
+        ->supportsExpressionLanguage(true)->withDefaultValue<int>(22)->build());
 core::Property PutSFTP::Username(
-    core::PropertyBuilder::createProperty("Username")->withDescription("Username")->build());
+    core::PropertyBuilder::createProperty("Username")->withDescription("Username")
+        ->supportsExpressionLanguage(true)->build());
 core::Property PutSFTP::Password(
     core::PropertyBuilder::createProperty("Password")->withDescription("Password for the user account")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::PrivateKeyPath(
     core::PropertyBuilder::createProperty("Private Key Path")->withDescription("The fully qualified path to the Private Key file")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::PrivateKeyPassphrase(
     core::PropertyBuilder::createProperty("Private Key Passphrase")->withDescription("Password for the private key")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::RemotePath(
     core::PropertyBuilder::createProperty("Remote Path")->withDescription("The path on the remote system from which to pull or push files")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::CreateDirectory(
     core::PropertyBuilder::createProperty("Create Directory")->withDescription("Specifies whether or not the remote directory should be created if it does not exist.")
         ->withDefaultValue<bool>(false)->build());
-core::Property PutSFTP::DisableDirectoryListing(
+core::Property PutSFTP::DisableDirectoryListing( // TODO: dynamic properties
     core::PropertyBuilder::createProperty("Disable Directory Listing")->withDescription("If set to 'true', directory listing is not performed prior to create missing directories. "
                                                                                         "By default, this processor executes a directory listing command to see target directory existence before creating missing directories. "
                                                                                         "However, there are situations that you might need to disable the directory listing such as the following. "
@@ -110,7 +112,7 @@ core::Property PutSFTP::DotRename(
 core::Property PutSFTP::TempFilename(
     core::PropertyBuilder::createProperty("Temporary Filename")->withDescription("If set, the filename of the sent file will be equal to the value specified during the transfer and after successful completion will be renamed to the original filename. "
                                                                                  "If this value is set, the Dot Rename property is ignored.")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::HostKeyFile(
     core::PropertyBuilder::createProperty("Host Key File")->withDescription("If supplied, the given file will be used as the Host Key; otherwise, no use host key file will be used")
         ->isRequired(false)->build());
@@ -120,24 +122,24 @@ core::Property PutSFTP::LastModifiedTime(
                                                                                   "Format must be yyyy-MM-dd'T'HH:mm:ssZ. "
                                                                                   "You may also use expression language such as ${file.lastModifiedTime}. "
                                                                                   "If the value is invalid, the processor will not be invalid but will fail to change lastModifiedTime of the file.")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::Permissions(
     core::PropertyBuilder::createProperty("Permissions")->withDescription("The permissions to assign to the file after transferring it. "
                                                                           "Format must be either UNIX rwxrwxrwx with a - in place of denied permissions (e.g. rw-r--r--) or an octal number (e.g. 644). "
                                                                           "If not set, the permissions will not be changed. "
                                                                           "You may also use expression language such as ${file.permissions}. "
                                                                           "If the value is invalid, the processor will not be invalid but will fail to change permissions of the file.")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::RemoteOwner(
     core::PropertyBuilder::createProperty("Remote Owner")->withDescription("Integer value representing the User ID to set on the file after transferring it. "
                                                                            "If not set, the owner will not be set. You may also use expression language such as ${file.owner}. "
                                                                            "If the value is invalid, the processor will not be invalid but will fail to change the owner of the file.")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::RemoteGroup(
     core::PropertyBuilder::createProperty("Remote Group")->withDescription("Integer value representing the Group ID to set on the file after transferring it. "
                                                                            "If not set, the group will not be set. You may also use expression language such as ${file.group}. "
                                                                            "If the value is invalid, the processor will not be invalid but will fail to change the group of the file.")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::StrictHostKeyChecking(
     core::PropertyBuilder::createProperty("Strict Host Key Checking")->withDescription("Indicates whether or not strict enforcement of hosts keys should be applied")
         ->withDefaultValue<bool>(false)->build());
@@ -157,16 +159,16 @@ core::Property PutSFTP::ProxyType(
         ->withDefaultValue(PROXY_TYPE_DIRECT)->build());
 core::Property PutSFTP::ProxyHost(
     core::PropertyBuilder::createProperty("Proxy Host")->withDescription("The fully qualified hostname or IP address of the proxy server")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::ProxyPort(
     core::PropertyBuilder::createProperty("Proxy Port")->withDescription("The port of the proxy server")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::HttpProxyUsername(
     core::PropertyBuilder::createProperty("Http Proxy Username")->withDescription("Http Proxy Username")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property PutSFTP::HttpProxyPassword(
     core::PropertyBuilder::createProperty("Http Proxy Password")->withDescription("Http Proxy Password")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 
 core::Relationship PutSFTP::Success("success", "FlowFiles that are successfully sent will be routed to success");
 core::Relationship PutSFTP::Reject("reject", "FlowFiles that were rejected by the destination system");
@@ -362,6 +364,9 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   while (remote_path.size() > 1U && remote_path.back() == '/') {
     remote_path.resize(remote_path.size() - 1);
   }
+  if (remote_path.empty()) {
+    remote_path = ".";
+  }
   context->getProperty(TempFilename, temp_file_name, flow_file);
   if (context->getProperty(LastModifiedTime, value, flow_file)) {
     if (core::Property::StringToDateTime(value, last_modified_time)) {
@@ -384,12 +389,12 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     }
   }
   context->getProperty(ProxyHost, proxy_host, flow_file);
-  if (context->getProperty(ProxyPort, value, flow_file)) {
+  if (context->getProperty(ProxyPort, value, flow_file) && !value.empty()) {
     int port_tmp;
     if (!core::Property::StringToInt(value, port_tmp) ||
         port_tmp < std::numeric_limits<uint16_t>::min() ||
         port_tmp > std::numeric_limits<uint16_t>::max()) {
-      logger_->log_error("Proxy Port attribute is invalid");
+      logger_->log_error("Proxy Port attribute \"%s\" is invalid", value);
       context->yield();
       return;
     } else {
@@ -453,9 +458,12 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   /* Try to detect conflicts if needed */
   std::string resolved_filename = filename;
   if (conflict_resolution_ != CONFLICT_RESOLUTION_NONE) {
+    std::stringstream target_path_ss;
+    target_path_ss << remote_path << "/" << filename;
+    auto target_path = target_path_ss.str();
     LIBSSH2_SFTP_ATTRIBUTES attrs;
     bool file_not_exists;
-    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+    if (!client.stat(target_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
       if (!file_not_exists) {
         session->transfer(flow_file, Failure); // TODO
         return;

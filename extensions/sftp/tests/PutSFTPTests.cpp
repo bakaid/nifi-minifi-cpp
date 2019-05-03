@@ -49,7 +49,7 @@ TEST_CASE("PutSFTP simple test", "[PutSFTPSimple]") {
 
   LogTestController::getInstance().setTrace<TestPlan>();
   LogTestController::getInstance().setTrace<processors::GenerateFlowFile>();
-  LogTestController::getInstance().setDebug<minifi::utils::SFTPClient>();
+  LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
   LogTestController::getInstance().setTrace<processors::PutSFTP>();
 
   auto plan = testController.createPlan();
@@ -68,17 +68,18 @@ TEST_CASE("PutSFTP simple test", "[PutSFTPSimple]") {
   plan->setProperty(put, "Port", "22");
   plan->setProperty(put, "Username", "test");
   plan->setProperty(put, "Password", "<redacted>");
-  plan->setProperty(put, "Remote Path", "/Users/test/processor-test");
+  plan->setProperty(put, "Remote Path", "processor-test");
   plan->setProperty(put, "Create Directory", "true");
   plan->setProperty(put, "Batch Size", "500");
   plan->setProperty(put, "Connection Timeout", "30 sec");
   plan->setProperty(put, "Data Timeout", "30 sec");
-  plan->setProperty(put, "Conflict Resolution", "NONE");
+  plan->setProperty(put, "Conflict Resolution", "REJECT");
   plan->setProperty(put, "Strict Host Key Checking", "false");
   plan->setProperty(put, "Send Keep Alive On Timeout", "false");
   plan->setProperty(put, "Use Compression", "false");
   plan->setProperty(put, "Permissions", "rwxrwx---");
   plan->setProperty(put, "Last Modified Time", "1990-05-21T12:32:12Z");
+  plan->setProperty(put, "Temporary Filename", "${filename:append('.temp')}");
 
   plan->runNextProcessor();  // Generate
   plan->runNextProcessor();  // PutSFTP
