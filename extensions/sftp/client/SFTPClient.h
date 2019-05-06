@@ -25,11 +25,6 @@
 #include <iostream>
 #include <string>
 #include <uuid/uuid.h>
-#ifdef WIN32
-#include <regex>
-#else
-#include <regex.h>
-#endif
 #include <vector>
 
 #include "utils/HTTPClient.h"

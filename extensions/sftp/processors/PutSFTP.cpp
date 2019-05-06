@@ -295,10 +295,10 @@ bool PutSFTP::ReadCallback::commit() {
   return write_succeeded_;
 }
 
-void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
+bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
   std::shared_ptr<FlowFileRecord> flow_file = std::static_pointer_cast<FlowFileRecord>(session->get());
   if (flow_file == nullptr) {
-    return;
+    return false;
   }
 
   /* Parse possibly FlowFile-dependent properties */
@@ -331,12 +331,12 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   if (!context->getProperty(Hostname, hostname, flow_file)) {
     logger_->log_error("Hostname attribute is missing");
     context->yield();
-    return;
+    return false;
   }
   if (!context->getProperty(Port, value, flow_file)) {
     logger_->log_error("Port attribute is missing or invalid");
     context->yield();
-    return;
+    return false;
   } else {
     int port_tmp;
     if (!core::Property::StringToInt(value, port_tmp) ||
@@ -344,7 +344,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         port_tmp > std::numeric_limits<uint16_t>::max()) {
       logger_->log_error("Port attribute \"%s\" is invalid", value);
       context->yield();
-      return;
+      return false;
     } else {
       port = static_cast<uint16_t>(port_tmp);
     }
@@ -352,7 +352,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   if (!context->getProperty(Username, username, flow_file)) {
     logger_->log_error("Username attribute is missing");
     context->yield();
-    return;
+    return false;
   }
   context->getProperty(Password, password, flow_file);
   context->getProperty(PrivateKeyPath, private_key_path, flow_file);
@@ -399,7 +399,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         port_tmp > std::numeric_limits<uint16_t>::max()) {
       logger_->log_error("Proxy Port attribute \"%s\" is invalid", value);
       context->yield();
-      return;
+      return false;
     } else {
       proxy_port = static_cast<uint16_t>(port_tmp);
     }
@@ -411,7 +411,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
   if (reject_zero_byte_ && flow_file->getSize() == 0U) {
     logger_->log_debug("Rejecting %s because it is zero bytes", filename);
     session->transfer(flow_file, Reject);
-    return;
+    return true;
   }
 
   /* Create and setup SFTPClient */
@@ -420,7 +420,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     if (!client.setHostKeyFile(host_key_file_, strict_host_checking_)) {
       logger_->log_error("Cannot set host key file");
       context->yield();
-      return;
+      return false;
     }
   }
   if (!IsNullOrEmpty(password)) {
@@ -438,31 +438,31 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     if (!client.setProxy(proxy_type_ == PROXY_TYPE_HTTP ? utils::SFTPClient::ProxyType::Http : utils::SFTPClient::ProxyType::Socks, proxy)) {
       logger_->log_error("Cannot set proxy");
       context->yield();
-      return;
+      return false;
     }
   }
   if (!client.setConnectionTimeout(connection_timeout_)) {
     logger_->log_error("Cannot set connection timeout");
     context->yield();
-    return;
+    return false;
   }
   client.setDataTimeout(data_timeout_);
   if (!client.setSendKeepAlive(use_keepalive_on_timeout_)) {
     logger_->log_error("Cannot set keepalive on timeout");
     context->yield();
-    return;
+    return false;
   }
   if (!client.setUseCompression(use_compression_)) {
     logger_->log_error("Cannot set compression");
     context->yield();
-    return;
+    return false;
   }
 
   /* Connect to SFTP server */
   if (!client.connect()) {
     logger_->log_error("Cannot connect to SFTP server");
     context->yield();
-    return;
+    return false;
   }
 
   /* Try to detect conflicts if needed */
@@ -477,26 +477,26 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
       if (!file_not_exists) {
         logger_->log_error("Failed to stat %s", target_path.c_str());
         session->transfer(flow_file, Failure);
-        return;
+        return true;
       }
     } else {
       if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
         logger_->log_error("Rejecting %s because a directory with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
-        return;
+        return true;
       }
       if (conflict_resolution_ == CONFLICT_RESOLUTION_IGNORE) {
         logger_->log_debug("Routing %s to SUCCESS despite a file with the same name already existing", filename.c_str());
         session->transfer(flow_file, Success);
-        return;
+        return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_REJECT) {
         logger_->log_debug("Routing %s to REJECT because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
-        return;
+        return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_FAIL) {
         logger_->log_debug("Routing %s to FAILURE because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Failure);
-        return;
+        return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_RENAME) {
         std::string possible_resolved_filename;
         bool unique_name_generated = false;
@@ -513,7 +513,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
             } else {
               logger_->log_error("Failed to stat %s", possible_resolved_path.c_str());
               session->transfer(flow_file, Failure);
-              return;
+              return true;
             }
           }
         }
@@ -523,7 +523,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         } else {
           logger_->log_error("Rejecting %s because a unique name could not be determined after 99 attempts", filename.c_str());
           session->transfer(flow_file, Reject);
-          return;
+          return true;
         }
       }
     }
@@ -543,7 +543,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
       if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
         logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
         session->transfer(flow_file, Failure);
-        return;
+        return true;
       }
     }
   }
@@ -556,16 +556,17 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         if (file_not_exists) {
           logger_->log_error("Could not create remote directory %s", remote_path.c_str());
           session->transfer(flow_file, Failure);
+          return true;
         } else {
           logger_->log_error("Failed to stat %s", remote_path.c_str());
           context->yield();
+          return false;
         }
-        return;
       } else {
         if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
           logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
           session->transfer(flow_file, Failure);
-          return;
+          return true;
         }
       }
     }
@@ -592,7 +593,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
 
   if (!read_callback.commit()) {
     session->transfer(flow_file, Failure);
-    return;
+    return true;
   }
 
   /* Move file to its final place */
@@ -603,7 +604,7 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
         logger_->log_error("Failed to remove temporary file %s", target_path);
       }
       session->transfer(flow_file, Failure);
-      return;
+      return true;
     }
   }
 
@@ -634,11 +635,20 @@ void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, co
     if (!client.setAttributes(final_target_path, attrs)) {
       logger_->log_error("Failed to set file attributes for %s", target_path);
       session->transfer(flow_file, Failure); // TODO: shall this be fatal? If yes, we should also delete here.
-      return;
+      return true;
     }
   }
 
   session->transfer(flow_file, Success);
+  return true;
+}
+
+void PutSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
+  for (size_t i = 0; i < batch_size_; i++) {
+    if (!this->processOne(context, session)) {
+      return;
+    }
+  }
 }
 
 } /* namespace processors */

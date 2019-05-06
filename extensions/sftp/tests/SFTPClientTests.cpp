@@ -29,6 +29,7 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <cstring>
 #include "TestBase.h"
 #include "utils/StringUtils.h"
 #include "core/Core.h"
@@ -41,26 +42,29 @@
 #include "io/StreamFactory.h"
 #include "c2/C2Agent.h"
 #include "SFTPClient.h"
-#include <cstring>
+#include "tools/SFTPTestServer.h"
 
 
 TEST_CASE("SFTPClientTest", "[sftptest]") {
   LogTestController::getInstance().setDebug<minifi::utils::SFTPClient>();
 
-  utils::SFTPClient sftp_client("localhost", 22, "test");
+  SFTPTestServer sftp_server("/tmp/test1");
+  REQUIRE(true == sftp_server.start());
+
+  utils::SFTPClient sftp_client("localhost", sftp_server.getPort(), "nifiuser");
   REQUIRE(true == sftp_client.setVerbose());
-  utils::HTTPProxy proxy;
-  proxy.host = "localhost";
-  proxy.port = 3128;
-  REQUIRE(true == sftp_client.setProxy(utils::SFTPClient::ProxyType::Http, proxy));
-  sftp_client.setPasswordAuthenticationCredentials("<redacted>");
-  sftp_client.setPublicKeyAuthenticationCredentials("/Users/danielbakai/.ssh/id_rsa", "");
+//  utils::HTTPProxy proxy;
+//  proxy.host = "localhost";
+//  proxy.port = 3128;
+//  REQUIRE(true == sftp_client.setProxy(utils::SFTPClient::ProxyType::Http, proxy));
+  sftp_client.setPasswordAuthenticationCredentials("nifipassword");
+//  sftp_client.setPublicKeyAuthenticationCredentials("/Users/danielbakai/.ssh/id_rsa", "");
 //  assert(sftp_client.setHostKeyFile("/tmp/known_hosts", false /*strict_host_checking*/));
 
-REQUIRE(true == sftp_client.connect());
+  REQUIRE(true == sftp_client.connect());
 
   std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> children;
-  REQUIRE(true == sftp_client.listDirectory("/Users/test/", false /*follow_symlinks*/, children));
+  REQUIRE(true == sftp_client.listDirectory("", false /*follow_symlinks*/, children));
   for (const auto& child : children) {
     std::cerr << std::get<0>(child) << ", dir: " << static_cast<bool>(LIBSSH2_SFTP_S_ISDIR(std::get<2>(child).permissions))
         << ", link: " << static_cast<bool>(LIBSSH2_SFTP_S_ISLNK(std::get<2>(child).permissions)) << std::endl;
@@ -70,6 +74,8 @@ REQUIRE(true == sftp_client.connect());
   bool file_not_exists;
   REQUIRE(false == sftp_client.stat("/Users/test/foobar", false /*follow_symlinks*/, attrs, file_not_exists));
   REQUIRE(true == file_not_exists);
+
+  REQUIRE(true == sftp_server.stop());
 
   LogTestController::getInstance().reset();
 }

@@ -42,7 +42,25 @@
 #include "c2/C2Agent.h"
 #include "processors/PutSFTP.h"
 #include "processors/GenerateFlowFile.h"
+#include "tools/SFTPTestServer.h"
 
+
+static void setupPutSFTPProcessor(const std::shared_ptr<TestPlan> plan, const std::shared_ptr<core::Processor>& put, SFTPTestServer& sftp_server) {
+  plan->setProperty(put, "Hostname", "localhost");
+  plan->setProperty(put, "Port", std::to_string(sftp_server.getPort()));
+  plan->setProperty(put, "Username", "nifiuser");
+  plan->setProperty(put, "Password", "nifipassword");
+  plan->setProperty(put, "Remote Path", "nifi_test/");
+  plan->setProperty(put, "Create Directory", "true");
+  plan->setProperty(put, "Batch Size", "2");
+  plan->setProperty(put, "Connection Timeout", "30 sec");
+  plan->setProperty(put, "Data Timeout", "30 sec");
+  plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
+  plan->setProperty(put, "Strict Host Key Checking", "false");
+  plan->setProperty(put, "Send Keep Alive On Timeout", "false");
+  plan->setProperty(put, "Use Compression", "false");
+  plan->setProperty(put, "Reject Zero-Byte Files", "true");
+}
 
 TEST_CASE("PutSFTP simple test", "[PutSFTPSimple]") {
   TestController testController;
@@ -55,6 +73,16 @@ TEST_CASE("PutSFTP simple test", "[PutSFTPSimple]") {
   auto plan = testController.createPlan();
   auto repo = std::make_shared<TestRepository>();
 
+  // Define directory for SFTP VFS root
+  char format[] = "/tmp/gt.XXXXXX";
+  char *dir = testController.createTempDirectory(format);
+  REQUIRE(dir != nullptr);
+
+  // Start SFTP server
+  SFTPTestServer sftp_server(format);
+  REQUIRE(true == sftp_server.start());
+  uint16_t port = sftp_server.getPort();
+
   // Build MiNiFi processing graph
   auto generate = plan->addProcessor(
       "GenerateFlowFile",
@@ -65,10 +93,11 @@ TEST_CASE("PutSFTP simple test", "[PutSFTPSimple]") {
       core::Relationship("success", "description"),
       true);
   plan->setProperty(put, "Hostname", "localhost");
-  plan->setProperty(put, "Port", "22");
-  plan->setProperty(put, "Username", "test");
-  plan->setProperty(put, "Password", "<redacted>");
+  plan->setProperty(put, "Port", std::to_string(port));
+  plan->setProperty(put, "Username", "nifiuser");
+  plan->setProperty(put, "Password", "nifipassword");
   plan->setProperty(put, "Remote Path", "processor-test");
+//  plan->setProperty(put, "Disable Directory Listing", "true");
   plan->setProperty(put, "Create Directory", "true");
   plan->setProperty(put, "Batch Size", "500");
   plan->setProperty(put, "Connection Timeout", "30 sec");
@@ -85,4 +114,41 @@ TEST_CASE("PutSFTP simple test", "[PutSFTPSimple]") {
   plan->runNextProcessor();  // PutSFTP
 
   // Verify output state
+}
+
+TEST_CASE("PutSFTP put file", "[testPutSFTPFile]") {
+  TestController testController;
+
+  LogTestController::getInstance().setTrace<TestPlan>();
+  LogTestController::getInstance().setTrace<processors::GenerateFlowFile>();
+  LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
+  LogTestController::getInstance().setTrace<processors::PutSFTP>();
+
+  auto plan = testController.createPlan();
+  auto repo = std::make_shared<TestRepository>();
+
+  // Define directory for SFTP VFS root
+  char format[] = "/tmp/gt.XXXXXX";
+  char *dir = testController.createTempDirectory(format);
+  REQUIRE(dir != nullptr);
+
+  // Start SFTP server
+  SFTPTestServer sftp_server(format);
+  REQUIRE(true == sftp_server.start());
+
+  // Build MiNiFi processing graph
+  auto generate = plan->addProcessor(
+      "GenerateFlowFile",
+      "Generate");
+  auto put = plan->addProcessor(
+      "PutSFTP",
+      "PutSFTP",
+      core::Relationship("success", "description"),
+      true);
+  setupPutSFTPProcessor(plan, put, sftp_server);
+
+  plan->runNextProcessor();  // Generate
+  plan->runNextProcessor();  // PutSFTP
+
+  // TODO: check file contents
 }

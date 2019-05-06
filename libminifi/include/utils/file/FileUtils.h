@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <errno.h>
 #endif
 #endif
 #include <cstdio>
@@ -49,6 +50,9 @@
 #include <tchar.h> // _tcscpy,_tcscat,_tcscmp
 #include <string> // string
 #include <algorithm> // replace
+#endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
 #endif
 
 #include "core/logging/LoggerConfiguration.h"
@@ -391,6 +395,61 @@ class FileUtils {
     std::stringstream new_path;
     new_path << root << get_separator() << child;
     return new_path.str();
+  }
+
+  static std::string get_parent_path(const std::string& path) {
+    size_t last_separator = path.find_last_of(get_separator());
+    if (last_separator == std::string::npos) {
+      return "";
+    }
+    return path.substr(0, last_separator);
+  }
+
+  /*
+   * Returns the absolute path of the current executable
+   */
+  static std::string get_executable_path() {
+#if defined(__linux__)
+    std::vector<char> buf(1024U);
+    while (true) {
+      ssize_t ret = readlink("/proc/self/exe", buf.data(), buf.size());
+      if (ret == -1) {
+        return "";
+      }
+      if (ret == buf.size()) {
+        /* It may have been truncated */
+        buf.resize(buf.size() * 2);
+        continue;
+      }
+      return std::string(buf.data());
+    }
+#elif defined(__APPLE__)
+    std::vector<char> buf(PATH_MAX);
+    uint32_t buf_size = buf.size();
+    while (_NSGetExecutablePath(buf.data(), &buf_size) != 0) {
+      buf.resize(buf_size);
+    }
+    std::vector<char> resolved_name(PATH_MAX);
+    if (realpath(buf.data(), resolved_name.data()) == nullptr) {
+      return "";
+    }
+    return std::string(resolved_name.data());
+#elif defined(WIN32)
+    return ""; // TODO
+#else
+    return "";
+#endif
+  }
+
+  /*
+   * Returns the absolute path to the directory containing the current executable
+   */
+  static std::string get_executable_dir() {
+    auto executable_path = get_executable_path();
+    if (executable_path.empty()) {
+      return "";
+    }
+    return get_parent_path(executable_path);
   }
 };
 

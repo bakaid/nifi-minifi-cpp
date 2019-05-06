@@ -154,6 +154,8 @@ class PutSFTP : public core::Processor {
   bool use_keepalive_on_timeout_;
   bool use_compression_;
   std::string proxy_type_;
+
+  bool processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session);
 };
 
 REGISTER_RESOURCE(PutSFTP, "Sends FlowFiles to an SFTP Server")
