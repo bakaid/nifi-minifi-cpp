@@ -39,23 +39,23 @@ TEST_CASE("TestFileUtils::concat_path", "[TestConcatPath]") {
 
 TEST_CASE("TestFileUtils::get_parent_path", "[TestGetParentPath]") {
 #ifdef WIN32
-  std::string relative = "foo\\bar";
-  REQUIRE("foo\\" == FileUtils::get_parent_path(relative));
-  std::string absolute = "C:\\foo\\bar";
-  REQUIRE("C:\\foo\\" == FileUtils::get_parent_path(absolute));
-  std::string parent_root = "C:\\foo";
-  REQUIRE("C:\\" == FileUtils::get_parent_path(parent_root));
-  std::string parent_root = "C:\\";
-  REQUIRE("" == FileUtils::get_parent_path(root));
+  REQUIRE("foo\\" == FileUtils::get_parent_path("foo\\bar"));
+  REQUIRE("foo\\" == FileUtils::get_parent_path("foo\\bar\\"));
+  REQUIRE("C:\\foo\\" == FileUtils::get_parent_path("C:\\foo\\bar"));
+  REQUIRE("C:\\foo\\" == FileUtils::get_parent_path("C:\\foo\\bar\\"));
+  REQUIRE("C:\\" == FileUtils::get_parent_path("C:\\foo"));
+  REQUIRE("C:\\" == FileUtils::get_parent_path("C:\\foo\\"));
+  REQUIRE("" == FileUtils::get_parent_path("C:\\"));
+  REQUIRE("" == FileUtils::get_parent_path("C:\\\\"));
 #else
-  std::string relative = "foo/bar";
-  REQUIRE("foo/" == FileUtils::get_parent_path(relative));
-  std::string absolute = "/foo/bar";
-  REQUIRE("/foo/" == FileUtils::get_parent_path(absolute));
-  std::string parent_root = "/foo";
-  REQUIRE("/" == FileUtils::get_parent_path(parent_root));
-  std::string root = "/";
-  REQUIRE("" == FileUtils::get_parent_path(root));
+  REQUIRE("foo/" == FileUtils::get_parent_path("foo/bar"));
+  REQUIRE("foo/" == FileUtils::get_parent_path("foo/bar/"));
+  REQUIRE("/foo/" == FileUtils::get_parent_path("/foo/bar"));
+  REQUIRE("/foo/" == FileUtils::get_parent_path("/foo/bar/"));
+  REQUIRE("/" == FileUtils::get_parent_path("/foo"));
+  REQUIRE("/" == FileUtils::get_parent_path("/foo/"));
+  REQUIRE("" == FileUtils::get_parent_path("/"));
+  REQUIRE("" == FileUtils::get_parent_path("//"));
 #endif
 }
 

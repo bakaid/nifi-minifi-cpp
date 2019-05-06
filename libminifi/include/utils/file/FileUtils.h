@@ -409,9 +409,11 @@ class FileUtils {
       /* Empty path has no parent */
       return "";
     }
+    bool absolute = false;
     size_t root_pos = 0U;
 #ifdef WIN32
     if (path[0] == '\\') {
+      absolute = true;
       if (path.size() < 2U) {
         return "";
       }
@@ -435,20 +437,26 @@ class FileUtils {
                toupper(path[0]) =< 'Z' &&
                path[1] == ':' &&
                path[2] == '\\') {
+      absolute = true;
       root_pos = 2U;
-    }
-    if (path.size() == root_pos) {
-      return "";
     }
 #else
     if (path[0] == '/') {
-      if (path.size() == 1U) {
-        /* root has no parent */
-        return "";
-      }
+      absolute = true;
+      root_pos = 0U;
     }
 #endif
-    size_t last_separator = path.find_last_of(get_separator());
+    /* Ignore trailing separators */
+    size_t last_pos = path.size() - 1;
+    while (last_pos > root_pos && path[last_pos] == get_separator()) {
+      last_pos--;
+    }
+    if (absolute && last_pos == root_pos) {
+      /* This means we are only a root */
+      return "";
+    }
+    /* Find parent */
+    size_t last_separator = path.find_last_of(get_separator(), last_pos);
     if (last_separator == std::string::npos || last_separator < root_pos) {
       return "";
     }
