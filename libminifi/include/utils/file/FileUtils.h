@@ -479,7 +479,7 @@ class FileUtils {
         buf.resize(buf.size() * 2);
         continue;
       }
-      return std::string(buf.data());
+      return std::string(buf.data(), ret);
     }
 #elif defined(__APPLE__)
     std::vector<char> buf(PATH_MAX);

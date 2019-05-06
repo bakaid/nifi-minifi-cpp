@@ -110,6 +110,7 @@ bool SFTPTestServer::stop() {
     ::unlink(port_file_path_.c_str());
   }
 #endif
+  started_ = false;
   return true;
 }
 
