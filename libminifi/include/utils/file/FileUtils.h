@@ -392,17 +392,67 @@ class FileUtils {
   }
 
   static std::string concat_path(const std::string& root, const std::string& child) {
+    if (root.empty()) {
+      return child;
+    }
     std::stringstream new_path;
-    new_path << root << get_separator() << child;
+    if (root.back() == get_separator()) {
+      new_path << root << child;
+    } else {
+      new_path << root << get_separator() << child;
+    }
     return new_path.str();
   }
 
   static std::string get_parent_path(const std::string& path) {
-    size_t last_separator = path.find_last_of(get_separator());
-    if (last_separator == std::string::npos) {
+    if (path.empty()) {
+      /* Empty path has no parent */
       return "";
     }
-    return path.substr(0, last_separator);
+    size_t root_pos = 0U;
+#ifdef WIN32
+    if (path[0] == '\\') {
+      if (path.size() < 2U) {
+        return "";
+      }
+      if (path[1] == '\\') {
+        if (path.size() >= 4U &&
+           (path[2] == '?' || path[2] == '.') &&
+            path[3] == '\\') {
+          /* Probably an UNC path */
+          root_pos = 4U;
+        } else {
+          /* Probably a \\server\-type path */
+          root_pos = 2U;
+        }
+        root_pos = path.find_first_of("\\", root_pos);
+        if (root_pos == std::string::npos) {
+          return "";
+        }
+      }
+    } else if (path.size() >= 3U &&
+               toupper(path[0]) >= 'A' &&
+               toupper(path[0]) =< 'Z' &&
+               path[1] == ':' &&
+               path[2] == '\\') {
+      root_pos = 2U;
+    }
+    if (path.size() == root_pos) {
+      return "";
+    }
+#else
+    if (path[0] == '/') {
+      if (path.size() == 1U) {
+        /* root has no parent */
+        return "";
+      }
+    }
+#endif
+    size_t last_separator = path.find_last_of(get_separator());
+    if (last_separator == std::string::npos || last_separator < root_pos) {
+      return "";
+    }
+    return path.substr(0, last_separator + 1);
   }
 
   /*
@@ -435,7 +485,23 @@ class FileUtils {
     }
     return std::string(resolved_name.data());
 #elif defined(WIN32)
-    return ""; // TODO
+    HMODULE hModule = GetModuleHandleA(nullptr);
+    if (hModule == nullptr) {
+      return "";
+    }
+    std::vector<char> buf(1024U);
+    while (true) {
+      size_t ret = GetModuleFileNameA(hModule, buf.data(), buf.size());
+      if (ret == 0U) {
+        return "";
+      }
+      if (ret == buf.size() && GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+        /* It has been truncated */
+        buf.resize(buf.size() * 2);
+        continue;
+      }
+      return std::string(buf.data());
+    }
 #else
     return "";
 #endif
