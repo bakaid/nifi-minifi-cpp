@@ -140,6 +140,14 @@ class PutSFTPTestsFixture {
     REQUIRE(expected_content == content.str());
   }
 
+  void testFileNotExists(const std::string& relative_path) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/vfs/" << relative_path;
+    std::ifstream file(resultFile.str());
+    REQUIRE(false == file.is_open());
+    REQUIRE(false == file.good());
+  }
+
  protected:
   char *src_dir;
   char *dst_dir;
@@ -167,13 +175,6 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP put two files", "[testPutSFTPFile
   testFile("nifi_test/tstFile1.ext", "content 1");
   testFile("nifi_test/tstFile2.ext", "content 2");
 }
-
-//TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP bad password", "[testPutSFTPFile]") {
-//  plan->setProperty(put, "Password", "badpassword");
-//  createFile(src_dir, "tstFile.ext", "tempFile");
-//
-//  testController.runSession(plan, true);
-//}
 
 TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP conflict resolution rename", "[testPutSFTPFile]") {
   plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
@@ -242,19 +243,101 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP conflict resolution replace", "[t
   testFile("nifi_test/tstFile1.ext", "content 1");
 }
 
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP conflict resolution none", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_NONE);
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test")));
+  createFile(utils::file::FileUtils::concat_path(dst_dir, "vfs"), "nifi_test/tstFile1.ext", "content 2");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship failure"));
+  testFile("nifi_test/tstFile1.ext", "content 2");
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP conflict resolution with directory existing at target", "[testPutSFTPFile]") {
+  bool should_predetect_failure = true;
+  SECTION("with conflict resolution rename") {
+    plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
+  }
+  SECTION("with conflict resolution reject") {
+    plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_REJECT);
+  }
+  SECTION("with conflict resolution fail") {
+    plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_FAIL);
+  }
+  SECTION("with conflict resolution ignore") {
+    plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_IGNORE);
+  }
+  SECTION("with conflict resolution replace") {
+    plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_REPLACE);
+  }
+  SECTION("with conflict resolution none") {
+    plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_NONE);
+    should_predetect_failure = false;
+  }
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test")));
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test/tstFile1.ext")));
+
+  testController.runSession(plan, true);
+
+  if (should_predetect_failure) {
+    REQUIRE(LogTestController::getInstance().contains("Rejecting tstFile1.ext because a directory with the same name already exists"));
+    REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship reject"));
+  } else {
+    REQUIRE(LogTestController::getInstance().contains("Failed to rename remote file \"nifi_test/.tstFile1.ext\" to \"nifi_test/tstFile1.ext\", error: LIBSSH2_FX_FILE_ALREADY_EXISTS"));
+    REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship failure"));
+  }
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP reject zero-byte false", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Reject Zero-Byte Files", "false");
+
+  createFile(src_dir, "tstFile1.ext", "");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship success"));
+  testFile("nifi_test/tstFile1.ext", "");
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP reject zero-byte true", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Reject Zero-Byte Files", "true");
+
+  createFile(src_dir, "tstFile1.ext", "");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Rejecting tstFile1.ext because it is zero bytes"));
+  REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship reject"));
+  testFileNotExists("nifi_test/tstFile1.ext");
+}
+
+//TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP bad password", "[testPutSFTPFile]") {
+//  plan->setProperty(put, "Password", "badpassword");
+//  createFile(src_dir, "tstFile.ext", "tempFile");
+//
+//  testController.runSession(plan, true);
+//}
+
+
 // private key auth
 // both auth
 // host key file test (both strict and non-strict)
 // disable directory listing test by setting 0100 on the directories
 // create directory disable test
 // conflict resolution tests
-//  - directory in place of target file
-//  - replace
-//  - ignore
-//  - rename
-//  - reject
-//  - fail
-// reject zero-byte
+//  - directory in place of target file -> OK
+//  - replace -> OK
+//  - ignore -> OK
+//  - rename -> OK
+//  - reject -> OK
+//  - fail -> OK
+//  - none -> OK
+// reject zero-byte -> OK
 // disable dot-rename test by creating an unoverwriteable dot file
 // temporary filename test (with expression language)
 // permissions (non-windows)

@@ -217,7 +217,9 @@ class FileUtils {
 #ifdef WIN32
       _mkdir(path.c_str());
 #else
-      mkdir(path.c_str(), 0700);
+      if (mkdir(path.c_str(), 0700) != 0 && errno != EEXIST) {
+        return -1;
+      }
 #endif
       return 0;
     }
