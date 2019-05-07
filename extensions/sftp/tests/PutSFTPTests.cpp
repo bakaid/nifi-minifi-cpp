@@ -76,7 +76,7 @@ TEST_CASE("PutSFTP put file", "[testPutSFTPFile]") {
       "PutSFTP",
       core::Relationship("success", "description"),
       true);
-  plan->addProcessor("LogAttribute", "LogAttribute", core::Relationship("success", "description"), true);
+  plan->addProcessor("LogAttribute", "LogAttribute", { core::Relationship("success", "d"), core::Relationship("reject", "d"), core::Relationship("failure", "d") }, true);
 
   // Configure GetFile processor
   plan->setProperty(getfile, "Input Directory", src_dir);
@@ -139,4 +139,25 @@ TEST_CASE("PutSFTP put file", "[testPutSFTPFile]") {
     testFile("nifi_test/tstFile1.ext", "content 1");
     testFile("nifi_test/tstFile2.ext", "content 2");
   }
+
+  // private key auth
+  // both auth
+  // host key file test (both strict and non-strict)
+  // disable directory listing test by setting 0100 on the directories
+  // create directory disable test
+  // conflict resolution tests
+  //  - directory in place of target file
+  //  - replace
+  //  - ignore
+  //  - rename
+  //  - reject
+  //  - fail
+  // reject zero-byte
+  // disable dot-rename test by creating an unoverwriteable dot file
+  // temporary filename test (with expression language)
+  // permissions (non-windows)
+  // remote owner and group (non-windows)
+  // modification time
+  // batching tests
+  // proxy tests -> not really feasible, manual/docker tests
 }

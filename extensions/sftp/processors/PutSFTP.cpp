@@ -76,7 +76,7 @@ core::Property PutSFTP::RemotePath(
 core::Property PutSFTP::CreateDirectory(
     core::PropertyBuilder::createProperty("Create Directory")->withDescription("Specifies whether or not the remote directory should be created if it does not exist.")
         ->withDefaultValue<bool>(false)->build());
-core::Property PutSFTP::DisableDirectoryListing( // TODO: dynamic properties
+core::Property PutSFTP::DisableDirectoryListing(
     core::PropertyBuilder::createProperty("Disable Directory Listing")->withDescription("If set to 'true', directory listing is not performed prior to create missing directories. "
                                                                                         "By default, this processor executes a directory listing command to see target directory existence before creating missing directories. "
                                                                                         "However, there are situations that you might need to disable the directory listing such as the following. "
