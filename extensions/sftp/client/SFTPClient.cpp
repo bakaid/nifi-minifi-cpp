@@ -386,12 +386,14 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
   } else {
     flags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_EXCL;
   }
+  logger_->log_trace("Opening remote file \"%s\"", path.c_str());
   LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), flags, 0644);
   if (file_handle == nullptr) {
     logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
     return false;
   }
-  ScopeGuard guard([&file_handle]() {
+  ScopeGuard guard([this, &file_handle, &path]() {
+    logger_->log_trace("Closing remote file \"%s\"", path.c_str());
     libssh2_sftp_close(file_handle);
   });
 
@@ -404,15 +406,18 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
       logger_->log_error("Error while reading input");
       return false;
     } else if (read_ret == 0) {
+      logger_->log_trace("EOF while reading input");
       break; // TODO
     }
+    logger_->log_trace("Read %d bytes", read_ret);\
     ssize_t remaining = read_ret;
     while (remaining > 0) {
-      int write_ret = libssh2_sftp_write(file_handle, reinterpret_cast<char*>(buf.data() + (buf.size() - remaining)), remaining);
+      int write_ret = libssh2_sftp_write(file_handle, reinterpret_cast<char*>(buf.data() + (read_ret - remaining)), remaining);
       if (write_ret < 0) {
         logger_->log_error("Failed to write remote file \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
         return false;
       }
+      logger_->log_trace("Wrote %ld bytes", write_ret);
       remaining -= write_ret;
     }
   } while (true);

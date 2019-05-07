@@ -40,40 +40,48 @@
 #include "unit/ProvenanceTestHelper.h"
 #include "io/StreamFactory.h"
 #include "processors/PutSFTP.h"
-#include "processors/GenerateFlowFile.h"
+#include "processors/GetFile.h"
 #include "tools/SFTPTestServer.h"
 
 TEST_CASE("PutSFTP put file", "[testPutSFTPFile]") {
   TestController testController;
 
   LogTestController::getInstance().setTrace<TestPlan>();
-  LogTestController::getInstance().setTrace<processors::GenerateFlowFile>();
+  LogTestController::getInstance().setTrace<processors::GetFile>();
   LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
   LogTestController::getInstance().setTrace<processors::PutSFTP>();
 
   auto plan = testController.createPlan();
   auto repo = std::make_shared<TestRepository>();
 
-  // Define directory for SFTP VFS root
-  char format[] = "/tmp/gt.XXXXXX";
-  char *dir = testController.createTempDirectory(format);
-  REQUIRE(dir != nullptr);
+  // Create temporary directories
+  char format1[] = "/tmp/gt.XXXXXX";
+  char *src_dir = testController.createTempDirectory(format1);
+  REQUIRE(src_dir != nullptr);
+
+  char format2[] = "/tmp/ft.XXXXXX";
+  char *dst_dir = testController.createTempDirectory(format2);
+  REQUIRE(dst_dir != nullptr);
 
   // Start SFTP server
-  SFTPTestServer sftp_server(format);
+  SFTPTestServer sftp_server(dst_dir);
   REQUIRE(true == sftp_server.start());
 
   // Build MiNiFi processing graph
-  auto generate = plan->addProcessor(
-      "GenerateFlowFile",
-      "Generate");
+  auto getfile = plan->addProcessor(
+      "GetFile",
+      "GetFile");
   auto put = plan->addProcessor(
       "PutSFTP",
       "PutSFTP",
       core::Relationship("success", "description"),
       true);
+  plan->addProcessor("LogAttribute", "LogAttribute", core::Relationship("success", "description"), true);
 
-  // Configure SFTP processor
+  // Configure GetFile processor
+  plan->setProperty(getfile, "Input Directory", src_dir);
+
+  // Configure PutSFTP processor
   plan->setProperty(put, "Hostname", "localhost");
   plan->setProperty(put, "Port", std::to_string(sftp_server.getPort()));
   plan->setProperty(put, "Username", "nifiuser");
@@ -89,18 +97,46 @@ TEST_CASE("PutSFTP put file", "[testPutSFTPFile]") {
   plan->setProperty(put, "Use Compression", "false");
   plan->setProperty(put, "Reject Zero-Byte Files", "true");
 
-  SECTION("Put one file") {
-    plan->runNextProcessor();  // Generate
-    plan->runNextProcessor();  // PutSFTP
+  // Create source file
+  auto createFile = [&](const std::string& relative_path, const std::string& content) {
+    std::fstream file;
+    std::stringstream ss;
+    ss << src_dir << "/" << relative_path;
+    file.open(ss.str(), std::ios::out);
+    file << content;
+    file.close();
+  };
 
-    // TODO: check file contents
+  // Test target file
+  auto testFile = [&](const std::string& relative_path, const std::string& expected_content) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/vfs/" << relative_path;
+    std::ifstream file(resultFile.str());
+    REQUIRE(true == file.good());
+    std::stringstream content;
+    std::vector<char> buffer(1024U);
+    while (file) {
+      file.read(buffer.data(), buffer.size());
+      content << std::string(buffer.data(), file.gcount());
+    }
+    REQUIRE(expected_content == content.str());
+  };
+
+  SECTION("Put one file") {
+    createFile("tstFile.ext", "tempFile");
+
+    testController.runSession(plan, true);
+
+    testFile("nifi_test/tstFile.ext", "tempFile");
   }
 
   SECTION("Put two files") {
-    plan->setProperty(generate, "Batch Size", "2");
-    plan->runNextProcessor();  // Generate
-    plan->runNextProcessor();  // PutSFTP
+    createFile("tstFile1.ext", "content 1");
+    createFile("tstFile2.ext", "content 2");
 
-    // TODO: check file contents
+    testController.runSession(plan, true);
+
+    testFile("nifi_test/tstFile1.ext", "content 1");
+    testFile("nifi_test/tstFile2.ext", "content 2");
   }
 }
