@@ -485,6 +485,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
         session->transfer(flow_file, Reject);
         return true;
       }
+      logger_->log_debug("Found file with the same name as the target file: %s", filename.c_str());
       if (conflict_resolution_ == CONFLICT_RESOLUTION_IGNORE) {
         logger_->log_debug("Routing %s to SUCCESS despite a file with the same name already existing", filename.c_str());
         session->transfer(flow_file, Success);
@@ -518,7 +519,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           }
         }
         if (unique_name_generated) {
-          logger_->log_debug("Resolved %s to %s", possible_resolved_filename.c_str());
+          logger_->log_debug("Resolved %s to %s", filename.c_str(), possible_resolved_filename.c_str());
           resolved_filename = std::move(possible_resolved_filename);
         } else {
           logger_->log_error("Rejecting %s because a unique name could not be determined after 99 attempts", filename.c_str());

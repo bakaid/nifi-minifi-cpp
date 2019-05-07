@@ -432,13 +432,26 @@ bool SFTPClient::rename(const std::string& source_path, const std::string& targe
   } else {
     flags = LIBSSH2_SFTP_RENAME_ATOMIC | LIBSSH2_SFTP_RENAME_NATIVE;
   }
-  if (libssh2_sftp_rename_ex(sftp_session_,
+  bool tried_deleting = false;
+  while (libssh2_sftp_rename_ex(sftp_session_,
                               source_path.c_str(),
                               source_path.length(),
                               target_path.c_str(),
                               target_path.length(),
                               flags) != 0) {
-    logger_->log_error("Failed to rename remote file \"%s\", error: %s", source_path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
+    auto err = libssh2_sftp_last_error(sftp_session_);
+    if (overwrite && err == LIBSSH2_FX_FILE_ALREADY_EXISTS && !tried_deleting) {
+      /* It couldn't overwrite the file, let's delete it and try again */
+      tried_deleting = true;
+      if (!this->removeFile(target_path)) {
+        return false;
+      }
+      continue;
+    }
+    logger_->log_error("Failed to rename remote file \"%s\" to \"%s\", error: %s",
+        source_path.c_str(),
+        target_path.c_str(),
+        sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
     return false;
   }
   return true;
