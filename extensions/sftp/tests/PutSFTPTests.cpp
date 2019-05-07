@@ -148,6 +148,12 @@ class PutSFTPTestsFixture {
     REQUIRE(false == file.good());
   }
 
+  void testModificationTime(const std::string& relative_path, int64_t mtime) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/vfs/" << relative_path;
+    REQUIRE(mtime == utils::file::FileUtils::last_write_time(resultFile.str()));
+  }
+
  protected:
   char *src_dir;
   char *dst_dir;
@@ -316,6 +322,17 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP reject zero-byte true", "[testPut
   testFileNotExists("nifi_test/tstFile1.ext");
 }
 
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set mtime", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Last Modified Time", "2065-01-24T05:20:00Z");
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile1.ext", "content 1");
+  testModificationTime("nifi_test/tstFile1.ext", 3000000000LL);
+}
+
 //TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP bad password", "[testPutSFTPFile]") {
 //  plan->setProperty(put, "Password", "badpassword");
 //  createFile(src_dir, "tstFile.ext", "tempFile");
@@ -342,6 +359,6 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP reject zero-byte true", "[testPut
 // temporary filename test (with expression language)
 // permissions (non-windows)
 // remote owner and group (non-windows)
-// modification time
+// modification time -> OK
 // batching tests
 // proxy tests -> not really feasible, manual/docker tests
