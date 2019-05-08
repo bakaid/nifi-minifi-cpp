@@ -46,4 +46,7 @@ FOREACH(testfile ${SFTP_INTEGRATION_TESTS})
 ENDFOREACH()
 message("-- Finished building ${SFTP-EXTENSIONS_TEST_COUNT} SFTP related test file(s)...")
 
+# Copy test resources
+file(COPY "${CMAKE_SOURCE_DIR}/extensions/sftp/tests/resources" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/")
+
 add_subdirectory(tools)

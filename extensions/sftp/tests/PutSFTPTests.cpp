@@ -208,6 +208,64 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP put two files", "[testPutSFTPFile
   testFile("nifi_test/tstFile2.ext", "content 2");
 }
 
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP bad password", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Password", "badpassword");
+  createFile(src_dir, "tstFile.ext", "tempFile");
+
+  try {
+    testController.runSession(plan, true);
+  } catch (std::exception &e) {
+    std::string expected("Process Session Operation:Can not find the transfer relationship for the updated flow");
+    REQUIRE(0 == std::string(e.what()).compare(0, expected.size(), expected));
+  }
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to authenticate with password, error: Authentication failed (username/password)"));
+  REQUIRE(LogTestController::getInstance().contains("Could not authenticate with any available method"));
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP public key authentication success", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Private Key Path", utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"));
+  plan->setProperty(put, "Private Key Passphrase", "privatekeypassword");
+
+  createFile(src_dir, "tstFile.ext", "tempFile");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Successfully authenticated with publickey"));
+  testFile("nifi_test/tstFile.ext", "tempFile");
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP public key authentication bad passphrase", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Password", "");
+  plan->setProperty(put, "Private Key Path", utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"));
+  plan->setProperty(put, "Private Key Passphrase", "badpassword");
+
+  createFile(src_dir, "tstFile.ext", "tempFile");
+
+  try {
+    testController.runSession(plan, true);
+  } catch (std::exception &e) {
+    std::string expected("Process Session Operation:Can not find the transfer relationship for the updated flow");
+    REQUIRE(0 == std::string(e.what()).compare(0, expected.size(), expected));
+  }
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to authenticate with publickey, error: Unable to extract public key from private key file: Wrong passphrase or invalid/unrecognized private key file format"));
+  REQUIRE(LogTestController::getInstance().contains("Could not authenticate with any available method"));
+  }
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP public key authentication bad passphrase fallback to password", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Private Key Path", utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"));
+  plan->setProperty(put, "Private Key Passphrase", "badpassword");
+
+  createFile(src_dir, "tstFile.ext", "tempFile");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to authenticate with publickey, error: Unable to extract public key from private key file: Wrong passphrase or invalid/unrecognized private key file format"));
+  REQUIRE(LogTestController::getInstance().contains("Successfully authenticated with password"));
+  testFile("nifi_test/tstFile.ext", "tempFile");
+}
+
 TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP conflict resolution rename", "[testPutSFTPFile]") {
   plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
 
@@ -508,16 +566,8 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP test disable directory listing", 
   REQUIRE(should_list == LogTestController::getInstance().contains("Failed to stat remote path \"nifi_test\", error: LIBSSH2_FX_NO_SUCH_FILE"));
 }
 
-//TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP bad password", "[testPutSFTPFile]") {
-//  plan->setProperty(put, "Password", "badpassword");
-//  createFile(src_dir, "tstFile.ext", "tempFile");
-//
-//  testController.runSession(plan, true);
-//}
-
-
-// private key auth
-// both auth
+// public key auth -> OK
+// both auth -> OK
 // host key file test (both strict and non-strict)
 // disable directory listing test -> OK, needs dynamic property test
 // create directory disable test -> OK
