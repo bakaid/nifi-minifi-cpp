@@ -121,9 +121,15 @@ bool SFTPClient::setHostKeyFile(const std::string& host_key_file_path, bool stri
   }
   ssh_known_hosts_ = libssh2_knownhost_init(ssh_session_);
   if (ssh_known_hosts_ == nullptr) {
+    char *err_msg = nullptr;
+    libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
+    logger_->log_error("Failed to init knownhost structure, error: %s", err_msg);
     return false;
   }
   if (libssh2_knownhost_readfile(ssh_known_hosts_, host_key_file_path.c_str(), LIBSSH2_KNOWNHOST_FILE_OPENSSH) <= 0) {
+    char *err_msg = nullptr;
+    libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
+    logger_->log_error("Failed to read host file %s, error: %s", host_key_file_path.c_str(), err_msg);
     return false;
   }
   strict_host_checking_ = strict_host_checking;
@@ -280,7 +286,7 @@ bool SFTPClient::connect() {
           fingerprint_hex << ":";
         }
       }
-      logger_->log_debug("SHA1 host key fingerprint for %s is %s", uri.str().c_str(), fingerprint_hex.str().c_str());
+      logger_->log_debug("SHA1 host key fingerprint for %s is %s", hostname_.c_str(), fingerprint_hex.str().c_str());
     }
   }
 

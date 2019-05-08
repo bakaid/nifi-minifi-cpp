@@ -260,12 +260,12 @@ void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, c
   if (!context->getProperty(StrictHostKeyChecking.getName(), value)) {
     logger_->log_error("Strict Host Key Checking attribute is missing or invalid");
   } else {
-    core::Property::StringToInt(value, strict_host_checking_);
+    utils::StringUtils::StringToBool(value, strict_host_checking_);
   }
   if (!context->getProperty(UseCompression.getName(), value)) {
     logger_->log_error("Use Compression attribute is missing or invalid");
   } else {
-    core::Property::StringToInt(value, use_compression_);
+    utils::StringUtils::StringToBool(value, use_compression_);
   }
   context->getProperty(ProxyType.getName(), proxy_type_);
 }
@@ -535,7 +535,6 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   /* Create remote directory if needed */
   if (create_directory_) {
     bool should_create_directory = disable_directory_listing;
-    logger_->log_error("disable_directory_listing %d", disable_directory_listing);
     if (!disable_directory_listing) {
       LIBSSH2_SFTP_ATTRIBUTES attrs;
       bool file_not_exists;
