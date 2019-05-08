@@ -262,6 +262,11 @@ void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, c
   } else {
     utils::StringUtils::StringToBool(value, strict_host_checking_);
   }
+  if (!context->getProperty(UseKeepaliveOnTimeout.getName(), value)) {
+    logger_->log_error("Send Keep Alive On Timeout attribute is missing or invalid");
+  } else {
+    utils::StringUtils::StringToBool(value, use_keepalive_on_timeout_);
+  }
   if (!context->getProperty(UseCompression.getName(), value)) {
     logger_->log_error("Use Compression attribute is missing or invalid");
   } else {
@@ -449,11 +454,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     return false;
   }
   client.setDataTimeout(data_timeout_);
-  if (!client.setSendKeepAlive(use_keepalive_on_timeout_)) {
-    logger_->log_error("Cannot set keepalive on timeout");
-    context->yield();
-    return false;
-  }
+  client.setSendKeepAlive(use_keepalive_on_timeout_);
   if (!client.setUseCompression(use_compression_)) {
     logger_->log_error("Cannot set compression");
     context->yield();

@@ -74,6 +74,7 @@ SFTPClient::SFTPClient(const std::string &hostname, uint16_t port, const std::st
       password_authentication_enabled_(false),
       public_key_authentication_enabled_(false),
       data_timeout_(0),
+      curl_errorbuffer_(CURL_ERROR_SIZE, '\0'),
       easy_(nullptr),
       ssh_session_(nullptr),
       sftp_session_(nullptr),
@@ -183,8 +184,14 @@ void SFTPClient::setDataTimeout(int64_t timeout) {
   libssh2_session_set_timeout(ssh_session_, timeout);
 }
 
-bool SFTPClient::setSendKeepAlive(bool send_keepalive) {
-  return true; // TODO
+void SFTPClient::setSendKeepAlive(bool send_keepalive) {
+  unsigned int interval;
+  if (send_keepalive) {
+    interval = 10U; // TODO
+  } else {
+    interval = 0U;
+  }
+  libssh2_keepalive_config(ssh_session_, 0 /*TODO: want_reply*/, interval);
 }
 
 bool SFTPClient::setUseCompression(bool use_compression) {
@@ -200,9 +207,13 @@ bool SFTPClient::connect() {
   }
 
   /* Setting up curl request */
-  std::stringstream uri;
-  uri << hostname_ << ":" << port_;
-  if (curl_easy_setopt(easy_, CURLOPT_URL, uri.str().c_str()) != CURLE_OK) {
+  std::stringstream uri_ss;
+  uri_ss << hostname_ << ":" << port_;
+  auto uri = uri_ss.str();
+  if (curl_easy_setopt(easy_, CURLOPT_URL, uri.c_str()) != CURLE_OK) {
+    return false;
+  }
+  if (curl_easy_setopt(easy_, CURLOPT_ERRORBUFFER, curl_errorbuffer_.data()) != CURLE_OK) {
     return false;
   }
   if (curl_easy_setopt(easy_, CURLOPT_NOSIGNAL, 1L) != CURLE_OK) {
@@ -213,14 +224,19 @@ bool SFTPClient::connect() {
   }
 
   /* Connecting to proxy, if needed, then to the host */
-  if (curl_easy_perform(easy_) != CURLE_OK) {
+  CURLcode curl_res = curl_easy_perform(easy_);
+  if (curl_res != CURLE_OK) {
+    logger_->log_error("Failed to connect to %s, curl error code: %s, detailed error message: %s",
+        uri.c_str(),
+        curl_easy_strerror(curl_res),
+        curl_errorbuffer_.data());
     return false;
   }
 
   /* Getting socket from curl */
   curl_socket_t sockfd;
-  if (curl_easy_getinfo(easy_, CURLINFO_ACTIVESOCKET, &sockfd) != CURLE_OK) {
-    // TODO
+  curl_res = curl_easy_getinfo(easy_, CURLINFO_ACTIVESOCKET, &sockfd);
+  if (curl_res != CURLE_OK) {
     return false;
   }
 
@@ -238,7 +254,10 @@ bool SFTPClient::connect() {
     int type = LIBSSH2_HOSTKEY_TYPE_UNKNOWN;
     const char *hostkey = libssh2_session_hostkey(ssh_session_, &hostkey_len, &type);
     if (hostkey == nullptr) {
-      // TODO
+      char *err_msg = nullptr;
+      libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
+      logger_->log_info("Failed to get session hostkey, error: %s", err_msg);
+      return false;
     }
     int keybit = 0;
     switch (type) {
@@ -565,7 +584,7 @@ bool SFTPClient::stat(const std::string& path, bool follow_symlinks, LIBSSH2_SFT
       file_not_exists = true;
     }
     logger_->log_debug("Failed to stat remote path \"%s\", error: %s", path.c_str(), sftp_strerror(error));
-    return false; // TODO: can we differentiate file not exists from other errors?
+    return false;
   }
   return true;
 }
@@ -578,7 +597,6 @@ bool SFTPClient::setAttributes(const std::string& path, const SFTPAttributes& in
     /* Because we can only set these attributes in pairs, we must stat first to learn the other */
     bool file_not_exists;
     if (!this->stat(path, false /*follow_symlinks*/, attrs, file_not_exists)) {
-      // TODO: log
       return false;
     }
   }

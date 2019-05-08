@@ -87,7 +87,7 @@ class SFTPClient {
 
   void setDataTimeout(int64_t timeout);
 
-  bool setSendKeepAlive(bool send_keepalive);
+  void setSendKeepAlive(bool send_keepalive);
 
   bool setUseCompression(bool use_compression);
 
@@ -146,6 +146,8 @@ class SFTPClient {
   std::string private_key_passphrase_;
 
   int64_t data_timeout_;
+
+  std::vector<char> curl_errorbuffer_;
 
   CURL *easy_;
   LIBSSH2_SESSION *ssh_session_;
