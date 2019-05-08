@@ -154,6 +154,32 @@ class PutSFTPTestsFixture {
     REQUIRE(mtime == utils::file::FileUtils::last_write_time(resultFile.str()));
   }
 
+  void testPermissions(const std::string& relative_path, uint32_t expected_permissions) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/vfs/" << relative_path;
+    uint32_t permissions = 0U;
+    REQUIRE(true == utils::file::FileUtils::get_permissions(resultFile.str(), permissions));
+    REQUIRE(expected_permissions == permissions);
+  }
+
+  void testOwner(const std::string& relative_path, uint64_t expected_uid) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/vfs/" << relative_path;
+    uint64_t uid = 0U;
+    uint64_t gid = 0U;
+    REQUIRE(true == utils::file::FileUtils::get_uid_gid(resultFile.str(), uid, gid));
+    REQUIRE(expected_uid == uid);
+  }
+
+  void testGroup(const std::string& relative_path, uint64_t expected_gid) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/vfs/" << relative_path;
+    uint64_t uid = 0U;
+    uint64_t gid = 0U;
+    REQUIRE(true == utils::file::FileUtils::get_uid_gid(resultFile.str(), uid, gid));
+    REQUIRE(expected_gid == gid);
+  }
+
  protected:
   char *src_dir;
   char *dst_dir;
@@ -333,6 +359,155 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set mtime", "[testPutSFTPFile]") 
   testModificationTime("nifi_test/tstFile1.ext", 3000000000LL);
 }
 
+#ifndef WIN32
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set permissions", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Permissions", "0613");
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile1.ext", "content 1");
+  testPermissions("nifi_test/tstFile1.ext", 0613);
+}
+#endif
+
+#ifndef WIN32
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set uid and gid", "[testPutSFTPFile]") {
+#ifdef __APPLE__
+  /*
+   * chowning to another user or an arbitrary group doesn't seem to work on MacOS
+   * We at least change the group to the 'everyone' group
+   */
+  plan->setProperty(put, "Remote Group", "12");
+#else
+  plan->setProperty(put, "Remote Owner", "1234");
+  plan->setProperty(put, "Remote Group", "4567");
+#endif
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile1.ext", "content 1");
+#ifdef __APPLE__
+  testGroup("nifi_test/tstFile1.ext", 12);
+#else
+  testOwner("nifi_test/tstFile1.ext", 1234);
+  testGroup("nifi_test/tstFile1.ext", 4567);
+#endif
+}
+#endif
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP disable directory creation", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Create Directory", "false");
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship failure"));
+  testFileNotExists("nifi_test/tstFile1.ext");
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP test dot rename", "[testPutSFTPFile]") {
+  bool should_fail = false;
+  SECTION("with dot rename enabled") {
+    plan->setProperty(put, "Dot Rename", "true");
+    should_fail = true;
+  }
+  SECTION("with dot rename disabled") {
+    plan->setProperty(put, "Dot Rename", "false");
+    should_fail = false;
+  }
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  /*
+   * We create the would-be dot renamed file in the target, and because we don't overwrite temporary files,
+   * if we really use a dot renamed temporary file, we should fail.
+   */
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test")));
+  createFile(utils::file::FileUtils::concat_path(dst_dir, "vfs"), "nifi_test/.tstFile1.ext", "");
+
+  testController.runSession(plan, true);
+
+  if (should_fail) {
+    REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship failure"));
+    testFileNotExists("nifi_test/tstFile1.ext");
+  } else {
+    REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship success"));
+    testFile("nifi_test/tstFile1.ext", "content 1");
+  }
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP test temporary filename", "[testPutSFTPFile]") {
+  bool should_fail = false;
+  SECTION("with temporary filename set") {
+    /* Also test expression language */
+    plan->setProperty(put, "Temporary Filename", "${ filename:append('.temp') }");
+    should_fail = true;
+  }
+  SECTION("with temporary filename not set and dot rename disabled") {
+    plan->setProperty(put, "Dot Rename", "false");
+    should_fail = false;
+  }
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  /*
+   * We create the would-be temporary file in the target, and because we don't overwrite temporary files,
+   * if we really use the temporary file, we should fail.
+   */
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test")));
+  createFile(utils::file::FileUtils::concat_path(dst_dir, "vfs"), "nifi_test/tstFile1.ext.temp", "");
+
+  testController.runSession(plan, true);
+
+  if (should_fail) {
+    REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship failure"));
+    testFileNotExists("nifi_test/tstFile1.ext");
+  } else {
+    REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship success"));
+    testFile("nifi_test/tstFile1.ext", "content 1");
+  }
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP test temporary file cleanup", "[testPutSFTPFile]") {
+  plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_NONE);
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test")));
+  createFile(utils::file::FileUtils::concat_path(dst_dir, "vfs"), "nifi_test/tstFile1.ext", "content 2");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship failure"));
+  testFile("nifi_test/tstFile1.ext", "content 2");
+  testFileNotExists("nifi_test/.tstFile1.ext");
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP test disable directory listing", "[testPutSFTPFile]") {
+  bool should_list = false;
+  SECTION("with directory listing enabled") {
+    plan->setProperty(put, "Disable Directory Listing", "false");
+    should_list = true;
+  }
+  SECTION("with directory listing disabled") {
+    plan->setProperty(put, "Disable Directory Listing", "true");
+    should_list = false;
+  }
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from PutSFTP to relationship success"));
+  testFileNotExists("nifi_test/inner/tstFile1.ext");
+
+  REQUIRE(should_list == LogTestController::getInstance().contains("Failed to stat remote path \"nifi_test\", error: LIBSSH2_FX_NO_SUCH_FILE"));
+}
+
 //TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP bad password", "[testPutSFTPFile]") {
 //  plan->setProperty(put, "Password", "badpassword");
 //  createFile(src_dir, "tstFile.ext", "tempFile");
@@ -344,9 +519,9 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set mtime", "[testPutSFTPFile]") 
 // private key auth
 // both auth
 // host key file test (both strict and non-strict)
-// disable directory listing test by setting 0100 on the directories
-// create directory disable test
-// conflict resolution tests
+// disable directory listing test -> OK, needs dynamic property test
+// create directory disable test -> OK
+// conflict resolution tests -> OK
 //  - directory in place of target file -> OK
 //  - replace -> OK
 //  - ignore -> OK
@@ -355,10 +530,11 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set mtime", "[testPutSFTPFile]") 
 //  - fail -> OK
 //  - none -> OK
 // reject zero-byte -> OK
-// disable dot-rename test by creating an unoverwriteable dot file
-// temporary filename test (with expression language)
-// permissions (non-windows)
-// remote owner and group (non-windows)
+// dot-rename test -> OK
+// temporary filename test (with expression language) -> OK
+// permissions (non-windows) -> OK
+// remote owner and group (non-windows) -> OK
 // modification time -> OK
 // batching tests
 // proxy tests -> not really feasible, manual/docker tests
+// make sure we clean temporaries -> OK

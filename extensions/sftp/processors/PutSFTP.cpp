@@ -361,6 +361,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   context->getProperty(RemotePath, remote_path, flow_file);
   if (context->getDynamicProperty(DisableDirectoryListing.getName(), value)) {
     utils::StringUtils::StringToBool(value, disable_directory_listing);
+  } else if (context->getProperty(DisableDirectoryListing.getName(), value)) {
+    utils::StringUtils::StringToBool(value, disable_directory_listing); // TODO
   }
   /* Remove trailing slashes */
   while (remote_path.size() > 1U && remote_path.back() == '/') {
@@ -531,43 +533,47 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   }
 
   /* Create remote directory if needed */
-  bool should_create_directory = disable_directory_listing;
-  if (!disable_directory_listing) {
-    LIBSSH2_SFTP_ATTRIBUTES attrs;
-    bool file_not_exists;
-    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
-      if (!file_not_exists) {
-        logger_->log_error("Failed to stat %s", remote_path.c_str());
-      }
-      should_create_directory = true;
-    } else {
-      if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
-        logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
-        session->transfer(flow_file, Failure);
-        return true;
-      }
-    }
-  }
-  if (should_create_directory) {
-    client.createDirectoryHierarchy(remote_path);
+  if (create_directory_) {
+    bool should_create_directory = disable_directory_listing;
+    logger_->log_error("disable_directory_listing %d", disable_directory_listing);
     if (!disable_directory_listing) {
       LIBSSH2_SFTP_ATTRIBUTES attrs;
       bool file_not_exists;
       if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
-        if (file_not_exists) {
-          logger_->log_error("Could not create remote directory %s", remote_path.c_str());
-          session->transfer(flow_file, Failure);
-          return true;
-        } else {
+        if (!file_not_exists) {
           logger_->log_error("Failed to stat %s", remote_path.c_str());
-          context->yield();
-          return false;
         }
+        should_create_directory = true;
       } else {
-        if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+        if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
           logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
           session->transfer(flow_file, Failure);
           return true;
+        }
+        logger_->log_debug("Found remote directory %s", remote_path.c_str());
+      }
+    }
+    if (should_create_directory) {
+      (void) client.createDirectoryHierarchy(remote_path);
+      if (!disable_directory_listing) {
+        LIBSSH2_SFTP_ATTRIBUTES attrs;
+        bool file_not_exists;
+        if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+          if (file_not_exists) {
+            logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
+            session->transfer(flow_file, Failure);
+            return true;
+          } else {
+            logger_->log_error("Failed to stat %s", remote_path.c_str());
+            context->yield();
+            return false;
+          }
+        } else {
+          if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+            logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
+            session->transfer(flow_file, Failure);
+            return true;
+          }
         }
       }
     }

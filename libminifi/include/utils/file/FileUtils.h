@@ -200,6 +200,29 @@ class FileUtils {
     return 0;
   }
 
+#ifndef WIN32
+  static bool get_permissions(const std::string &path, uint32_t &permissions) {
+    struct stat result;
+    if (stat(path.c_str(), &result) == 0) {
+      permissions = result.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO);
+      return true;
+    }
+    return false;
+  }
+#endif
+
+#ifndef WIN32
+  static bool get_uid_gid(const std::string &path, uint64_t &uid, uint64_t &gid) {
+    struct stat result;
+    if (stat(path.c_str(), &result) == 0) {
+      uid = result.st_uid;
+      gid = result.st_gid;
+      return true;
+    }
+    return false;
+  }
+#endif
+
   static int create_dir(const std::string &path, bool create = true) {
 #ifdef BOOST_VERSION
     boost::filesystem::path dir(path);
