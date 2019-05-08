@@ -30,6 +30,7 @@ class SFTPTestServer {
  public:
 
   SFTPTestServer(const std::string& working_directory,
+      const std::string& host_key_file = "resources/host.pem",
       const std::string& jar_path = "tools/sftp-test-server/target/SFTPTestServer-1.0.0.jar");
   ~SFTPTestServer();
 
@@ -39,6 +40,7 @@ class SFTPTestServer {
 
  private:
 
+  std::string host_key_file_;
   std::string jar_path_;
   std::string working_directory_;
   bool started_;

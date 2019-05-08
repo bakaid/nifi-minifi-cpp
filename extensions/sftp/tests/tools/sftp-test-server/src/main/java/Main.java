@@ -28,6 +28,10 @@ public class Main {
         workingDirectoryArg.setRequired(true);
         options.addOption(workingDirectoryArg);
 
+        Option hostKeyArg = new Option("k", "host-key", true, "path to the host key file");
+        hostKeyArg.setRequired(false);
+        options.addOption(hostKeyArg);
+
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd = null;
@@ -45,6 +49,10 @@ public class Main {
 
         SFTPTestServer server = new SFTPTestServer();
         server.setVirtualFileSystemPath(Paths.get(workingDirectory, "vfs").toString());
+
+        if (cmd.hasOption("host-key")) {
+            server.setHostKeyFile(Paths.get(cmd.getOptionValue("host-key")));
+        }
         try {
             server.startServer();
             FileWriter portFile = new FileWriter(Paths.get(workingDirectory, "port.txt").toFile());

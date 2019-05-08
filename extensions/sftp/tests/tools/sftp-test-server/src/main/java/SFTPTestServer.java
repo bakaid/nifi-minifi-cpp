@@ -23,6 +23,7 @@ import org.apache.sshd.server.Command;
 import org.apache.sshd.server.SshServer;
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
 import org.apache.sshd.server.subsystem.sftp.SftpSubsystemFactory;
+import org.apache.sshd.common.util.security.bouncycastle.BouncyCastleGeneratorHostKeyProvider;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -60,11 +61,17 @@ public class SFTPTestServer {
         this.password = password;
     }
 
+    public void setHostKeyFile(Path hostKeyFile) {
+        this.hostKeyFile = hostKeyFile;
+    }
+
     private static SshServer sshd;
     private String virtualFileSystemPath = "target/ssh_vfs/";
 
     private String username = "nifiuser";
     private String password = "nifipassword";
+
+    private Path hostKeyFile = null;
 
     public void SSHTestServer(){
 
@@ -74,7 +81,11 @@ public class SFTPTestServer {
         sshd = SshServer.setUpDefaultServer();
         sshd.setHost("localhost");
 
-        sshd.setKeyPairProvider(new SimpleGeneratorHostKeyProvider());
+        if (hostKeyFile != null) {
+            sshd.setKeyPairProvider(new BouncyCastleGeneratorHostKeyProvider(hostKeyFile));
+        } else {
+            sshd.setKeyPairProvider(new SimpleGeneratorHostKeyProvider());
+        }
 
         //Accept all keys for authentication
         sshd.setPublickeyAuthenticator((s, publicKey, serverSession) -> true);

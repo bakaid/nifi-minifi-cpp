@@ -31,6 +31,7 @@
 #include "utils/file/FileUtils.h"
 
 SFTPTestServer::SFTPTestServer(const std::string& working_directory,
+    const std::string& host_key_file /*= "resources/host.pem"*/,
     const std::string& jar_path /*= "tools/sftp-test-server/target/SFTPTestServer-1.0.0.jar"*/)
  : working_directory_(working_directory)
  , started_(false)
@@ -40,7 +41,9 @@ SFTPTestServer::SFTPTestServer(const std::string& working_directory,
  , server_pid_(-1)
 #endif
 {
-  jar_path_ = utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), jar_path);
+  auto executable_dir = utils::file::FileUtils::get_executable_dir();
+  host_key_file_ = utils::file::FileUtils::concat_path(executable_dir, host_key_file);
+  jar_path_ = utils::file::FileUtils::concat_path(executable_dir, jar_path);
 }
 
 SFTPTestServer::~SFTPTestServer()
@@ -68,7 +71,7 @@ bool SFTPTestServer::start() {
     std::vector<char*> args(4U);
     args[0] = strdup("/bin/sh");
     args[1] = strdup("-c");
-    args[2] = strdup(("java -jar " + jar_path_ + " -w " + working_directory_).c_str());
+    args[2] = strdup(("java -jar " + jar_path_ + " -w " + working_directory_ + " -k " + host_key_file_).c_str());
     args[3] = nullptr;
     execv("/bin/sh", args.data());
     std::cerr << "Failed to start server, errno: " << strerror(errno) << std::endl;
