@@ -45,6 +45,7 @@
 #include "io/StreamFactory.h"
 #include "ResourceClaim.h"
 #include "utils/StringUtils.h"
+#include "utils/ScopeGuard.h"
 
 namespace org {
 namespace apache {
@@ -291,6 +292,10 @@ void PutSFTP::addConnectionToCache(const PutSFTP::ConnectionCacheKey& key, std::
   keepalive_cv_.notify_one();
 }
 
+void PutSFTP::removeConnectionFromCache(const PutSFTP::ConnectionCacheKey& key) {
+  connections_.erase(key);
+}
+
 void PutSFTP::keepaliveThreadFunc() {
   std::unique_lock<std::mutex> lock(connections_mutex_);
 
@@ -301,15 +306,16 @@ void PutSFTP::keepaliveThreadFunc() {
       });
     }
     if (!running_) {
+      logger_->log_trace("Stopping keepalive thread");
       lock.unlock();
       return;
     }
 
-    int min_wait = std::numeric_limits<int>::max();
+    int min_wait = 10;
     for (auto &connection : connections_) {
       int seconds_to_next = 0;
       if (connection.second.first->sendKeepAliveIfNeeded(seconds_to_next)) {
-        logger_->log_debug("Sent keepalive to %s@%s:%hu, next keepalive in %d s",
+        logger_->log_debug("Sent keepalive to %s@%s:%hu if needed, next keepalive in %d s",
            connection.first.username,
            connection.first.hostname,
            connection.first.port,
@@ -317,6 +323,11 @@ void PutSFTP::keepaliveThreadFunc() {
         if (seconds_to_next < min_wait) {
           min_wait = seconds_to_next;
         }
+      } else {
+        logger_->log_debug("Failed to send keepalive to %s@%s:%hu",
+                           connection.first.username,
+                           connection.first.hostname,
+                           connection.first.port);
       }
     }
 
@@ -542,7 +553,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
 
   /* Create and setup SFTPClient */
   std::lock_guard<std::mutex> lock(connections_mutex_);
-  auto client = getConnectionFromCache({hostname, port, username, proxy_type_, proxy_host, proxy_port});
+  const PutSFTP::ConnectionCacheKey connection_cache_key = {hostname, port, username, proxy_type_, proxy_host, proxy_port};
+  auto client = getConnectionFromCache(connection_cache_key);
   if (client == nullptr) {
     client = std::shared_ptr<utils::SFTPClient>(new utils::SFTPClient(hostname, port, username));
     if (!IsNullOrEmpty(host_key_file_)) {
@@ -596,6 +608,15 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     addConnectionToCache({hostname, port, username, proxy_type_, proxy_host, proxy_port}, client);
   }
 
+  /* Unless we're sure that the connection is good, it's better to remove it from the connection cache on errors */
+  ScopeGuard remove_connection_guard([this, &connection_cache_key]() {
+    logger_->log_debug("Removing connection %s@%s:%hu from SFTP connection pool",
+        connection_cache_key.username,
+        connection_cache_key.hostname,
+        connection_cache_key.port);
+    removeConnectionFromCache(connection_cache_key);
+  });
+
   /* Try to detect conflicts if needed */
   std::string resolved_filename = filename;
   if (conflict_resolution_ != CONFLICT_RESOLUTION_NONE) {
@@ -614,20 +635,24 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
         logger_->log_error("Rejecting %s because a directory with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
+        remove_connection_guard.disable();
         return true;
       }
       logger_->log_debug("Found file with the same name as the target file: %s", filename.c_str());
       if (conflict_resolution_ == CONFLICT_RESOLUTION_IGNORE) {
         logger_->log_debug("Routing %s to SUCCESS despite a file with the same name already existing", filename.c_str());
         session->transfer(flow_file, Success);
+        remove_connection_guard.disable();
         return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_REJECT) {
         logger_->log_debug("Routing %s to REJECT because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
+        remove_connection_guard.disable();
         return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_FAIL) {
         logger_->log_debug("Routing %s to FAILURE because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Failure);
+        remove_connection_guard.disable();
         return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_RENAME) {
         std::string possible_resolved_filename;
@@ -655,6 +680,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
         } else {
           logger_->log_error("Rejecting %s because a unique name could not be determined after 99 attempts", filename.c_str());
           session->transfer(flow_file, Reject);
+          remove_connection_guard.disable();
           return true;
         }
       }
@@ -676,6 +702,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
         if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
           logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
           session->transfer(flow_file, Failure);
+          remove_connection_guard.disable();
           return true;
         }
         logger_->log_debug("Found remote directory %s", remote_path.c_str());
@@ -690,6 +717,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           if (file_not_exists) {
             logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
             session->transfer(flow_file, Failure);
+            remove_connection_guard.disable();
             return true;
           } else {
             logger_->log_error("Failed to stat %s", remote_path.c_str());
@@ -700,6 +728,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
             logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
             session->transfer(flow_file, Failure);
+            remove_connection_guard.disable();
             return true;
           }
         }
@@ -775,6 +804,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   }
 
   session->transfer(flow_file, Success);
+  remove_connection_guard.disable();
   return true;
 }
 

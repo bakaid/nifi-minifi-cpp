@@ -380,7 +380,11 @@ bool SFTPClient::sendKeepAliveIfNeeded(int &seconds_to_next) {
   if (libssh2_keepalive_send(ssh_session_, &seconds_to_next) != 0) {
     char *err_msg = nullptr;
     libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
-    logger_->log_error("Failed to send keepalive, error: %s", err_msg);
+    logger_->log_error("Failed to send keepalive to %s@%s:%hu, error: %s",
+        username_,
+        hostname_,
+        port_,
+        err_msg);
     return false;
   }
   return true;

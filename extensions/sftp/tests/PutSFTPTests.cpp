@@ -183,9 +183,9 @@ class PutSFTPTestsFixture {
  protected:
   char *src_dir;
   char *dst_dir;
+  std::unique_ptr<SFTPTestServer> sftp_server;
   TestController testController;
   std::shared_ptr<TestPlan> plan;
-  std::unique_ptr<SFTPTestServer> sftp_server;
   std::shared_ptr<core::Processor> getfile;
   std::shared_ptr<core::Processor> put;
 };

@@ -157,6 +157,7 @@ class PutSFTP : public core::Processor {
   std::map<ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient> /*connection*/, uint32_t /*usage*/>> connections_;
   std::shared_ptr<utils::SFTPClient> getConnectionFromCache(const ConnectionCacheKey& key);
   void addConnectionToCache(const ConnectionCacheKey& key, std::shared_ptr<utils::SFTPClient> connection);
+  void removeConnectionFromCache(const ConnectionCacheKey& key);
 
   std::thread keepalive_thread_;
   bool running_;
