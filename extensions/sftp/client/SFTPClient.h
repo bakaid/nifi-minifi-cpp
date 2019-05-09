@@ -68,6 +68,9 @@ class SFTPClient {
 
   ~SFTPClient();
 
+  SFTPClient(const SFTPClient&) = delete;
+  SFTPClient& operator=(const SFTPClient&) = delete;
+
   bool setVerbose();
 
   bool setHostKeyFile(const std::string& host_key_file_path, bool strict_host_checking);
@@ -92,6 +95,8 @@ class SFTPClient {
   bool setUseCompression(bool use_compression);
 
   bool connect();
+
+  bool sendKeepAliveIfNeeded(int &seconds_to_next);
 
   bool getFile(const std::string& path, io::BaseStream& output);
 
@@ -146,6 +151,8 @@ class SFTPClient {
   std::string private_key_passphrase_;
 
   int64_t data_timeout_;
+
+  bool send_keepalive_;
 
   std::vector<char> curl_errorbuffer_;
 

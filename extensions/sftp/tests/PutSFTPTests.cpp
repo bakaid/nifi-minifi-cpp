@@ -104,7 +104,7 @@ class PutSFTPTestsFixture {
     plan->setProperty(put, "Data Timeout", "30 sec");
     plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
     plan->setProperty(put, "Strict Host Key Checking", "false");
-    plan->setProperty(put, "Send Keep Alive On Timeout", "false");
+    plan->setProperty(put, "Send Keep Alive On Timeout", "true");
     plan->setProperty(put, "Use Compression", "false");
     plan->setProperty(put, "Reject Zero-Byte Files", "true");
   }

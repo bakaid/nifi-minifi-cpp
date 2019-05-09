@@ -60,22 +60,7 @@ class PutSFTP : public core::Processor {
   /*!
    * Create a new processor
    */
-  PutSFTP(std::string name, utils::Identifier uuid = utils::Identifier())
-      : Processor(name, uuid),
-        logger_(logging::LoggerFactory<PutSFTP>::getLogger()),
-        create_directory_(false),
-        batch_size_(0),
-        connection_timeout_(0),
-        data_timeout_(0),
-        reject_zero_byte_(false),
-        dot_rename_(false),
-        strict_host_checking_(false),
-        use_keepalive_on_timeout_(false),
-        use_compression_(false) {
-    static utils::LibSSH2Initializer *initializer = utils::LibSSH2Initializer::getInstance();
-    initializer->initialize();
-    // TODO
-  }
+  PutSFTP(std::string name, utils::Identifier uuid = utils::Identifier());
   virtual ~PutSFTP();
 
   // Supported Properties
@@ -125,7 +110,7 @@ class PutSFTP : public core::Processor {
   class ReadCallback : public InputStreamCallback {
    public:
     ReadCallback(const std::string& target_path,
-        utils::SFTPClient& client,
+        std::shared_ptr<utils::SFTPClient> client,
         const std::string& conflict_resolution);
     ~ReadCallback();
     virtual int64_t process(std::shared_ptr<io::BaseStream> stream) override;
@@ -135,11 +120,12 @@ class PutSFTP : public core::Processor {
     std::shared_ptr<logging::Logger> logger_;
     bool write_succeeded_;
     const std::string target_path_;
-    utils::SFTPClient& client_;
+    std::shared_ptr<utils::SFTPClient> client_;
     const std::string conflict_resolution_;
   };
 
  private:
+
   std::shared_ptr<logging::Logger> logger_;
 
   bool create_directory_;
@@ -154,6 +140,28 @@ class PutSFTP : public core::Processor {
   bool use_keepalive_on_timeout_;
   bool use_compression_;
   std::string proxy_type_;
+
+  static constexpr size_t CONNECTION_CACHE_MAX_SIZE = 8U; // TODO
+  struct ConnectionCacheKey {
+    std::string hostname;
+    uint16_t port;
+    std::string username;
+    std::string proxy_type;
+    std::string proxy_host;
+    uint16_t proxy_port;
+
+    bool operator<(const ConnectionCacheKey& other) const;
+    bool operator==(const ConnectionCacheKey& other) const;
+  };
+  std::mutex connections_mutex_;
+  std::map<ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient> /*connection*/, uint32_t /*usage*/>> connections_;
+  std::shared_ptr<utils::SFTPClient> getConnectionFromCache(const ConnectionCacheKey& key);
+  void addConnectionToCache(const ConnectionCacheKey& key, std::shared_ptr<utils::SFTPClient> connection);
+
+  std::thread keepalive_thread_;
+  bool running_;
+  std::condition_variable keepalive_cv_;
+  void keepaliveThreadFunc();
 
   bool processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session);
 };

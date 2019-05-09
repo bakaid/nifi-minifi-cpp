@@ -74,6 +74,7 @@ SFTPClient::SFTPClient(const std::string &hostname, uint16_t port, const std::st
       password_authentication_enabled_(false),
       public_key_authentication_enabled_(false),
       data_timeout_(0),
+      send_keepalive_(false),
       curl_errorbuffer_(CURL_ERROR_SIZE, '\0'),
       easy_(nullptr),
       ssh_session_(nullptr),
@@ -185,13 +186,12 @@ void SFTPClient::setDataTimeout(int64_t timeout) {
 }
 
 void SFTPClient::setSendKeepAlive(bool send_keepalive) {
-  unsigned int interval;
-  if (send_keepalive) {
-    interval = 10U; // TODO
-  } else {
-    interval = 0U;
-  }
-  libssh2_keepalive_config(ssh_session_, 0 /*TODO: want_reply*/, interval);
+  /*
+   * Some SSH clients don't like if we send keepalives before we're connected,
+   * but libssh2 sends keepalives before that, so we will set up keepalives after
+   * a successful connection.
+   */
+  send_keepalive_ = send_keepalive;
 }
 
 bool SFTPClient::setUseCompression(bool use_compression) {
@@ -368,6 +368,21 @@ bool SFTPClient::connect() {
 
   connected_ = true;
 
+  /* Set up keepalive config if needed */
+  if (send_keepalive_) {
+    libssh2_keepalive_config(ssh_session_, 0 /*TODO: want_reply*/, 10U /*TODO: interval*/);
+  }
+
+  return true;
+}
+
+bool SFTPClient::sendKeepAliveIfNeeded(int &seconds_to_next) {
+  if (libssh2_keepalive_send(ssh_session_, &seconds_to_next) != 0) {
+    char *err_msg = nullptr;
+    libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
+    logger_->log_error("Failed to send keepalive, error: %s", err_msg);
+    return false;
+  }
   return true;
 }
 

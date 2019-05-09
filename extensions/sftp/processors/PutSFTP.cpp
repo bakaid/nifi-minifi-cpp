@@ -218,7 +218,122 @@ void PutSFTP::initialize() {
   setSupportedRelationships(relationships);
 }
 
+PutSFTP::PutSFTP(std::string name, utils::Identifier uuid /*= utils::Identifier()*/)
+  : Processor(name, uuid),
+    logger_(logging::LoggerFactory<PutSFTP>::getLogger()),
+    create_directory_(false),
+    batch_size_(0),
+    connection_timeout_(0),
+    data_timeout_(0),
+    reject_zero_byte_(false),
+    dot_rename_(false),
+    strict_host_checking_(false),
+    use_keepalive_on_timeout_(false),
+    use_compression_(false),
+    running_(true) {
+  static utils::LibSSH2Initializer *initializer = utils::LibSSH2Initializer::getInstance();
+  initializer->initialize();
+  // TODO
+}
+
 PutSFTP::~PutSFTP() {
+  if (keepalive_thread_.joinable()) {
+    {
+      std::lock_guard<std::mutex> lock(connections_mutex_);
+      running_ = false;
+      keepalive_cv_.notify_one();
+    }
+    keepalive_thread_.join();
+  }
+}
+
+bool PutSFTP::ConnectionCacheKey::operator<(const PutSFTP::ConnectionCacheKey& other) const {
+  return std::tie(hostname, port, username, proxy_type, proxy_host, proxy_port) <
+          std::tie(other.hostname, other.port, other.username, other.proxy_type, other.proxy_host, other.proxy_port);
+}
+
+bool PutSFTP::ConnectionCacheKey::operator==(const PutSFTP::ConnectionCacheKey& other) const {
+  return std::tie(hostname, port, username, proxy_type, proxy_host, proxy_port) ==
+         std::tie(other.hostname, other.port, other.username, other.proxy_type, other.proxy_host, other.proxy_port);
+}
+
+std::shared_ptr<utils::SFTPClient> PutSFTP::getConnectionFromCache(const PutSFTP::ConnectionCacheKey& key) {
+  auto it = connections_.find(key);
+  if (it == connections_.end()) {
+    return nullptr;
+  }
+
+  /* Increment usage */
+  it->second.second++;
+
+  return it->second.first;
+}
+
+void PutSFTP::addConnectionToCache(const PutSFTP::ConnectionCacheKey& key, std::shared_ptr<utils::SFTPClient> connection) {
+  while (connections_.size() >= PutSFTP::CONNECTION_CACHE_MAX_SIZE) {
+    auto min_usage_element_it = std::min_element(connections_.begin(), connections_.end(),
+        [](const std::pair<PutSFTP::ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient>, uint32_t>>& a,
+           const std::pair<PutSFTP::ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient>, uint32_t>>& b) {
+          return a.second.second < b.second.second;
+    });
+    logger_->log_debug("SFTP connection pool full, removing %s@%s:%hu",
+        min_usage_element_it->first.username,
+        min_usage_element_it->first.hostname,
+        min_usage_element_it->first.port);
+    connections_.erase(min_usage_element_it);
+  }
+
+  logger_->log_debug("Adding %s@%s:%hu to SFTP connection pool",
+      key.username,
+      key.hostname,
+      key.port);
+  connections_.emplace(key, std::make_pair(std::move(connection), 1U /*usage*/));
+  keepalive_cv_.notify_one();
+}
+
+void PutSFTP::keepaliveThreadFunc() {
+  std::unique_lock<std::mutex> lock(connections_mutex_);
+
+  while (true) {
+    if (connections_.empty()) {
+      keepalive_cv_.wait(lock, [this] {
+        return !running_ || !connections_.empty();
+      });
+    }
+    if (!running_) {
+      lock.unlock();
+      return;
+    }
+
+    int min_wait = std::numeric_limits<int>::max();
+    for (auto &connection : connections_) {
+      int seconds_to_next = 0;
+      if (connection.second.first->sendKeepAliveIfNeeded(seconds_to_next)) {
+        logger_->log_debug("Sent keepalive to %s@%s:%hu, next keepalive in %d s",
+           connection.first.username,
+           connection.first.hostname,
+           connection.first.port,
+           seconds_to_next);
+        if (seconds_to_next < min_wait) {
+          min_wait = seconds_to_next;
+        }
+      }
+    }
+
+    /* Avoid busy loops */
+    if (min_wait < 1) {
+      min_wait = 1;
+    }
+
+    logger_->log_trace("Keepalive thread is going to sleep for %d s", min_wait);
+    keepalive_cv_.wait_for(lock, std::chrono::seconds(min_wait), [this] {
+      return !running_;
+    });
+    if (!running_) {
+      lock.unlock();
+      return;
+    }
+  }
 }
 
 void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
@@ -273,15 +388,19 @@ void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, c
     utils::StringUtils::StringToBool(value, use_compression_);
   }
   context->getProperty(ProxyType.getName(), proxy_type_);
+
+  if (use_keepalive_on_timeout_ && !keepalive_thread_.joinable()) {
+    keepalive_thread_ = std::thread(&PutSFTP::keepaliveThreadFunc, this); // TODO: should we do this in onScheduled?
+  }
 }
 
 PutSFTP::ReadCallback::ReadCallback(const std::string& target_path,
-                                    utils::SFTPClient& client,
+                                    std::shared_ptr<utils::SFTPClient> client,
                                     const std::string& conflict_resolution)
     : logger_(logging::LoggerFactory<PutSFTP::ReadCallback>::getLogger())
     , write_succeeded_(false)
     , target_path_(target_path)
-    , client_(client)
+    , client_(std::move(client))
     , conflict_resolution_(conflict_resolution) {
 }
 
@@ -289,7 +408,7 @@ PutSFTP::ReadCallback::~ReadCallback() {
 }
 
 int64_t PutSFTP::ReadCallback::process(std::shared_ptr<io::BaseStream> stream) {
-  if (!client_.putFile(target_path_, *stream, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
+  if (!client_->putFile(target_path_, *stream, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
     return -1;
   }
   write_succeeded_ = true;
@@ -422,50 +541,59 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   }
 
   /* Create and setup SFTPClient */
-  utils::SFTPClient client(hostname, port, username);
-  if (!IsNullOrEmpty(host_key_file_)) {
-    if (!client.setHostKeyFile(host_key_file_, strict_host_checking_)) {
-      logger_->log_error("Cannot set host key file");
+  std::lock_guard<std::mutex> lock(connections_mutex_);
+  auto client = getConnectionFromCache({hostname, port, username, proxy_type_, proxy_host, proxy_port});
+  if (client == nullptr) {
+    client = std::shared_ptr<utils::SFTPClient>(new utils::SFTPClient(hostname, port, username));
+    if (!IsNullOrEmpty(host_key_file_)) {
+      if (!client->setHostKeyFile(host_key_file_, strict_host_checking_)) {
+        logger_->log_error("Cannot set host key file");
+        context->yield();
+        return false;
+      }
+    }
+    if (!IsNullOrEmpty(password)) {
+      client->setPasswordAuthenticationCredentials(password);
+    }
+    if (!IsNullOrEmpty(private_key_path)) {
+      client->setPublicKeyAuthenticationCredentials(private_key_path, private_key_passphrase);
+    }
+    if (proxy_type_ != PROXY_TYPE_DIRECT) {
+      utils::HTTPProxy proxy;
+      proxy.host = proxy_host;
+      proxy.port = proxy_port;
+      proxy.username = proxy_username;
+      proxy.password = proxy_password;
+      if (!client->setProxy(
+          proxy_type_ == PROXY_TYPE_HTTP ? utils::SFTPClient::ProxyType::Http : utils::SFTPClient::ProxyType::Socks,
+          proxy)) {
+        logger_->log_error("Cannot set proxy");
+        context->yield();
+        return false;
+      }
+    }
+    if (!client->setConnectionTimeout(connection_timeout_)) {
+      logger_->log_error("Cannot set connection timeout");
       context->yield();
       return false;
     }
-  }
-  if (!IsNullOrEmpty(password)) {
-    client.setPasswordAuthenticationCredentials(password);
-  }
-  if (!IsNullOrEmpty(private_key_path)) {
-    client.setPublicKeyAuthenticationCredentials(private_key_path, private_key_passphrase);
-  }
-  if (proxy_type_ != PROXY_TYPE_DIRECT) {
-    utils::HTTPProxy proxy;
-    proxy.host = proxy_host;
-    proxy.port = proxy_port;
-    proxy.username = proxy_username;
-    proxy.password = proxy_password;
-    if (!client.setProxy(proxy_type_ == PROXY_TYPE_HTTP ? utils::SFTPClient::ProxyType::Http : utils::SFTPClient::ProxyType::Socks, proxy)) {
-      logger_->log_error("Cannot set proxy");
+    client->setDataTimeout(data_timeout_);
+    client->setSendKeepAlive(use_keepalive_on_timeout_);
+    if (!client->setUseCompression(use_compression_)) {
+      logger_->log_error("Cannot set compression");
       context->yield();
       return false;
     }
-  }
-  if (!client.setConnectionTimeout(connection_timeout_)) {
-    logger_->log_error("Cannot set connection timeout");
-    context->yield();
-    return false;
-  }
-  client.setDataTimeout(data_timeout_);
-  client.setSendKeepAlive(use_keepalive_on_timeout_);
-  if (!client.setUseCompression(use_compression_)) {
-    logger_->log_error("Cannot set compression");
-    context->yield();
-    return false;
-  }
 
-  /* Connect to SFTP server */
-  if (!client.connect()) {
-    logger_->log_error("Cannot connect to SFTP server");
-    context->yield();
-    return false;
+    /* Connect to SFTP server */
+    if (!client->connect()) {
+      logger_->log_error("Cannot connect to SFTP server");
+      context->yield();
+      return false;
+    }
+
+    /* Add client to cache */
+    addConnectionToCache({hostname, port, username, proxy_type_, proxy_host, proxy_port}, client);
   }
 
   /* Try to detect conflicts if needed */
@@ -476,7 +604,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     auto target_path = target_path_ss.str();
     LIBSSH2_SFTP_ATTRIBUTES attrs;
     bool file_not_exists;
-    if (!client.stat(target_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+    if (!client->stat(target_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
       if (!file_not_exists) {
         logger_->log_error("Failed to stat %s", target_path.c_str());
         session->transfer(flow_file, Failure);
@@ -510,7 +638,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           possible_resolved_filename = possible_resolved_filename_ss.str();
           auto possible_resolved_path = remote_path + "/" + possible_resolved_filename;
           bool file_not_exists;
-          if (!client.stat(possible_resolved_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+          if (!client->stat(possible_resolved_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
             if (file_not_exists) {
               unique_name_generated = true;
               break;
@@ -539,7 +667,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     if (!disable_directory_listing) {
       LIBSSH2_SFTP_ATTRIBUTES attrs;
       bool file_not_exists;
-      if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+      if (!client->stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
         if (!file_not_exists) {
           logger_->log_error("Failed to stat %s", remote_path.c_str());
         }
@@ -554,11 +682,11 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       }
     }
     if (should_create_directory) {
-      (void) client.createDirectoryHierarchy(remote_path);
+      (void) client->createDirectoryHierarchy(remote_path);
       if (!disable_directory_listing) {
         LIBSSH2_SFTP_ATTRIBUTES attrs;
         bool file_not_exists;
-        if (!client.stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
+        if (!client->stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
           if (file_not_exists) {
             logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
             session->transfer(flow_file, Failure);
@@ -605,9 +733,9 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
 
   /* Move file to its final place */
   if (target_path != final_target_path) {
-    if (!client.rename(target_path, final_target_path, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
+    if (!client->rename(target_path, final_target_path, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
       logger_->log_error("Failed to move temporary file %s to final path %s", target_path, final_target_path);
-      if (!client.removeFile(target_path)) {
+      if (!client->removeFile(target_path)) {
         logger_->log_error("Failed to remove temporary file %s", target_path);
       }
       session->transfer(flow_file, Failure);
@@ -639,7 +767,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_GID;
       attrs.gid = remote_group;
     }
-    if (!client.setAttributes(final_target_path, attrs)) {
+    if (!client->setAttributes(final_target_path, attrs)) {
       logger_->log_error("Failed to set file attributes for %s", target_path);
       session->transfer(flow_file, Failure); // TODO: shall this be fatal? If yes, we should also delete here.
       return true;
