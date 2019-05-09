@@ -21,6 +21,10 @@
 
 #include <memory>
 #include <string>
+#include <list>
+#include <map>
+#include <mutex>
+#include <thread>
 
 #include "utils/ByteArrayCallback.h"
 #include "FlowFileRecord.h"
@@ -154,10 +158,10 @@ class PutSFTP : public core::Processor {
     bool operator==(const ConnectionCacheKey& other) const;
   };
   std::mutex connections_mutex_;
-  std::map<ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient> /*connection*/, uint32_t /*usage*/>> connections_;
+  std::map<ConnectionCacheKey, std::shared_ptr<utils::SFTPClient>> connections_;
+  std::list<ConnectionCacheKey> lru_;
   std::shared_ptr<utils::SFTPClient> getConnectionFromCache(const ConnectionCacheKey& key);
   void addConnectionToCache(const ConnectionCacheKey& key, std::shared_ptr<utils::SFTPClient> connection);
-  void removeConnectionFromCache(const ConnectionCacheKey& key);
 
   std::thread keepalive_thread_;
   bool running_;

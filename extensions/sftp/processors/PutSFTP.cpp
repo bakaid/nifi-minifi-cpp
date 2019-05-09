@@ -259,41 +259,50 @@ bool PutSFTP::ConnectionCacheKey::operator==(const PutSFTP::ConnectionCacheKey& 
 }
 
 std::shared_ptr<utils::SFTPClient> PutSFTP::getConnectionFromCache(const PutSFTP::ConnectionCacheKey& key) {
+  std::lock_guard<std::mutex> lock(connections_mutex_);
+
   auto it = connections_.find(key);
   if (it == connections_.end()) {
     return nullptr;
   }
 
-  /* Increment usage */
-  it->second.second++;
+  logger_->log_debug("Removing %s@%s:%hu from SFTP connection pool",
+      key.username,
+      key.hostname,
+      key.port);
 
-  return it->second.first;
+  auto lru_it = std::find(lru_.begin(), lru_.end(), key);
+  if (lru_it == lru_.end()) {
+    logger_->log_trace("Assertion error: can't find key in LRU cache");
+  } else {
+    lru_.erase(lru_it);
+  }
+
+  auto connection = it->second;
+  connections_.erase(it);
+  return connection;
 }
 
 void PutSFTP::addConnectionToCache(const PutSFTP::ConnectionCacheKey& key, std::shared_ptr<utils::SFTPClient> connection) {
+  std::lock_guard<std::mutex> lock(connections_mutex_);
+
   while (connections_.size() >= PutSFTP::CONNECTION_CACHE_MAX_SIZE) {
-    auto min_usage_element_it = std::min_element(connections_.begin(), connections_.end(),
-        [](const std::pair<PutSFTP::ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient>, uint32_t>>& a,
-           const std::pair<PutSFTP::ConnectionCacheKey, std::pair<std::shared_ptr<utils::SFTPClient>, uint32_t>>& b) {
-          return a.second.second < b.second.second;
-    });
-    logger_->log_debug("SFTP connection pool full, removing %s@%s:%hu",
-        min_usage_element_it->first.username,
-        min_usage_element_it->first.hostname,
-        min_usage_element_it->first.port);
-    connections_.erase(min_usage_element_it);
+    const auto& lru_key = lru_.back();
+    logger_->log_debug("SFTP connection pool is full, removing %s@%s:%hu",
+        lru_key.username,
+        lru_key.hostname,
+        lru_key.port);
+    connections_.erase(lru_key);
+    lru_.pop_back();
   }
 
   logger_->log_debug("Adding %s@%s:%hu to SFTP connection pool",
       key.username,
       key.hostname,
       key.port);
-  connections_.emplace(key, std::make_pair(std::move(connection), 1U /*usage*/));
+  connections_.emplace(key, std::move(connection));
+  lru_.push_front(key);
   keepalive_cv_.notify_one();
-}
-
-void PutSFTP::removeConnectionFromCache(const PutSFTP::ConnectionCacheKey& key) {
-  connections_.erase(key);
 }
 
 void PutSFTP::keepaliveThreadFunc() {
@@ -314,7 +323,7 @@ void PutSFTP::keepaliveThreadFunc() {
     int min_wait = 10;
     for (auto &connection : connections_) {
       int seconds_to_next = 0;
-      if (connection.second.first->sendKeepAliveIfNeeded(seconds_to_next)) {
+      if (connection.second->sendKeepAliveIfNeeded(seconds_to_next)) {
         logger_->log_debug("Sent keepalive to %s@%s:%hu if needed, next keepalive in %d s",
            connection.first.username,
            connection.first.hostname,
@@ -551,8 +560,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     return true;
   }
 
-  /* Create and setup SFTPClient */
-  std::lock_guard<std::mutex> lock(connections_mutex_);
+  /* Get SFTPClient from cache or create it */
   const PutSFTP::ConnectionCacheKey connection_cache_key = {hostname, port, username, proxy_type_, proxy_host, proxy_port};
   auto client = getConnectionFromCache(connection_cache_key);
   if (client == nullptr) {
@@ -603,19 +611,15 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       context->yield();
       return false;
     }
-
-    /* Add client to cache */
-    addConnectionToCache({hostname, port, username, proxy_type_, proxy_host, proxy_port}, client);
   }
 
-  /* Unless we're sure that the connection is good, it's better to remove it from the connection cache on errors */
-  ScopeGuard remove_connection_guard([this, &connection_cache_key]() {
-    logger_->log_debug("Removing connection %s@%s:%hu from SFTP connection pool",
-        connection_cache_key.username,
-        connection_cache_key.hostname,
-        connection_cache_key.port);
-    removeConnectionFromCache(connection_cache_key);
-  });
+  /*
+   * Unless we're sure that the connection is good, we don't want to put it back to the cache.
+   * So we will only call this when we're sure that the connection is OK.
+   */
+  auto put_connection_back_to_cache = [this, &connection_cache_key, &client]() {
+    addConnectionToCache(connection_cache_key, client);
+  };
 
   /* Try to detect conflicts if needed */
   std::string resolved_filename = filename;
@@ -635,24 +639,24 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
         logger_->log_error("Rejecting %s because a directory with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
-        remove_connection_guard.disable();
+        put_connection_back_to_cache();
         return true;
       }
       logger_->log_debug("Found file with the same name as the target file: %s", filename.c_str());
       if (conflict_resolution_ == CONFLICT_RESOLUTION_IGNORE) {
         logger_->log_debug("Routing %s to SUCCESS despite a file with the same name already existing", filename.c_str());
         session->transfer(flow_file, Success);
-        remove_connection_guard.disable();
+        put_connection_back_to_cache();
         return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_REJECT) {
         logger_->log_debug("Routing %s to REJECT because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Reject);
-        remove_connection_guard.disable();
+        put_connection_back_to_cache();
         return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_FAIL) {
         logger_->log_debug("Routing %s to FAILURE because a file with the same name already exists", filename.c_str());
         session->transfer(flow_file, Failure);
-        remove_connection_guard.disable();
+        put_connection_back_to_cache();
         return true;
       } else if (conflict_resolution_ == CONFLICT_RESOLUTION_RENAME) {
         std::string possible_resolved_filename;
@@ -680,7 +684,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
         } else {
           logger_->log_error("Rejecting %s because a unique name could not be determined after 99 attempts", filename.c_str());
           session->transfer(flow_file, Reject);
-          remove_connection_guard.disable();
+          put_connection_back_to_cache();
           return true;
         }
       }
@@ -702,7 +706,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
         if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
           logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
           session->transfer(flow_file, Failure);
-          remove_connection_guard.disable();
+          put_connection_back_to_cache();
           return true;
         }
         logger_->log_debug("Found remote directory %s", remote_path.c_str());
@@ -717,7 +721,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           if (file_not_exists) {
             logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
             session->transfer(flow_file, Failure);
-            remove_connection_guard.disable();
+            put_connection_back_to_cache();
             return true;
           } else {
             logger_->log_error("Failed to stat %s", remote_path.c_str());
@@ -728,7 +732,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
             logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
             session->transfer(flow_file, Failure);
-            remove_connection_guard.disable();
+            put_connection_back_to_cache();
             return true;
           }
         }
@@ -804,7 +808,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   }
 
   session->transfer(flow_file, Success);
-  remove_connection_guard.disable();
+  put_connection_back_to_cache();
   return true;
 }
 
