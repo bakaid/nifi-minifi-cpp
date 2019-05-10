@@ -50,12 +50,16 @@ if (CURL_FOUND)
 	endif()
 endif ()
 
+# Include UUID
+find_package(UUID REQUIRED)
+target_link_libraries(minifi-sftp ${LIBMINIFI} ${UUID_LIBRARIES})
+
 # Include OpenSSL
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
+
 target_link_libraries(minifi-sftp ${CMAKE_DL_LIBS})
-target_link_libraries(minifi-sftp minifi-civet-extensions)
 
 # Include LibSSH2
 find_package(LibSSH2 REQUIRED)
