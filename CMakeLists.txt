@@ -337,6 +337,7 @@ endif()
                 -DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}
                 -DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}
                 -DCURL_DISABLE_CRYPTO_AUTH=ON
+                -DCMAKE_USE_LIBSSH2=OFF
                 -DHAVE_GLIBC_STRERROR_R=1
                 -DHAVE_GLIBC_STRERROR_R__TRYRUN_OUTPUT=""
                 -DHAVE_POSIX_STRERROR_R=0
