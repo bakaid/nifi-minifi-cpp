@@ -641,10 +641,22 @@ if (ENABLE_BUSTACHE)
     createExtension(BUSTACHE-EXTENSIONS "BUSTACHE EXTENSIONS" "This enables bustache functionality including ApplyTemplate." "extensions/bustache" "${TEST_DIR}/bustache-tests" "TRUE" "thirdparty/bustache")
 endif()
 
-## USB camera extensions
+## SFTP extensions
 option(ENABLE_SFTP "Enables SFTP support." ON)
 if (ENABLE_ALL OR ENABLE_SFTP)
-	createExtension(SFTP "SFTP EXTENSIONS" "This enables SFTP camera support" "extensions/sftp" "extensions/sftp/tests")
+	createExtension(SFTP "SFTP EXTENSIONS" "This enables SFTP support" "extensions/sftp" "extensions/sftp/tests")
+    if(NOT USE_SYSTEM_LIBSSH2)
+        message("minifi-sftp will depend on libssh2-external")
+        add_dependencies(minifi-sftp libssh2-external)
+    endif()
+    if(NOT USE_SYSTEM_CURL)
+        message("minifi-sftp will depend on curl-external")
+        add_dependencies(minifi-sftp curl-external)
+    endif()
+    if(NOT USE_SYSTEM_ZLIB)
+        message("minifi-sftp will depend on zlib-external")
+        add_dependencies(minifi-sftp zlib-external)
+    endif()
 endif()
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN
