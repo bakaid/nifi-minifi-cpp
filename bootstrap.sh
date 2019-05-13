@@ -279,6 +279,11 @@ add_dependency COAP_ENABLED "libtool"
 add_disabled_option JNI_ENABLED ${FALSE} "ENABLE_JNI"
 add_dependency JNI_ENABLED "jnibuild"
 
+add_disabled_option SFTP_ENABLED ${TRUE} "ENABLE_SFTP"
+add_dependency SFTP_ENABLED "libssh2"
+add_dependency SFTP_ENABLED "libcurl"
+add_dependency SFTP_ENABLED "openssl"
+
 TESTS_DISABLED=${FALSE}
 
 add_disabled_option SQLITE_ENABLED ${FALSE} "ENABLE_SQLITE"

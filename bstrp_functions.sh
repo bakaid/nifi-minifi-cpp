@@ -259,6 +259,7 @@ show_supported_features() {
   echo "M. SQLite Support ..............$(print_feature_status SQLITE_ENABLED)"
   echo "N. Python Support ..............$(print_feature_status PYTHON_ENABLED)"
   echo "O. COAP Support ................$(print_feature_status COAP_ENABLED)"
+  echo "S. SFTP Support ................$(print_feature_status SFTP_ENABLED)"
   echo "****************************************"
   echo "            Build Options."
   echo "****************************************"
@@ -277,7 +278,7 @@ show_supported_features() {
 
 read_feature_options(){
   local choice
-  read -p "Enter choice [ A - P or 1-3 ] " choice
+  read -p "Enter choice [ A - S or 1-4 ] " choice
   choice=$(echo ${choice} | tr '[:upper:]' '[:lower:]')
   case $choice in
     a) ToggleFeature ROCKSDB_ENABLED ;;
@@ -300,6 +301,7 @@ read_feature_options(){
    	   fi
    	   ;;
     o) ToggleFeature COAP_ENABLED ;;
+    s) ToggleFeature SFTP_ENABLED ;;
     1) ToggleFeature TESTS_DISABLED ;;
     2) EnableAllFeatures ;;
     3) ToggleFeature JNI_ENABLED;;
@@ -315,7 +317,7 @@ read_feature_options(){
       fi
       ;;
     q) exit 0;;
-    *) echo -e "${RED}Please enter an option A-P or 1-4...${NO_COLOR}" && sleep 2
+    *) echo -e "${RED}Please enter an option A-S or 1-4...${NO_COLOR}" && sleep 2
   esac
 }
 

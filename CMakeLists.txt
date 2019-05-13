@@ -656,7 +656,7 @@ if (ENABLE_BUSTACHE)
 endif()
 
 ## SFTP extensions
-option(ENABLE_SFTP "Enables SFTP support." ON)
+option(ENABLE_SFTP "Enables SFTP support." OFF)
 if (ENABLE_ALL OR ENABLE_SFTP)
 	createExtension(SFTP "SFTP EXTENSIONS" "This enables SFTP support" "extensions/sftp" "extensions/sftp/tests")
     if(NOT USE_SYSTEM_LIBSSH2)
