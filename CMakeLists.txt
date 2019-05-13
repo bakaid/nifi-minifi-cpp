@@ -387,24 +387,13 @@ endif()
 if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
     message("Using bundled libssh2")
 
-    if (WIN32)
-        set(CRYPTO_BACKEND "WinCNG")
-    else()
-        set(CRYPTO_BACKEND "OpenSSL")
-    endif()
+    set(BYPRODUCT "lib/libssh2.a")
 
     if (WIN32)
-        if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
-            set(BYPRODUCT "lib/libssh2.lib")
-        else()
-            set(BYPRODUCT "lib/libssh2d.lib")
-        endif()
-    else()
-        set(BYPRODUCT "lib/libssh2.a")
-    endif()
-
-    if (NOT WIN32)
-        set(PC patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch)
+		string(REPLACE "/" "\\" CMAKE_CURRENT_SOURCE_DIR_BACKSLASH ${CMAKE_CURRENT_SOURCE_DIR})
+		set (PC copy /Y ${CMAKE_CURRENT_SOURCE_DIR_BACKSLASH}\\thirdparty\\libssh2\\CMakeLists.txt CMakeLists.txt)
+	else()
+		set(PC patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch)
     endif()
 
     ExternalProject_Add(
@@ -412,11 +401,12 @@ if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
             GIT_REPOSITORY "https://github.com/libssh2/libssh2"
             GIT_TAG "libssh2-1.8.2"
             SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-src"
+            LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install"
             -DENABLE_ZLIB_COMPRESSION=ON
-            "-DCRYPTO_BACKEND=${CRYPTO_BACKEND}"
-            "-DCMAKE_MODULE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl;${CMAKE_CURRENT_SOURCE_DIR}/cmake/zlib/dummy"
+            "-DCRYPTO_BACKEND=OpenSSL"
+            "-DCMAKE_MODULE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl%${CMAKE_CURRENT_SOURCE_DIR}/cmake/zlib/dummy"
             "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
             "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
             "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
@@ -441,6 +431,7 @@ if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/libssh2/dummy")
     add_library(libssh2 STATIC IMPORTED)
     set_target_properties(libssh2 PROPERTIES IMPORTED_LOCATION "${LIBSSH2_BIN_DIR}${BYPRODUCT}")
+	message("CMAKE_MODULE_PATH is: ${CMAKE_MODULE_PATH}")
 
     if (OPENSSL_FOUND)
         if (NOT WIN32)

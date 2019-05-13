@@ -459,7 +459,7 @@ class FileUtils {
       }
     } else if (path.size() >= 3U &&
                toupper(path[0]) >= 'A' &&
-               toupper(path[0]) =< 'Z' &&
+               toupper(path[0]) <= 'Z' &&
                path[1] == ':' &&
                path[2] == '\\') {
       absolute = true;
