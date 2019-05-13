@@ -268,8 +268,8 @@ bool SFTPClient::connect() {
         keybit = LIBSSH2_KNOWNHOST_KEY_SSHDSS;
         break;
       default:
-        keybit = LIBSSH2_KNOWNHOST_KEY_UNKNOWN;
-        break;
+        logger_->log_error("Unknown host key type: %d", type);
+        return false;
     }
     int keycheck_result = libssh2_knownhost_checkp(ssh_known_hosts_,
                             hostname_.c_str(),
