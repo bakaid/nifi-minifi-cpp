@@ -62,8 +62,6 @@ option(FORCE_WINDOWS "Instructs the build system to force Windows builds when WI
 option(DISABLE_CURL "Disables libCurl Properties." OFF)
 
 
-message("Using system OpenSSL: ${USE_SYSTEM_OPENSSL}")
-
 if(NOT WIN32)
 	if (ENABLE_JNI)
 	if (NOT DISABLE_JEMALLOC)
@@ -168,7 +166,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 if (NOT OPENSSL_OFF)
 	if(USE_SYSTEM_OPENSSL)
-		message("Using system OpenSSL: ${USE_SYSTEM_OPENSSL}")
 		# Set the right openssl root path
 		if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
@@ -182,8 +179,6 @@ if (NOT OPENSSL_OFF)
 		find_package (OpenSSL REQUIRED)
 	
 	else()
-        message("Using bundled OpenSSL: ${USE_SYSTEM_OPENSSL}")
-
 		include(LibreSSL)
 		use_libre_ssl(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 		list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl")
@@ -449,7 +444,6 @@ if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/libssh2/dummy")
     add_library(libssh2 STATIC IMPORTED)
     set_target_properties(libssh2 PROPERTIES IMPORTED_LOCATION "${LIBSSH2_BIN_DIR}${BYPRODUCT}")
-	message("CMAKE_MODULE_PATH is: ${CMAKE_MODULE_PATH}")
 
     if (OPENSSL_FOUND)
         if (NOT WIN32)
