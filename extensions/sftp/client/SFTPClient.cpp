@@ -234,8 +234,15 @@ bool SFTPClient::connect() {
   }
 
   /* Getting socket from curl */
+#ifdef WIN32
   curl_socket_t sockfd;
+  /* Only CURLINFO_ACTIVESOCKET works on Win64 */
   curl_res = curl_easy_getinfo(easy_, CURLINFO_ACTIVESOCKET, &sockfd);
+#else
+  long sockfd;
+  /* Some older cURL versions only support CURLINFO_LASTSOCKET */
+  curl_res = curl_easy_getinfo(easy_, CURLINFO_LASTSOCKET, &sockfd);
+#endif
   if (curl_res != CURLE_OK) {
     return false;
   }
