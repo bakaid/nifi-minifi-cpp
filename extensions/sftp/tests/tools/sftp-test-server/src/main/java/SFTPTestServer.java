@@ -79,7 +79,7 @@ public class SFTPTestServer {
 
     public void startServer() throws IOException {
         sshd = SshServer.setUpDefaultServer();
-        // sshd.setHost("localhost");
+        sshd.setHost("localhost");
 
         if (hostKeyFile != null) {
             sshd.setKeyPairProvider(new BouncyCastleGeneratorHostKeyProvider(hostKeyFile));
