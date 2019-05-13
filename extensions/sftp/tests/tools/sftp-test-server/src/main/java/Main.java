@@ -54,11 +54,13 @@ public class Main {
             server.setHostKeyFile(Paths.get(cmd.getOptionValue("host-key")));
         }
         try {
+            System.err.println("Starting test SFTP server");
             server.startServer();
             FileWriter portFile = new FileWriter(Paths.get(workingDirectory, "port.txt").toFile());
             portFile.write(Integer.toString(server.getSSHPort()));
             portFile.close();
             System.in.read();
+            System.err.println("Shutting down test SFTP server");
             server.stopServer();
         } catch (Exception e) {
             e.printStackTrace();
