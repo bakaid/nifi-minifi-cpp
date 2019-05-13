@@ -395,9 +395,31 @@ if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
 
     if (WIN32)
 		string(REPLACE "/" "\\" CMAKE_CURRENT_SOURCE_DIR_BACKSLASH ${CMAKE_CURRENT_SOURCE_DIR})
-		set (PC copy /Y ${CMAKE_CURRENT_SOURCE_DIR_BACKSLASH}\\thirdparty\\libssh2\\CMakeLists.txt CMakeLists.txt)
+		set(PC copy /Y ${CMAKE_CURRENT_SOURCE_DIR_BACKSLASH}\\thirdparty\\libssh2\\CMakeLists.txt CMakeLists.txt)
 	else()
 		set(PC patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch)
+    endif()
+
+    set(LIBSSH2_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
+            "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install"
+            -DENABLE_ZLIB_COMPRESSION=ON
+            -DCRYPTO_BACKEND=OpenSSL)
+
+    if(NOT USE_SYSTEM_OPENSSL OR USE_SYSTEM_OPENSSL STREQUAL "OFF")
+        list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl)
+        list(APPEND LIBSSH2_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
+                "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
+                "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
+                "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
+    endif()
+    if(NOT USE_SYSTEM_ZLIB OR USE_SYSTEM_ZLIB STREQUAL "OFF")
+        list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/zlib/dummy)
+        list(APPEND LIBSSH2_CMAKE_ARGS "-DZLIB_BYPRODUCT_INCLUDE=${ZLIB_BYPRODUCT_INCLUDE}"
+                "-DZLIB_BYPRODUCT=${ZLIB_BYPRODUCT}")
+    endif()
+    if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
+        string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
+        list(APPEND LIBSSH2_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
     endif()
 
     ExternalProject_Add(
@@ -406,17 +428,7 @@ if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
             GIT_TAG "libssh2-1.8.2"
             SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-src"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
-            CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-            "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install"
-            -DENABLE_ZLIB_COMPRESSION=ON
-            "-DCRYPTO_BACKEND=OpenSSL"
-            "-DCMAKE_MODULE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl%${CMAKE_CURRENT_SOURCE_DIR}/cmake/zlib/dummy"
-            "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
-            "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
-            "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
-            "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}"
-            "-DZLIB_BYPRODUCT_INCLUDE=${ZLIB_BYPRODUCT_INCLUDE}"
-            "-DZLIB_BYPRODUCT=${ZLIB_BYPRODUCT}"
+            CMAKE_ARGS ${LIBSSH2_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install/${BYPRODUCT}"
     )
@@ -424,7 +436,6 @@ if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
     if(NOT USE_SYSTEM_OPENSSL OR USE_SYSTEM_OPENSSL STREQUAL "OFF")
         add_dependencies(libssh2-external libressl-portable)
     endif()
-
     if(NOT USE_SYSTEM_ZLIB OR USE_SYSTEM_ZLIB STREQUAL "OFF")
         add_dependencies(libssh2-external z)
     endif()
