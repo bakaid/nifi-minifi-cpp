@@ -69,7 +69,7 @@ target_link_libraries(minifi-sftp ${LIBSSH2_LIBRARY})
 # Include zlib
 find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries (minifi-sftp ${ZLIB_LIBRARIES})
+target_link_libraries(minifi-sftp ${ZLIB_LIBRARIES})
 
 if (WIN32)
 message("${OPENSSL_LIBRARIES}")
