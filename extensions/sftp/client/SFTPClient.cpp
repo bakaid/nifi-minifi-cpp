@@ -563,8 +563,8 @@ bool SFTPClient::listDirectory(const std::string& path, bool follow_symlinks,
   });
 
   LIBSSH2_SFTP_ATTRIBUTES attrs;
-  std::vector<char> filename(PATH_MAX);
-  std::vector<char> longentry(PATH_MAX);
+  std::vector<char> filename(4096U);
+  std::vector<char> longentry(4096U);
   do {
     int ret = libssh2_sftp_readdir_ex(dir_handle,
                                       filename.data(),
