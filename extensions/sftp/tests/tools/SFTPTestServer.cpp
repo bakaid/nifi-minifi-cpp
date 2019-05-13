@@ -19,6 +19,7 @@
 #include "SFTPTestServer.h"
 #include <vector>
 #include <thread>
+#include <exception>
 
 #ifdef WIN32
 #else
@@ -58,6 +59,9 @@ bool SFTPTestServer::start() {
   if (started_) {
     return true;
   }
+#ifdef WIN32
+  throw std::runtime_error("Not implemented");
+#else
   /* Delete possible previous port.txt */
   port_file_path_ = utils::file::FileUtils::concat_path(working_directory_, "port.txt");
   if (!port_file_path_.empty()) {
@@ -95,6 +99,7 @@ bool SFTPTestServer::start() {
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   }
+#endif
   return false;
 }
 
@@ -103,6 +108,7 @@ bool SFTPTestServer::stop() {
     return true;
   }
 #ifdef WIN32
+  throw std::runtime_error("Not implemented");
 #else
   if (server_pid_ != -1) {
     if (::kill(server_pid_, SIGTERM) != 0) {
