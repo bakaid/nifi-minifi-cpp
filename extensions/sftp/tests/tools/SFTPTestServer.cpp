@@ -26,6 +26,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <cstring>
 #endif
 
@@ -112,6 +114,10 @@ bool SFTPTestServer::stop() {
 #else
   if (server_pid_ != -1) {
     if (::kill(server_pid_, SIGTERM) != 0) {
+      return false;
+    }
+    int wstatus;
+    if (::waitpid(server_pid_, &wstatus, 0) == -1) {
       return false;
     }
   }
