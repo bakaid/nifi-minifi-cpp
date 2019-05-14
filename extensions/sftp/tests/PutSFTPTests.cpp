@@ -110,7 +110,7 @@ class PutSFTPTestsFixture {
     plan->setProperty(put, "Reject Zero-Byte Files", "true");
   }
 
-  ~PutSFTPTestsFixture() {
+  virtual ~PutSFTPTestsFixture() {
     free(src_dir);
     free(dst_dir);
     LogTestController::getInstance().reset();

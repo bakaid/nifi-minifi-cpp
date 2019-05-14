@@ -102,8 +102,8 @@ bool SFTPTestServer::start() {
           logger_->log_debug("Found port file after %zu seconds", i);
           return true;
         }
-        logger_->log_debug("Could not find port file after %zu seconds", i);
       }
+      logger_->log_debug("Could not find port file after %zu seconds", i);
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   }
