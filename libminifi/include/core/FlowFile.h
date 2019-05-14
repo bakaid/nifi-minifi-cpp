@@ -271,12 +271,12 @@ class FlowFile : public core::Connectable, public ReferenceContainer {
    * Sets the original connection with a shared pointer.
    * @param connection shared connection.
    */
-  void setOriginalConnection(std::shared_ptr<core::Connectable> &connection);
+  void setOriginalConnection(std::weak_ptr<core::Connectable> connection);
   /**
    * Returns the original connection referenced by this record.
    * @return shared original connection pointer.
    */
-  std::shared_ptr<core::Connectable> getOriginalConnection();
+  std::weak_ptr<core::Connectable> getOriginalConnection();
 
   void setStoredToRepository(bool storedInRepository) {
     stored = storedInRepository;
@@ -321,7 +321,7 @@ class FlowFile : public core::Connectable, public ReferenceContainer {
   // Connection queue that this flow file will be transfer or current in
   std::shared_ptr<core::Connectable> connection_;
   // Orginal connection queue that this flow file was dequeued from
-  std::shared_ptr<core::Connectable> original_connection_;
+  std::weak_ptr<core::Connectable> original_connection_;
 
  private:
   static std::shared_ptr<logging::Logger> logger_;
