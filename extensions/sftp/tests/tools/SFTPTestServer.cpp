@@ -29,6 +29,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <cstring>
+#include <cerrno>
 #endif
 
 #include "utils/file/FileUtils.h"
@@ -36,7 +37,8 @@
 SFTPTestServer::SFTPTestServer(const std::string& working_directory,
     const std::string& host_key_file /*= "resources/host.pem"*/,
     const std::string& jar_path /*= "tools/sftp-test-server/target/SFTPTestServer-1.0.0.jar"*/)
- : working_directory_(working_directory)
+ : logger_(logging::LoggerFactory<SFTPTestServer>::getLogger())
+ , working_directory_(working_directory)
  , started_(false)
  , port_(0U)
 #ifdef WIN32
@@ -67,6 +69,7 @@ bool SFTPTestServer::start() {
   /* Delete possible previous port.txt */
   port_file_path_ = utils::file::FileUtils::concat_path(working_directory_, "port.txt");
   if (!port_file_path_.empty()) {
+    logger_->log_debug("Deleting port file %s", port_file_path_.c_str());
     ::unlink(port_file_path_.c_str());
   }
 
@@ -83,6 +86,7 @@ bool SFTPTestServer::start() {
     std::cerr << "Failed to start server, errno: " << strerror(errno) << std::endl;
     exit(-1);
   } else if (pid < 0) {
+    logger_->log_error("Failed to fork, error: %s", strerror(errno));
     return false;
   } else {
     server_pid_ = pid;
@@ -95,8 +99,10 @@ bool SFTPTestServer::start() {
         if (port_file >> port) {
           port_ = port;
           started_ = true;
+          logger_->log_debug("Found port file after %zu seconds", i);
           return true;
         }
+        logger_->log_debug("Could not find port file after %zu seconds", i);
       }
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -114,14 +120,17 @@ bool SFTPTestServer::stop() {
 #else
   if (server_pid_ != -1) {
     if (::kill(server_pid_, SIGTERM) != 0) {
+      logger_->log_error("Failed to kill child process, error: %s", strerror(errno));
       return false;
     }
     int wstatus;
     if (::waitpid(server_pid_, &wstatus, 0) == -1) {
+      logger_->log_error("Failed to waitpid for child process, error: %s", strerror(errno));
       return false;
     }
   }
   if (!port_file_path_.empty()) {
+    logger_->log_debug("Deleting port file %s", port_file_path_.c_str());
     ::unlink(port_file_path_.c_str());
   }
 #endif

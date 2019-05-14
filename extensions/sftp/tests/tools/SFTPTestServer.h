@@ -26,6 +26,9 @@
 #include <sys/types.h>
 #endif
 
+#include "core/logging/Logger.h"
+#include "core/logging/LoggerConfiguration.h"
+
 class SFTPTestServer {
  public:
 
@@ -39,6 +42,8 @@ class SFTPTestServer {
   uint16_t getPort();
 
  private:
+
+  std::shared_ptr<logging::Logger> logger_;
 
   std::string host_key_file_;
   std::string jar_path_;

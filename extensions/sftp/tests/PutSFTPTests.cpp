@@ -61,6 +61,7 @@ class PutSFTPTestsFixture {
     LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
     LogTestController::getInstance().setTrace<processors::PutSFTP>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
+    LogTestController::getInstance().setDebug<SFTPTestServer>();
 
     // Create temporary directories
     testController.createTempDirectory(src_dir);
