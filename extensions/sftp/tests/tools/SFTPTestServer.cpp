@@ -76,6 +76,11 @@ bool SFTPTestServer::start() {
   /* fork */
   pid_t pid = fork();
   if (pid == 0) {
+    /* Set the child process's pgid to its pid, so we will be able to kill the entire process group */
+    if (setpgid(0, 0) != 0) {
+      std::cerr << "Failed to set PGID, errno: " << strerror(errno) << std::endl;
+      exit(-1);
+    }
     /* execv */
     std::vector<char*> args(4U);
     args[0] = strdup("/bin/sh");
@@ -119,7 +124,7 @@ bool SFTPTestServer::stop() {
   throw std::runtime_error("Not implemented");
 #else
   if (server_pid_ != -1) {
-    if (::kill(server_pid_, SIGTERM) != 0) {
+    if (::kill(-server_pid_, SIGTERM) != 0) {
       logger_->log_error("Failed to kill child process, error: %s", strerror(errno));
       return false;
     }
