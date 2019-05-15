@@ -73,6 +73,8 @@ bool SFTPTestServer::start() {
     ::unlink(port_file_path_.c_str());
   }
 
+  auto server_log_file_path = utils::file::FileUtils::concat_path(working_directory_, "log.txt");
+
   /* fork */
   pid_t pid = fork();
   if (pid == 0) {
@@ -85,7 +87,7 @@ bool SFTPTestServer::start() {
     std::vector<char*> args(4U);
     args[0] = strdup("/bin/sh");
     args[1] = strdup("-c");
-    args[2] = strdup(("java -jar " + jar_path_ + " -w " + working_directory_ + " -k " + host_key_file_).c_str());
+    args[2] = strdup(("java -jar " + jar_path_ + " -w " + working_directory_ + " -k " + host_key_file_ + " &> " + server_log_file_path).c_str());
     args[3] = nullptr;
     execv("/bin/sh", args.data());
     std::cerr << "Failed to start server, errno: " << strerror(errno) << std::endl;
