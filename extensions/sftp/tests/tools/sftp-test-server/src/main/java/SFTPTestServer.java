@@ -17,9 +17,10 @@
  */
 
 import org.apache.commons.io.FileUtils;
+import org.apache.sshd.common.random.SingletonRandomFactory;
 import org.apache.sshd.common.NamedFactory;
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory;
-import org.apache.sshd.server.Command;
+import org.apache.sshd.server.command.Command;
 import org.apache.sshd.server.SshServer;
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
 import org.apache.sshd.server.subsystem.sftp.SftpSubsystemFactory;
@@ -79,8 +80,14 @@ public class SFTPTestServer {
 
     public void startServer() throws IOException {
         sshd = SshServer.setUpDefaultServer();
+
+        // Set an insecure random generator. This is insecure (gasp) but will prevent hangs by depleted entropy.
+        sshd.setRandomFactory(new SingletonRandomFactory(InsecureRandomFactory.INSTANCE));
+
+        // Listen on loopback
         sshd.setHost("localhost");
 
+        // Use the provided host key, or generate one
         if (hostKeyFile != null) {
             sshd.setKeyPairProvider(new BouncyCastleGeneratorHostKeyProvider(hostKeyFile));
         } else {
