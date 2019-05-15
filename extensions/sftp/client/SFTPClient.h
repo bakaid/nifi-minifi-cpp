@@ -41,23 +41,26 @@ namespace minifi {
 namespace utils {
 
 /**
- * Initializes and cleans up libssh2 once. Cleanup will only occur at the end of our execution since we are relying on a static variable.
+ * Initializes and cleans up curl and libssh2 once.
+ * Cleanup will only occur at the end of our execution since we are relying on a static variable.
  */
-class LibSSH2Initializer {
+class SFTPClientInitializer {
  public:
-  static LibSSH2Initializer *getInstance() {
-    static LibSSH2Initializer initializer;
+  static SFTPClientInitializer *getInstance() {
+    static SFTPClientInitializer initializer;
     return &initializer;
   }
   void initialize() {
 
   }
  private:
-  ~LibSSH2Initializer() {
-    libssh2_exit();
-  }
-  LibSSH2Initializer() {
+  SFTPClientInitializer() {
     libssh2_init(0);
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+  }
+  ~SFTPClientInitializer() {
+    curl_global_cleanup();
+    libssh2_exit();
   }
 };
 

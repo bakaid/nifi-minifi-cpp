@@ -232,9 +232,7 @@ PutSFTP::PutSFTP(std::string name, utils::Identifier uuid /*= utils::Identifier(
     use_keepalive_on_timeout_(false),
     use_compression_(false),
     running_(true) {
-  static utils::LibSSH2Initializer *initializer = utils::LibSSH2Initializer::getInstance();
-  initializer->initialize();
-  // TODO
+  utils::SFTPClientInitializer::getInstance()->initialize();
 }
 
 PutSFTP::~PutSFTP() {
