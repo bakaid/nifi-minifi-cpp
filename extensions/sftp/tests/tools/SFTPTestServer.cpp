@@ -87,7 +87,7 @@ bool SFTPTestServer::start() {
     std::vector<char*> args(4U);
     args[0] = strdup("/bin/sh");
     args[1] = strdup("-c");
-    args[2] = strdup(("java -jar " + jar_path_ + " -w " + working_directory_ + " -k " + host_key_file_ + " &> " + server_log_file_path).c_str());
+    args[2] = strdup(("java -Djava.security.egd=file:/dev/./urandom -jar " + jar_path_ + " -w " + working_directory_ + " -k " + host_key_file_ + " &> " + server_log_file_path).c_str());
     args[3] = nullptr;
     execv("/bin/sh", args.data());
     std::cerr << "Failed to start server, errno: " << strerror(errno) << std::endl;
