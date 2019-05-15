@@ -113,13 +113,13 @@ bool SFTPTestServer::start() {
     }
   }
 #endif
+  /* We could not find the port file, but the server have been started. Try to kill it. */
+  this->stop();
+
   return false;
 }
 
 bool SFTPTestServer::stop() {
-  if (!started_) {
-    return true;
-  }
 #ifdef WIN32
   throw std::runtime_error("Not implemented");
 #else
@@ -139,7 +139,9 @@ bool SFTPTestServer::stop() {
     ::unlink(port_file_path_.c_str());
   }
 #endif
+  server_pid_ = -1;
   started_ = false;
+  port_file_path_ = "";
   return true;
 }
 
