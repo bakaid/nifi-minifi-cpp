@@ -34,9 +34,9 @@ FOREACH(testfile ${SFTP_INTEGRATION_TESTS})
 	target_include_directories(${testfilename} BEFORE PRIVATE ./tools)
 
 	if (APPLE)
-		target_link_libraries (${testfilename} -Wl,-all_load minifi-sftp minifi-standard-processors sftp-test-tools)
+		target_link_libraries (${testfilename} -Wl,-all_load ${LIBSSH2_LIBRARY} ${ZLIB_LIBRARY} ${OPENSSL_LIBRARIES} minifi-sftp minifi-standard-processors sftp-test-tools)
 	else ()
-		target_link_libraries (${testfilename} -Wl,--whole-archive minifi-sftp minifi-standard-processors sftp-test-tools -Wl,--no-whole-archive)
+		target_link_libraries (${testfilename} -Wl,--whole-archive ${LIBSSH2_LIBRARY} ${ZLIB_LIBRARY} ${OPENSSL_LIBRARIES} minifi-sftp minifi-standard-processors sftp-test-tools -Wl,--no-whole-archive)
 	endif ()
 
 	createTests("${testfilename}")

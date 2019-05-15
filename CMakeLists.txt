@@ -54,7 +54,7 @@ option(BUILD_SHARED_LIBS "Build yaml cpp shared lib" OFF)
 
 cmake_dependent_option(USE_SYSTEM_ZLIB "Instructs the build system to search for and use a zlib library available in the host system" ON "NOT STATIC_BUILD" OFF)
 
-cmake_dependent_option(USE_SYSTEM_LIBSSH2 "Instructs the build system to search for and use a libssh2 library available in the host system" ON "NOT STATIC_BUILD" OFF)
+cmake_dependent_option(USE_SYSTEM_LIBSSH2 "Instructs the build system to search for and use a libssh2 library available in the host system" OFF "NOT STATIC_BUILD" OFF)
 
 option(USE_SYSTEM_BZIP2 "Instructs the build system to search for and use a bzip2 library available in the host system" ON)
 option(BUILD_ROCKSDB "Instructs the build system to use RocksDB from the third party directory" ON)
