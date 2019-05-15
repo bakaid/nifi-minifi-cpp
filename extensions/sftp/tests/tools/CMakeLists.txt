@@ -17,11 +17,6 @@
 # under the License.
 #
 
-message(STATUS "JAVA_HOME: '$ENV{JAVA_HOME}'")
-find_package(Java REQUIRED)
-find_package(Maven REQUIRED)
-message(STATUS "MAVEN: ${MAVEN_EXECUTABLE}")
-
 file(GLOB SOURCES  "*.cpp")
 
 add_library(sftp-test-tools STATIC ${SOURCES})
