@@ -97,7 +97,7 @@ bool SFTPTestServer::start() {
     server_pid_ = pid;
 
     /* Wait for port.txt to be created */
-    for (size_t i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 30; i++) {
       std::ifstream port_file(port_file_path_);
       if (port_file.is_open() && port_file.good()) {
         uint16_t port;
@@ -111,10 +111,11 @@ bool SFTPTestServer::start() {
       logger_->log_debug("Could not find port file after %zu seconds", i);
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+
+    /* We could not find the port file, but the server has been started. Try to kill it. */
+    this->stop();
   }
 #endif
-  /* We could not find the port file, but the server have been started. Try to kill it. */
-  this->stop();
 
   return false;
 }
