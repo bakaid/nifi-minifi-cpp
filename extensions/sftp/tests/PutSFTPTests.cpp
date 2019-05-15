@@ -294,7 +294,7 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP host key checking missing strict"
     REQUIRE(0 == std::string(e.what()).compare(0, expected.size(), expected));
   }
 
-  REQUIRE(LogTestController::getInstance().contains("Host key verification failed for 127.0.0.1: 2"));
+  REQUIRE(LogTestController::getInstance().contains("Host 127.0.0.1 not found in the host key file"));
 }
 
 TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP host key checking missing non-strict", "[PutSFTP][hostkey]") {
@@ -307,7 +307,7 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP host key checking missing non-str
 
   testController.runSession(plan, true);
 
-  REQUIRE(LogTestController::getInstance().contains("Host key verification failed for 127.0.0.1: 2"));
+  REQUIRE(LogTestController::getInstance().contains("Host 127.0.0.1 not found in the host key file"));
   testFile("nifi_test/tstFile.ext", "tempFile");
 }
 
@@ -324,7 +324,20 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP host key checking mismatch strict
     REQUIRE(0 == std::string(e.what()).compare(0, expected.size(), expected));
   }
 
-  REQUIRE(LogTestController::getInstance().contains("Host key verification failed for localhost: 1"));
+  REQUIRE(LogTestController::getInstance().contains("Host key mismatch for localhost, expected: "
+                                                    "AAAAB3NzaC1yc2EAAAADAQABAAABAQCueV6fHbTECMPps4nXJ9jiVcxArTKXYip+"
+                                                    "SEIBwkvmQiEDj4/zldU4KUn4QRwqbFmR9JO3s3SkPVzvP9bKh2Xk3nICB73iMs4v"
+                                                    "wO2nZKpkBFtNz6+w0LsqDzQe9piW0ukoXw2Ce41yQK+9xtugPVHbbchP0esDanDf"
+                                                    "SGjbQyPsmarfuJ8K+ACgGmWB9GKSthq7j+gArgefz0SGHkoKXA+3OXF/D6/MnLLv"
+                                                    "H1sYmVyIO6CzDiurHUS2o7MWjiw3qK+n6o9rW0fpLFM/l3+8dLCt3e6D+lLQsJVX"
+                                                    "iL1TJVu+Lf2z9kMc+3brFjFNVBRDxjYMVjOhUr6JyU3ouL1i6P/9"
+                                                    ", actual: "
+                                                    "AAAAB3NzaC1yc2EAAAADAQABAAABAQCrRDRfH278iGChp1a5hSMzQcDd63YoA2Np"
+                                                    "VELEXzKmrPOuUgQXpdzdxk17oTdh5D+xTax2sTa3ZR55RWl1q6keqnrRvihWpBqF"
+                                                    "N6D0aKUmGe/9Xlxhfe8v/RBs3j9JxlmbPtIFwKXF1ePfLFaI6n1BbXs0WUR8M7Cw"
+                                                    "4OMFYTuvQ7IcrPE/FU+Xh4hdNm6y3j0ppKBj3LnZOABI/Ql/fyJUTpRqrLIqqdMi"
+                                                    "3zxLNVBx7mVZQZICO1IPkh7ZqT0s3HyGT5hlsVuZsRfpqOjT4QfBeNjWuHdB5cDs"
+                                                    "mDbaOvO6iQ/NY63uy7t/2VGmSASSzi4wzILvXKQTL3Lx5de9Tol7"));
 }
 
 TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP conflict resolution rename", "[PutSFTP][conflict-resolution]") {

@@ -26,6 +26,7 @@
 #include "utils/StringUtils.h"
 #include "utils/ScopeGuard.h"
 #include "utils/StringUtils.h"
+#include "utils/base64.h"
 
 namespace org {
 namespace apache {
@@ -277,6 +278,7 @@ bool SFTPClient::connect() {
         logger_->log_error("Unknown host key type: %d", type);
         return false;
     }
+    struct libssh2_knownhost* known_host = nullptr;
     int keycheck_result = libssh2_knownhost_checkp(ssh_known_hosts_,
                             hostname_.c_str(),
                             -1 /*port*/,
@@ -284,19 +286,39 @@ bool SFTPClient::connect() {
                             LIBSSH2_KNOWNHOST_TYPE_PLAIN |
                             LIBSSH2_KNOWNHOST_KEYENC_RAW |
                             keybit,
-                            nullptr /*host*/);
+                            &known_host);
     switch (keycheck_result) {
       case LIBSSH2_KNOWNHOST_CHECK_FAILURE:
-      case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND:
-      case LIBSSH2_KNOWNHOST_CHECK_MISMATCH:
-        logger_->log_warn("Host key verification failed for %s: %d", hostname_.c_str(), keycheck_result); // TODO
+        logger_->log_warn("Failed to verify host key for %s", hostname_.c_str());
         if (strict_host_checking_) {
           return false;
-        } else {
         }
         break;
+      case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND:
+        logger_->log_warn("Host %s not found in the host key file", hostname_.c_str());
+        if (strict_host_checking_) {
+          return false;
+        }
+        break;
+      case LIBSSH2_KNOWNHOST_CHECK_MISMATCH: {
+        char* b64_out = nullptr;
+        auto b64_len = Curl_base64_encode(hostkey, hostkey_len, &b64_out);
+        logger_->log_warn("Host key mismatch for %s, expected: %s, actual: %s", hostname_.c_str(),
+                          known_host == nullptr ? "" : known_host->key,
+                          b64_out == nullptr ? "" : std::string(b64_out, b64_len).c_str());
+        if (strict_host_checking_) {
+          return false;
+        }
+        break;
+      }
       case LIBSSH2_KNOWNHOST_CHECK_MATCH:
         logger_->log_debug("Host key verification succeeded for %s", hostname_.c_str());
+        break;
+      default:
+        logger_->log_error("Unknown libssh2_knownhost_checkp result: %d", keycheck_result);
+        if (strict_host_checking_) {
+          return false;
+        }
         break;
     }
   } else {
@@ -376,7 +398,7 @@ bool SFTPClient::connect() {
 
   /* Set up keepalive config if needed */
   if (send_keepalive_) {
-    libssh2_keepalive_config(ssh_session_, 0 /*TODO: want_reply*/, 10U /*TODO: interval*/);
+    libssh2_keepalive_config(ssh_session_, 0 /*want_reply*/, 10U /*interval*/);
   }
 
   return true;
