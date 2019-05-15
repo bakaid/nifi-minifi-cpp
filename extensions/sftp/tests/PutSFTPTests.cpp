@@ -493,28 +493,17 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set permissions", "[PutSFTP]") {
 
 #ifndef WIN32
 TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP set uid and gid", "[PutSFTP]") {
-#ifdef __APPLE__
-  /*
-   * chowning to another user or an arbitrary group doesn't seem to work on MacOS
-   * We at least change the group to the 'everyone' group
-   */
-  plan->setProperty(put, "Remote Group", "12");
-#else
+  std::cerr << "!!!! This test ONLY works as root, because it needs to chown !!!!" << std::endl;
   plan->setProperty(put, "Remote Owner", "1234");
   plan->setProperty(put, "Remote Group", "4567");
-#endif
 
   createFile(src_dir, "tstFile1.ext", "content 1");
 
   testController.runSession(plan, true);
 
   testFile("nifi_test/tstFile1.ext", "content 1");
-#ifdef __APPLE__
-  testGroup("nifi_test/tstFile1.ext", 12);
-#else
   testOwner("nifi_test/tstFile1.ext", 1234);
   testGroup("nifi_test/tstFile1.ext", 4567);
-#endif
 }
 #endif
 
