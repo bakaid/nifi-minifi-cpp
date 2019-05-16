@@ -44,7 +44,7 @@
 #include "processors/PutSFTP.h"
 #include "processors/GetFile.h"
 #include "processors/LogAttribute.h"
-#include "processors/UpdateAttribute.h"
+#include "processors/ExtractText.h"
 #include "tools/SFTPTestServer.h"
 
 class PutSFTPTestsFixture {
@@ -61,7 +61,7 @@ class PutSFTPTestsFixture {
     LogTestController::getInstance().setDebug<processors::GetFile>();
     LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
     LogTestController::getInstance().setTrace<processors::PutSFTP>();
-    LogTestController::getInstance().setDebug<processors::UpdateAttribute>();
+    LogTestController::getInstance().setTrace<processors::ExtractText>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
     LogTestController::getInstance().setDebug<SFTPTestServer>();
 
@@ -77,14 +77,9 @@ class PutSFTPTestsFixture {
 
     // Build MiNiFi processing graph
     plan = testController.createPlan();
-    getfile = plan->addProcessor(
+    get_file = plan->addProcessor(
         "GetFile",
         "GetFile");
-    update_attribute = plan->addProcessor(
-        "UpdateAttribute",
-        "UpdateAttribute",
-        core::Relationship("success", "d"),
-        true);
     put = plan->addProcessor(
         "PutSFTP",
         "PutSFTP",
@@ -98,7 +93,7 @@ class PutSFTPTestsFixture {
           true);
 
     // Configure GetFile processor
-    plan->setProperty(getfile, "Input Directory", src_dir);
+    plan->setProperty(get_file, "Input Directory", src_dir);
 
     // Configure PutSFTP processor
     plan->setProperty(put, "Hostname", "localhost");
@@ -188,14 +183,23 @@ class PutSFTPTestsFixture {
     REQUIRE(expected_gid == gid);
   }
 
+  size_t directoryContentCount(const std::string& dir) {
+    size_t count = 0U;
+    utils::file::FileUtils::list_dir(dir, [&count](const std::string&, const std::string&) {
+      count++;
+      return true;
+    }, testController.getLogger());
+    return count;
+  }
+
  protected:
   char *src_dir;
   char *dst_dir;
   std::unique_ptr<SFTPTestServer> sftp_server;
   TestController testController;
   std::shared_ptr<TestPlan> plan;
-  std::shared_ptr<core::Processor> getfile;
-  std::shared_ptr<core::Processor> update_attribute;
+  std::shared_ptr<core::Processor> get_file;
+  std::shared_ptr<core::Processor> extract_text;
   std::shared_ptr<core::Processor> put;
 };
 
@@ -671,8 +675,49 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching does not reuse
 }
 
 TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching reaches limit", "[PutSFTP][connection-caching]") {
-  plan->setProperty(getfile, "Batch Size", "1");
-  plan->setProperty(put, "Port", "${ 'Port' }");
+  plan = testController.createPlan();
+  get_file = plan->addProcessor(
+      "GetFile",
+      "GetFile");
+  extract_text = plan->addProcessor(
+      "ExtractText",
+      "ExtractText",
+      core::Relationship("success", "d"),
+      true);
+  put = plan->addProcessor(
+      "PutSFTP",
+      "PutSFTP",
+      core::Relationship("success", "d"),
+      true);
+  plan->addProcessor("LogAttribute",
+      "LogAttribute",
+      { core::Relationship("success", "d"),
+      core::Relationship("reject", "d"),
+      core::Relationship("failure", "d") },
+      true);
+
+  // Configure GetFile processor
+  plan->setProperty(get_file, "Batch Size", "1");
+  plan->setProperty(get_file, "Input Directory", src_dir);
+
+  // Configure ExtractText processor
+  plan->setProperty(extract_text, "Attribute", "port_num");
+
+  // Configure PutSFTP processor
+  plan->setProperty(put, "Hostname", "localhost");
+  plan->setProperty(put, "Port", "${'port_num'}");
+  plan->setProperty(put, "Username", "nifiuser");
+  plan->setProperty(put, "Password", "nifipassword");
+  plan->setProperty(put, "Remote Path", "nifi_test/");
+  plan->setProperty(put, "Create Directory", "true");
+  plan->setProperty(put, "Batch Size", "2");
+  plan->setProperty(put, "Connection Timeout", "30 sec");
+  plan->setProperty(put, "Data Timeout", "30 sec");
+  plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
+  plan->setProperty(put, "Strict Host Key Checking", "false");
+  plan->setProperty(put, "Send Keep Alive On Timeout", "true");
+  plan->setProperty(put, "Use Compression", "false");
+  plan->setProperty(put, "Reject Zero-Byte Files", "true");
 
   sftp_server.reset();
 
@@ -681,48 +726,72 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching reaches limit"
 
   std::string tmp_dir_format("/tmp/sftpd.XXXXXX");
   for (size_t i = 0; i < 10; i++) {
-    createFile(src_dir, "tstFile" + std::to_string(i) + ".ext", "content " + std::to_string(i));
-
     dst_dirs.emplace_back(tmp_dir_format.data(), tmp_dir_format.data() + tmp_dir_format.size() + 1);
     testController.createTempDirectory(dst_dirs.back().data());
     sftp_servers.emplace_back(new SFTPTestServer(dst_dirs.back().data()));
     REQUIRE(true == sftp_servers.back()->start());
-  }
+    createFile(src_dir, "tstFile" + std::to_string(i) + ".ext", std::to_string(sftp_servers.back()->getPort()));
 
-  for (size_t i = 0; i < 10; i++) {
-    plan->setProperty(update_attribute, "Port", std::to_string(sftp_servers[i]->getPort()), true /*dynamic*/);
     testController.runSession(plan, true);
     plan->reset();
+
+    if (i == 8) {
+      REQUIRE(LogTestController::getInstance().contains("SFTP connection pool is full, removing nifiuser@localhost:" + std::to_string(sftp_servers[0]->getPort())));
+      REQUIRE(LogTestController::getInstance().contains("Closing SFTPClient for localhost:" + std::to_string(sftp_servers[0]->getPort())));
+      REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_servers[8]->getPort()) + " to SFTP connection pool"));
+    } else if (i == 9) {
+      REQUIRE(LogTestController::getInstance().contains("SFTP connection pool is full, removing nifiuser@localhost:" + std::to_string(sftp_servers[1]->getPort())));
+      REQUIRE(LogTestController::getInstance().contains("Closing SFTPClient for localhost:" + std::to_string(sftp_servers[1]->getPort())));
+      REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_servers[9]->getPort()) + " to SFTP connection pool"));
+    }
   }
-
-  REQUIRE(LogTestController::getInstance().contains("SFTP connection pool is full, removing nifiuser@localhost:" + std::to_string(sftp_servers[0]->getPort())));
-  REQUIRE(LogTestController::getInstance().contains("Closing SFTPClient for localhost:" + std::to_string(sftp_servers[0]->getPort())));
-  REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_servers[8]->getPort()) + " to SFTP connection pool"));
-
-  REQUIRE(LogTestController::getInstance().contains("SFTP connection pool is full, removing nifiuser@localhost:" + std::to_string(sftp_servers[1]->getPort())));
-  REQUIRE(LogTestController::getInstance().contains("Closing SFTPClient for localhost:" + std::to_string(sftp_servers[1]->getPort())));
-  REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_servers[9]->getPort()) + " to SFTP connection pool"));
 }
 
-// public key auth -> OK
-// both auth -> OK
-// host key file test (both strict and non-strict) -> OK
-// disable directory listing test -> OK, needs dynamic property test
-// create directory disable test -> OK
-// conflict resolution tests -> OK
-//  - directory in place of target file -> OK
-//  - replace -> OK
-//  - ignore -> OK
-//  - rename -> OK
-//  - reject -> OK
-//  - fail -> OK
-//  - none -> OK
-// reject zero-byte -> OK
-// dot-rename test -> OK
-// temporary filename test (with expression language) -> OK
-// permissions (non-windows) -> OK
-// remote owner and group (non-windows) -> OK
-// modification time -> OK
-// batching tests
-// proxy tests -> not really feasible, manual/docker tests
-// make sure we clean temporaries -> OK
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP batching two files in one batch", "[PutSFTP][batching]") {
+  plan->setProperty(put, "Batch Size", "2");
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  createFile(src_dir, "tstFile2.ext", "content 2");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(2U == directoryContentCount(std::string(dst_dir) + "/vfs/nifi_test"));
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP batching two files in two batches", "[PutSFTP][batching]") {
+  plan->setProperty(put, "Batch Size", "1");
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  createFile(src_dir, "tstFile2.ext", "content 2");
+
+  testController.runSession(plan, true);
+  REQUIRE(1U == directoryContentCount(std::string(dst_dir) + "/vfs/nifi_test"));
+  plan->reset();
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  createFile(src_dir, "tstFile2.ext", "content 2");
+
+  testController.runSession(plan, true);
+  REQUIRE(2U == directoryContentCount(std::string(dst_dir) + "/vfs/nifi_test"));
+  plan->reset();
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP batching does not fail even if one is routed to Failure", "[PutSFTP][batching]") {
+  plan->setProperty(put, "Batch Size", "3");
+  plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_FAIL);
+
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  createFile(src_dir, "tstFile2.ext", "content 2");
+  createFile(src_dir, "tstFile3.ext", "content 3");
+
+  REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::concat_path(dst_dir, "vfs/nifi_test")));
+  createFile(utils::file::FileUtils::concat_path(dst_dir, "vfs"), "nifi_test/tstFile1.ext", "content other");
+  createFile(utils::file::FileUtils::concat_path(dst_dir, "vfs"), "nifi_test/tstFile2.ext", "content other");
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile3.ext", "content 3");
+
+  REQUIRE(LogTestController::getInstance().contains("Routing tstFile1.ext to FAILURE because a file with the same name already exists"));
+  REQUIRE(LogTestController::getInstance().contains("Routing tstFile2.ext to FAILURE because a file with the same name already exists"));
+}
