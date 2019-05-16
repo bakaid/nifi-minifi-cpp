@@ -17,11 +17,7 @@
  */
 
 #include "PutSFTP.h"
-#ifdef WIN32
-#include <regex>
-#else
-#include <regex.h>
-#endif
+
 #include <memory>
 #include <algorithm>
 #include <cctype>
@@ -408,8 +404,24 @@ void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, c
   context->getProperty(ProxyType.getName(), proxy_type_);
 
   if (use_keepalive_on_timeout_ && !keepalive_thread_.joinable()) {
-    keepalive_thread_ = std::thread(&PutSFTP::keepaliveThreadFunc, this); // TODO: should we do this in onScheduled?
+    running_ = true;
+    keepalive_thread_ = std::thread(&PutSFTP::keepaliveThreadFunc, this);
   }
+}
+
+void PutSFTP::notifyStop() {
+  logger_->log_debug("Got notifyStop, stopping keepalive thread and clearing connections");
+  if (keepalive_thread_.joinable()) {
+    {
+      std::lock_guard<std::mutex> lock(connections_mutex_);
+      running_ = false;
+      keepalive_cv_.notify_one();
+    }
+    keepalive_thread_.join();
+  }
+  /* The thread is no longer running, we don't have to lock */
+  connections_.clear();
+  lru_.clear();
 }
 
 PutSFTP::ReadCallback::ReadCallback(const std::string& target_path,
@@ -504,7 +516,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   if (context->getDynamicProperty(DisableDirectoryListing.getName(), value)) {
     utils::StringUtils::StringToBool(value, disable_directory_listing);
   } else if (context->getProperty(DisableDirectoryListing.getName(), value)) {
-    utils::StringUtils::StringToBool(value, disable_directory_listing); // TODO
+    utils::StringUtils::StringToBool(value, disable_directory_listing); // TODO: test dynamic property
   }
   /* Remove trailing slashes */
   while (remote_path.size() > 1U && remote_path.back() == '/') {
@@ -767,7 +779,7 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     if (!client->rename(target_path, final_target_path, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
       logger_->log_error("Failed to move temporary file %s to final path %s", target_path, final_target_path);
       if (!client->removeFile(target_path)) {
-        logger_->log_error("Failed to remove temporary file %s", target_path);
+        logger_->log_error("Failed to remove temporary file %s", target_path.c_str());
       }
       session->transfer(flow_file, Failure);
       return true;
@@ -782,9 +794,14 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     utils::SFTPClient::SFTPAttributes attrs;
     attrs.flags = 0U;
     if (last_modified_time_set) {
+      /*
+       * NiFi doesn't set atime, only mtime, but because they can only be set together,
+       * if we don't want to modify atime, we first have to get it.
+       * Therefore setting them both saves an extra protocol round.
+       */
       attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_MTIME | utils::SFTPClient::SFTP_ATTRIBUTE_ATIME;
       attrs.mtime = last_modified_time;
-      attrs.atime = last_modified_time; // TODO
+      attrs.atime = last_modified_time;
     }
     if (permissions_set) {
       attrs.flags |= utils::SFTPClient::SFTP_ATTRIBUTE_PERMISSIONS;
@@ -799,9 +816,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       attrs.gid = remote_group;
     }
     if (!client->setAttributes(final_target_path, attrs)) {
-      logger_->log_error("Failed to set file attributes for %s", target_path);
-      session->transfer(flow_file, Failure); // TODO: shall this be fatal? If yes, we should also delete here.
-      return true;
+      /* This is not fatal, just log a warning */
+      logger_->log_warn("Failed to set file attributes for %s", target_path);
     }
   }
 
