@@ -519,13 +519,13 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   if (context->getDynamicProperty(DisableDirectoryListing.getName(), value)) {
     utils::StringUtils::StringToBool(value, disable_directory_listing);
   } else if (context->getProperty(DisableDirectoryListing.getName(), value)) {
-    utils::StringUtils::StringToBool(value, disable_directory_listing); // TODO: test dynamic property
+    utils::StringUtils::StringToBool(value, disable_directory_listing);
   }
   /* Remove trailing slashes */
   while (remote_path.size() > 1U && remote_path.back() == '/') {
     remote_path.resize(remote_path.size() - 1);
   }
-  /* Empty path means current directory, so we change it to '.' s*/
+  /* Empty path means current directory, so we change it to '.' */
   if (remote_path.empty()) {
     remote_path = ".";
   }

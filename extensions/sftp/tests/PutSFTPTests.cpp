@@ -50,6 +50,7 @@
 #include "processors/GetFile.h"
 #include "processors/LogAttribute.h"
 #include "processors/ExtractText.h"
+#include "processors/UpdateAttribute.h"
 #include "tools/SFTPTestServer.h"
 
 class PutSFTPTestsFixture {
@@ -204,7 +205,6 @@ class PutSFTPTestsFixture {
   TestController testController;
   std::shared_ptr<TestPlan> plan;
   std::shared_ptr<core::Processor> get_file;
-  std::shared_ptr<core::Processor> extract_text;
   std::shared_ptr<core::Processor> put;
 };
 
@@ -684,7 +684,7 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching reaches limit"
   get_file = plan->addProcessor(
       "GetFile",
       "GetFile");
-  extract_text = plan->addProcessor(
+  auto extract_text = plan->addProcessor(
       "ExtractText",
       "ExtractText",
       core::Relationship("success", "d"),
@@ -811,4 +811,74 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP put large file", "[PutSFTP]") {
   testController.runSession(plan, true);
 
   testFile("nifi_test/tstFile.ext", content);
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP expression language test", "[PutSFTP]") {
+  plan = testController.createPlan();
+  get_file = plan->addProcessor(
+      "GetFile",
+      "GetFile");
+  auto update_attribute = plan->addProcessor(
+      "UpdateAttribute",
+      "UpdateAttribute",
+      core::Relationship("success", "d"),
+      true);
+  put = plan->addProcessor(
+      "PutSFTP",
+      "PutSFTP",
+      core::Relationship("success", "d"),
+      true);
+  plan->addProcessor("LogAttribute",
+      "LogAttribute",
+      { core::Relationship("success", "d"),
+      core::Relationship("reject", "d"),
+      core::Relationship("failure", "d") },
+      true);
+
+  // Configure GetFile processor
+  plan->setProperty(get_file, "Input Directory", src_dir);
+
+  // Configure UpdateAttribute processor
+  plan->setProperty(update_attribute, "attr_Hostname", "localhost", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Port", std::to_string(sftp_server->getPort()), true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Username", "nifiuser", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Password", "nifipassword", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Private Key Path",
+      utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"), true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Private Key Passphrase", "privatekeypassword", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Remote Path", "nifi_test/", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Temporary Filename", "tempfile", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Last Modified Time", "2065-01-24T05:20:00Z", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Permissions", "rw-------", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Remote Owner", "1234", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Remote Group", "5678", true /*dynamic*/);
+
+  // Configure PutSFTP processor
+  plan->setProperty(put, "Hostname", "${'attr_Hostname'}");
+  plan->setProperty(put, "Port", "${'attr_Port'}");
+  plan->setProperty(put, "Username", "${'attr_Username'}");
+  plan->setProperty(put, "Password", "${'attr_Password'}");
+  plan->setProperty(put, "Private Key Path", "${'attr_Private Key Path'}");
+  plan->setProperty(put, "Private Key Passphrase", "${'attr_Private Key Passphrase'}");
+  plan->setProperty(put, "Remote Path", "${'attr_Remote Path'}");
+  plan->setProperty(put, "Temporary Filename", "${'attr_Temporary Filename'}");
+  plan->setProperty(put, "Last Modified Time", "${'attr_Last Modified Time'}");
+  plan->setProperty(put, "Permissions", "${'attr_Permissions'}");
+  plan->setProperty(put, "Remote Owner", "${'attr_Remote Owner'}");
+  plan->setProperty(put, "Remote Group", "${'attr_Remote Group'}");
+  plan->setProperty(put, "Create Directory", "true");
+  plan->setProperty(put, "Batch Size", "2");
+  plan->setProperty(put, "Connection Timeout", "30 sec");
+  plan->setProperty(put, "Data Timeout", "30 sec");
+  plan->setProperty(put, "Conflict Resolution", processors::PutSFTP::CONFLICT_RESOLUTION_RENAME);
+  plan->setProperty(put, "Strict Host Key Checking", "false");
+  plan->setProperty(put, "Send Keep Alive On Timeout", "true");
+  plan->setProperty(put, "Use Compression", "false");
+  plan->setProperty(put, "Reject Zero-Byte Files", "true");
+
+  createFile(src_dir, "tstFile.ext", "some content");
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile.ext", "some content");
 }
