@@ -438,7 +438,10 @@ PutSFTP::ReadCallback::~ReadCallback() {
 }
 
 int64_t PutSFTP::ReadCallback::process(std::shared_ptr<io::BaseStream> stream) {
-  if (!client_->putFile(target_path_, *stream, conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/)) {
+  if (!client_->putFile(target_path_,
+      *stream,
+      conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/,
+      stream->getSize() /*expected_size*/)) {
     return -1;
   }
   write_succeeded_ = true;

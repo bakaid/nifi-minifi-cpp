@@ -479,6 +479,11 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
     libssh2_sftp_close(file_handle);
   });
 
+  /* If they just want a zero byte file, we are done */
+  if (expected_size == 0) {
+    return true;
+  }
+
   const size_t buf_size = expected_size < 0 ? MAX_BUFFER_SIZE : std::min<size_t>(expected_size, MAX_BUFFER_SIZE);
   std::vector<uint8_t> buf(buf_size);
   uint64_t total_read = 0U;
