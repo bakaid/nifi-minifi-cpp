@@ -101,9 +101,9 @@ class SFTPClient {
 
   bool sendKeepAliveIfNeeded(int &seconds_to_next);
 
-  bool getFile(const std::string& path, io::BaseStream& output);
+  bool getFile(const std::string& path, io::BaseStream& output, int64_t expected_size = -1);
 
-  bool putFile(const std::string& path, io::BaseStream& input, bool overwrite);
+  bool putFile(const std::string& path, io::BaseStream& input, bool overwrite, int64_t expected_size = -1);
 
   bool rename(const std::string& source_path, const std::string& target_path, bool overwrite);
 

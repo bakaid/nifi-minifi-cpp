@@ -418,7 +418,7 @@ bool SFTPClient::sendKeepAliveIfNeeded(int &seconds_to_next) {
   return true;
 }
 
-bool SFTPClient::getFile(const std::string& path, io::BaseStream& output) {
+bool SFTPClient::getFile(const std::string& path, io::BaseStream& output, int64_t expected_size /*= -1*/) {
   LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), LIBSSH2_FXF_READ, 0);
   if (file_handle == nullptr) {
     logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
@@ -428,15 +428,20 @@ bool SFTPClient::getFile(const std::string& path, io::BaseStream& output) {
     libssh2_sftp_close(file_handle);
   });
 
-  std::vector<uint8_t> buf(32 * 1024U); // TODO
+  const size_t buf_size = expected_size < 0 ? (32 * 1024U) : std::min<size_t>(expected_size, 32 * 1024U);
+  std::vector<uint8_t> buf(buf_size);
+  uint64_t total_read = 0U;
   do {
     ssize_t read_ret = libssh2_sftp_read(file_handle, reinterpret_cast<char*>(buf.data()), buf.size());
     if (read_ret < 0) {
       logger_->log_error("Failed to read remote file \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
       return false;
     } else if (read_ret == 0) {
-      break; // TODO
+      logger_->log_trace("EOF while reading remote file \"%s\"", path.c_str());
+      break;
     }
+    logger_->log_trace("Read %d bytes from remote file \"%s\"", read_ret, path.c_str());
+    total_read += read_ret;
     int remaining = read_ret;
     while (remaining > 0) {
       int write_ret = output.writeData(buf.data() + (buf.size() - remaining), remaining);
@@ -448,10 +453,15 @@ bool SFTPClient::getFile(const std::string& path, io::BaseStream& output) {
     }
   } while (true);
 
+  if (expected_size >= 0 && total_read != expected_size) {
+    logger_->log_error("Remote file \"%s\" has unexpected size, expected: %ld, actual: %lu", path.c_str(), expected_size, total_read);
+    return false;
+  }
+
   return true;
 }
 
-bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool overwrite) {
+bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool overwrite, int64_t expected_size /*= -1*/) {
   int flags = 0;
   if (overwrite) {
     flags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC;
@@ -469,7 +479,9 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
     libssh2_sftp_close(file_handle);
   });
 
-  std::vector<uint8_t> buf(32 * 1024U); // TODO
+  const size_t buf_size = expected_size < 0 ? (32 * 1024U) : std::min<size_t>(expected_size, 32 * 1024U);
+  std::vector<uint8_t> buf(buf_size);
+  uint64_t total_read = 0U;
   do {
     int read_ret = input.readData(buf.data(), buf.size());
     if (read_ret < 0) {
@@ -479,9 +491,10 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
       return false;
     } else if (read_ret == 0) {
       logger_->log_trace("EOF while reading input");
-      break; // TODO
+      break;
     }
-    logger_->log_trace("Read %d bytes", read_ret);\
+    logger_->log_trace("Read %d bytes", read_ret);
+    total_read += read_ret;
     ssize_t remaining = read_ret;
     while (remaining > 0) {
       int write_ret = libssh2_sftp_write(file_handle, reinterpret_cast<char*>(buf.data() + (read_ret - remaining)), remaining);
@@ -489,10 +502,15 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
         logger_->log_error("Failed to write remote file \"%s\", error: %s", path.c_str(), sftp_strerror(libssh2_sftp_last_error(sftp_session_)));
         return false;
       }
-      logger_->log_trace("Wrote %ld bytes", write_ret);
+      logger_->log_trace("Wrote %d bytes to remote file \"%s\"", write_ret, path.c_str());
       remaining -= write_ret;
     }
   } while (true);
+
+  if (expected_size >= 0 && total_read != expected_size) {
+    logger_->log_error("Input has unexpected size, expected: %ld, actual: %lu", path.c_str(), expected_size, total_read);
+    return false;
+  }
 
   return true;
 }
