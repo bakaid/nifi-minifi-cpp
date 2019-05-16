@@ -30,6 +30,11 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <random>
+
 #include "TestBase.h"
 #include "utils/StringUtils.h"
 #include "utils/file/FileUtils.h"
@@ -794,4 +799,16 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP batching does not fail even if on
 
   REQUIRE(LogTestController::getInstance().contains("Routing tstFile1.ext to FAILURE because a file with the same name already exists"));
   REQUIRE(LogTestController::getInstance().contains("Routing tstFile2.ext to FAILURE because a file with the same name already exists"));
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP put large file", "[PutSFTP]") {
+  std::mt19937 rng(std::random_device{}());
+  std::string content(4 * 1024 * 1024U, '\0');
+  std::generate_n(content.begin(), 4 * 1024 * 1024U, std::ref(rng));
+
+  createFile(src_dir, "tstFile.ext", content);
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile.ext", content);
 }

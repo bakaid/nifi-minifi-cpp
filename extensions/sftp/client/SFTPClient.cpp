@@ -428,7 +428,7 @@ bool SFTPClient::getFile(const std::string& path, io::BaseStream& output, int64_
     libssh2_sftp_close(file_handle);
   });
 
-  const size_t buf_size = expected_size < 0 ? (32 * 1024U) : std::min<size_t>(expected_size, 32 * 1024U);
+  const size_t buf_size = expected_size < 0 ? MAX_BUFFER_SIZE : std::min<size_t>(expected_size, MAX_BUFFER_SIZE);
   std::vector<uint8_t> buf(buf_size);
   uint64_t total_read = 0U;
   do {
@@ -479,7 +479,7 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
     libssh2_sftp_close(file_handle);
   });
 
-  const size_t buf_size = expected_size < 0 ? (32 * 1024U) : std::min<size_t>(expected_size, 32 * 1024U);
+  const size_t buf_size = expected_size < 0 ? MAX_BUFFER_SIZE : std::min<size_t>(expected_size, MAX_BUFFER_SIZE);
   std::vector<uint8_t> buf(buf_size);
   uint64_t total_read = 0U;
   do {

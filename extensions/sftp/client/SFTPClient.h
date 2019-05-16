@@ -137,6 +137,13 @@ class SFTPClient {
 
  protected:
 
+  /*
+   * The maximum size libssh2 is willing to read or write in one go is 30000 bytes.
+   * (See MAX_SFTP_OUTGOING_SIZE and MAX_SFTP_READ_SIZE).
+   * So we will choose that as our read-write buffer size.
+   */
+  static constexpr size_t MAX_BUFFER_SIZE = 30000U;
+
   std::shared_ptr<logging::Logger> logger_;
 
   const std::string hostname_;
