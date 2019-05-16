@@ -43,8 +43,9 @@
 #include "io/StreamFactory.h"
 #include "processors/PutSFTP.h"
 #include "processors/GetFile.h"
-#include "tools/SFTPTestServer.h"
 #include "processors/LogAttribute.h"
+#include "processors/UpdateAttribute.h"
+#include "tools/SFTPTestServer.h"
 
 class PutSFTPTestsFixture {
  public:
@@ -60,6 +61,7 @@ class PutSFTPTestsFixture {
     LogTestController::getInstance().setDebug<processors::GetFile>();
     LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
     LogTestController::getInstance().setTrace<processors::PutSFTP>();
+    LogTestController::getInstance().setDebug<processors::UpdateAttribute>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
     LogTestController::getInstance().setDebug<SFTPTestServer>();
 
@@ -78,10 +80,15 @@ class PutSFTPTestsFixture {
     getfile = plan->addProcessor(
         "GetFile",
         "GetFile");
+    update_attribute = plan->addProcessor(
+        "UpdateAttribute",
+        "UpdateAttribute",
+        core::Relationship("success", "d"),
+        true);
     put = plan->addProcessor(
         "PutSFTP",
         "PutSFTP",
-        core::Relationship("success", "description"),
+        core::Relationship("success", "d"),
         true);
     plan->addProcessor("LogAttribute",
         "LogAttribute",
@@ -188,6 +195,7 @@ class PutSFTPTestsFixture {
   TestController testController;
   std::shared_ptr<TestPlan> plan;
   std::shared_ptr<core::Processor> getfile;
+  std::shared_ptr<core::Processor> update_attribute;
   std::shared_ptr<core::Processor> put;
 };
 
@@ -627,6 +635,73 @@ TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP test disable directory listing", 
   testFileNotExists("nifi_test/inner/tstFile1.ext");
 
   REQUIRE(should_list == LogTestController::getInstance().contains("Failed to stat remote path \"nifi_test\", error: LIBSSH2_FX_NO_SUCH_FILE"));
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching reuse", "[PutSFTP][connection-caching]") {
+  createFile(src_dir, "tstFile1.ext", "content 1");
+  createFile(src_dir, "tstFile2.ext", "content 2");
+
+  testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile1.ext", "content 1");
+  testFile("nifi_test/tstFile2.ext", "content 2");
+
+  REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_server->getPort()) + " to SFTP connection pool"));
+  REQUIRE(LogTestController::getInstance().contains("Removing nifiuser@localhost:" + std::to_string(sftp_server->getPort()) + " from SFTP connection pool"));
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching does not reuse bad connection", "[PutSFTP][connection-caching]") {
+  createFile(src_dir, "tstFile1.ext", "content 1");
+
+  /* Simulate connection failure */
+  auto port = sftp_server->getPort();
+  sftp_server.reset();
+
+  try {
+    testController.runSession(plan, true);
+  } catch (std::exception &e) {
+    std::string expected("Process Session Operation:Can not find the transfer relationship for the updated flow");
+    REQUIRE(0 == std::string(e.what()).compare(0, expected.size(), expected));
+  }
+
+  testController.runSession(plan, true);
+
+  REQUIRE(false == LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(port) + " to SFTP connection pool"));
+  REQUIRE(LogTestController::getInstance().contains("Cannot connect to SFTP server"));
+}
+
+TEST_CASE_METHOD(PutSFTPTestsFixture, "PutSFTP connection caching reaches limit", "[PutSFTP][connection-caching]") {
+  plan->setProperty(getfile, "Batch Size", "1");
+  plan->setProperty(put, "Port", "${ 'Port' }");
+
+  sftp_server.reset();
+
+  std::vector<std::vector<char>> dst_dirs;
+  std::vector<std::unique_ptr<SFTPTestServer>> sftp_servers;
+
+  std::string tmp_dir_format("/tmp/sftpd.XXXXXX");
+  for (size_t i = 0; i < 10; i++) {
+    createFile(src_dir, "tstFile" + std::to_string(i) + ".ext", "content " + std::to_string(i));
+
+    dst_dirs.emplace_back(tmp_dir_format.data(), tmp_dir_format.data() + tmp_dir_format.size() + 1);
+    testController.createTempDirectory(dst_dirs.back().data());
+    sftp_servers.emplace_back(new SFTPTestServer(dst_dirs.back().data()));
+    REQUIRE(true == sftp_servers.back()->start());
+  }
+
+  for (size_t i = 0; i < 10; i++) {
+    plan->setProperty(update_attribute, "Port", std::to_string(sftp_servers[i]->getPort()), true /*dynamic*/);
+    testController.runSession(plan, true);
+    plan->reset();
+  }
+
+  REQUIRE(LogTestController::getInstance().contains("SFTP connection pool is full, removing nifiuser@localhost:" + std::to_string(sftp_servers[0]->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("Closing SFTPClient for localhost:" + std::to_string(sftp_servers[0]->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_servers[8]->getPort()) + " to SFTP connection pool"));
+
+  REQUIRE(LogTestController::getInstance().contains("SFTP connection pool is full, removing nifiuser@localhost:" + std::to_string(sftp_servers[1]->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("Closing SFTPClient for localhost:" + std::to_string(sftp_servers[1]->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("Adding nifiuser@localhost:" + std::to_string(sftp_servers[9]->getPort()) + " to SFTP connection pool"));
 }
 
 // public key auth -> OK

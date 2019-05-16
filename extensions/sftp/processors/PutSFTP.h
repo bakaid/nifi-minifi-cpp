@@ -146,7 +146,7 @@ class PutSFTP : public core::Processor {
   bool use_compression_;
   std::string proxy_type_;
 
-  static constexpr size_t CONNECTION_CACHE_MAX_SIZE = 8U; // TODO
+  static constexpr size_t CONNECTION_CACHE_MAX_SIZE = 8U;
   struct ConnectionCacheKey {
     std::string hostname;
     uint16_t port;

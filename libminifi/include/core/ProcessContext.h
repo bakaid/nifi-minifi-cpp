@@ -212,7 +212,6 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
   std::shared_ptr<ProcessorNode> processor_node_;
 
   std::map<std::string, org::apache::nifi::minifi::expression::Expression> expressions_;
-  std::map<std::string, org::apache::nifi::minifi::expression::Expression> dynamic_property_expressions_;
 
   // Logger
   std::shared_ptr<logging::Logger> logger_;

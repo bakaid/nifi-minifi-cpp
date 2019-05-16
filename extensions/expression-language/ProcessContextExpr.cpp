@@ -45,15 +45,11 @@ bool ProcessContext::getDynamicProperty(const Property &property, std::string &v
   if (!property.supportsExpressionLangauge()) {
     return getDynamicProperty(property.getName(), value);
   }
-  auto name = property.getName();
-  if (dynamic_property_expressions_.find(name) == dynamic_property_expressions_.end()) {
-    std::string expression_str;
-    getDynamicProperty(name, expression_str);
-    logger_->log_debug("Compiling expression for %s/%s: %s", getProcessorNode()->getName(), name, expression_str);
-    dynamic_property_expressions_.emplace(name, expression::compile(expression_str));
-  }
-  minifi::expression::Parameters p(shared_from_this(), flow_file);
-  value = dynamic_property_expressions_[name](p).asString();
+
+  std::string expression_str;
+  getDynamicProperty(property.getName(), expression_str);
+  logger_->log_debug("Compiling expression for %s/%s: %s", getProcessorNode()->getName(), property.getName(), expression_str);
+  value = expression::compile(expression_str)(minifi::expression::Parameters(shared_from_this(), flow_file)).asString();
   return true;
 }
 

@@ -54,7 +54,7 @@ core::Property PutSFTP::Hostname(
         ->supportsExpressionLanguage(true)->build());
 core::Property PutSFTP::Port(
     core::PropertyBuilder::createProperty("Port")->withDescription("The port that the remote system is listening on for file transfers")
-        ->supportsExpressionLanguage(true)->withDefaultValue<int>(22)->build());
+        ->supportsExpressionLanguage(true)->build());
 core::Property PutSFTP::Username(
     core::PropertyBuilder::createProperty("Username")->withDescription("Username")
         ->supportsExpressionLanguage(true)->build());
