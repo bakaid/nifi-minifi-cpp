@@ -342,9 +342,8 @@ class ProvenanceEventRecord : public core::SerializableComponent {
     _attributes = flow->getAttributes();
     _size = flow->getSize();
     _offset = flow->getOffset();
-    auto original_connection_shared = flow->getOriginalConnection().lock();
-    if (original_connection_shared)
-      _sourceQueueIdentifier = original_connection_shared->getName();
+    if (flow->getOriginalConnection())
+      _sourceQueueIdentifier = flow->getOriginalConnection()->getName();
     if (flow->getResourceClaim()) {
       _contentFullPath = flow->getResourceClaim()->getContentFullPath();
     }

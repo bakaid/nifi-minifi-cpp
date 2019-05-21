@@ -43,6 +43,8 @@ Connection::Connection(const std::shared_ptr<core::Repository> &flow_repository,
       flow_repository_(flow_repository),
       content_repo_(content_repo),
       logger_(logging::LoggerFactory<Connection>::getLogger()) {
+  source_connectable_ = nullptr;
+  dest_connectable_ = nullptr;
   max_queue_size_ = 0;
   max_data_queue_size_ = 0;
   expired_duration_ = 0;
@@ -56,6 +58,8 @@ Connection::Connection(const std::shared_ptr<core::Repository> &flow_repository,
       flow_repository_(flow_repository),
       content_repo_(content_repo),
       logger_(logging::LoggerFactory<Connection>::getLogger()) {
+  source_connectable_ = nullptr;
+  dest_connectable_ = nullptr;
   max_queue_size_ = 0;
   max_data_queue_size_ = 0;
   expired_duration_ = 0;
@@ -73,6 +77,8 @@ Connection::Connection(const std::shared_ptr<core::Repository> &flow_repository,
 
   src_uuid_ = srcUUID;
 
+  source_connectable_ = nullptr;
+  dest_connectable_ = nullptr;
   max_queue_size_ = 0;
   max_data_queue_size_ = 0;
   expired_duration_ = 0;
@@ -91,6 +97,8 @@ Connection::Connection(const std::shared_ptr<core::Repository> &flow_repository,
   src_uuid_ = srcUUID;
   dest_uuid_ = destUUID;
 
+  source_connectable_ = nullptr;
+  dest_connectable_ = nullptr;
   max_queue_size_ = 0;
   max_data_queue_size_ = 0;
   expired_duration_ = 0;
@@ -141,10 +149,9 @@ void Connection::put(std::shared_ptr<core::FlowFile> flow) {
   }
 
   // Notify receiving processor that work may be available
-  auto dest_connectable_shared = dest_connectable_.lock();
-  if (dest_connectable_shared) {
-    logger_->log_debug("Notifying %s that %s was inserted", dest_connectable_shared->getName(), flow->getUUIDStr());
-    dest_connectable_shared->notifyWork();
+  if (dest_connectable_) {
+    logger_->log_debug("Notifying %s that %s was inserted", dest_connectable_->getName(), flow->getUUIDStr());
+    dest_connectable_->notifyWork();
   }
 }
 
