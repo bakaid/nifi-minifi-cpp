@@ -32,12 +32,6 @@ TestPlan::TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::s
   stream_factory = org::apache::nifi::minifi::io::StreamFactory::getInstance(std::make_shared<minifi::Configure>());
 }
 
-TestPlan::~TestPlan() {
-  for (auto& relationship : relationships_) {
-    relationship->drain();
-  }
-}
-
 std::shared_ptr<core::Processor> TestPlan::addProcessor(const std::shared_ptr<core::Processor> &processor, const std::string &name, const std::initializer_list<core::Relationship>& relationships, bool linkToPrevious) {
   if (finalized) {
     return nullptr;
