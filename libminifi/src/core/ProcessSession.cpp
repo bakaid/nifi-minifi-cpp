@@ -805,7 +805,7 @@ void ProcessSession::commit() {
         continue;
       }
 
-      connection = std::static_pointer_cast<Connection>(record->getConnection());
+      connection = std::static_pointer_cast<Connection>(record->getConnection().lock());
       if ((connection) != nullptr)
         connection->put(record);
     }
@@ -815,7 +815,7 @@ void ProcessSession::commit() {
       if (record->isDeleted()) {
         continue;
       }
-      connection = std::static_pointer_cast<Connection>(record->getConnection());
+      connection = std::static_pointer_cast<Connection>(record->getConnection().lock());
       if ((connection) != nullptr)
         connection->put(record);
     }
@@ -826,7 +826,7 @@ void ProcessSession::commit() {
       if (record->isDeleted()) {
         continue;
       }
-      connection = std::static_pointer_cast<Connection>(record->getConnection());
+      connection = std::static_pointer_cast<Connection>(record->getConnection().lock());
       if ((connection) != nullptr)
         connection->put(record);
     }
