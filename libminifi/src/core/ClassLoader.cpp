@@ -64,6 +64,12 @@ uint16_t ClassLoader::registerResource(const std::string &resource, const std::s
 
   std::lock_guard<std::mutex> lock(internal_mutex_);
 
+  auto initializer = factory->getInitializer();
+  if (initializer != nullptr) {
+    initializer->initialize();
+    initializers_.emplace_back(std::move(initializer));
+  }
+
   for (auto class_name : factory->getClassNames()) {
     loaded_factories_[class_name] = std::unique_ptr<ObjectFactory>(factory->assign(class_name));
   }
