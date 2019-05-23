@@ -54,12 +54,24 @@ namespace core {
 #define RTLD_LOCAL  (1 << 2)
 #endif
 
+/**
+ * Class used to provide a global initialization and deinitialization function for an ObjectFactory.
+ * Calls to instances of all ObjectFactoryInitializers are done under a unique lock.
+ */
 class ObjectFactoryInitializer {
  public:
   virtual ~ObjectFactoryInitializer() {
   }
 
+  /**
+   * This function is be called before the ObjectFactory is used.
+   * @return whether the initialization was successful. If false, deinitialize will NOT be called.
+   */
   virtual bool initialize() = 0;
+
+  /**
+   * This function will be called after the ObjectFactory is not needed anymore.
+   */
   virtual void deinitialize() = 0;
 };
 
@@ -114,8 +126,7 @@ class ObjectFactory {
   }
 
   /**
-   * Returns an initializer on which initialize will be called before any objects are created
-   * and deinitialize will be called when the factory is no longer needed.
+   * Returns an initializer for the factory.
    */
   virtual std::unique_ptr<ObjectFactoryInitializer> getInitializer() {
     return nullptr;

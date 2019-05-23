@@ -66,7 +66,10 @@ uint16_t ClassLoader::registerResource(const std::string &resource, const std::s
 
   auto initializer = factory->getInitializer();
   if (initializer != nullptr) {
-    initializer->initialize();
+    if (!initializer->initialize()) {
+      delete factory;
+      return RESOURCE_FAILURE;
+    }
     initializers_.emplace_back(std::move(initializer));
   }
 
