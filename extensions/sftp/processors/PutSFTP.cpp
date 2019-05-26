@@ -215,140 +215,16 @@ void PutSFTP::initialize() {
   setSupportedRelationships(relationships);
 }
 
-constexpr size_t PutSFTP::CONNECTION_CACHE_MAX_SIZE;
-
 PutSFTP::PutSFTP(std::string name, utils::Identifier uuid /*= utils::Identifier()*/)
-  : Processor(name, uuid),
+  : SFTPProcessorBase(name, uuid),
     logger_(logging::LoggerFactory<PutSFTP>::getLogger()),
     create_directory_(false),
     batch_size_(0),
-    connection_timeout_(0),
-    data_timeout_(0),
     reject_zero_byte_(false),
-    dot_rename_(false),
-    strict_host_checking_(false),
-    use_keepalive_on_timeout_(false),
-    use_compression_(false),
-    running_(true) {
+    dot_rename_(false) {
 }
 
 PutSFTP::~PutSFTP() {
-  if (keepalive_thread_.joinable()) {
-    {
-      std::lock_guard<std::mutex> lock(connections_mutex_);
-      running_ = false;
-      keepalive_cv_.notify_one();
-    }
-    keepalive_thread_.join();
-  }
-}
-
-bool PutSFTP::ConnectionCacheKey::operator<(const PutSFTP::ConnectionCacheKey& other) const {
-  return std::tie(hostname, port, username, proxy_type, proxy_host, proxy_port) <
-          std::tie(other.hostname, other.port, other.username, other.proxy_type, other.proxy_host, other.proxy_port);
-}
-
-bool PutSFTP::ConnectionCacheKey::operator==(const PutSFTP::ConnectionCacheKey& other) const {
-  return std::tie(hostname, port, username, proxy_type, proxy_host, proxy_port) ==
-         std::tie(other.hostname, other.port, other.username, other.proxy_type, other.proxy_host, other.proxy_port);
-}
-
-std::unique_ptr<utils::SFTPClient> PutSFTP::getConnectionFromCache(const PutSFTP::ConnectionCacheKey& key) {
-  std::lock_guard<std::mutex> lock(connections_mutex_);
-
-  auto it = connections_.find(key);
-  if (it == connections_.end()) {
-    return nullptr;
-  }
-
-  logger_->log_debug("Removing %s@%s:%hu from SFTP connection pool",
-      key.username,
-      key.hostname,
-      key.port);
-
-  auto lru_it = std::find(lru_.begin(), lru_.end(), key);
-  if (lru_it == lru_.end()) {
-    logger_->log_trace("Assertion error: can't find key in LRU cache");
-  } else {
-    lru_.erase(lru_it);
-  }
-
-  auto connection = std::move(it->second);
-  connections_.erase(it);
-  return connection;
-}
-
-void PutSFTP::addConnectionToCache(const PutSFTP::ConnectionCacheKey& key, std::unique_ptr<utils::SFTPClient>&& connection) {
-  std::lock_guard<std::mutex> lock(connections_mutex_);
-
-  while (connections_.size() >= PutSFTP::CONNECTION_CACHE_MAX_SIZE) {
-    const auto& lru_key = lru_.back();
-    logger_->log_debug("SFTP connection pool is full, removing %s@%s:%hu",
-        lru_key.username,
-        lru_key.hostname,
-        lru_key.port);
-    connections_.erase(lru_key);
-    lru_.pop_back();
-  }
-
-  logger_->log_debug("Adding %s@%s:%hu to SFTP connection pool",
-      key.username,
-      key.hostname,
-      key.port);
-  connections_.emplace(key, std::move(connection));
-  lru_.push_front(key);
-  keepalive_cv_.notify_one();
-}
-
-void PutSFTP::keepaliveThreadFunc() {
-  std::unique_lock<std::mutex> lock(connections_mutex_);
-
-  while (true) {
-    if (connections_.empty()) {
-      keepalive_cv_.wait(lock, [this] {
-        return !running_ || !connections_.empty();
-      });
-    }
-    if (!running_) {
-      logger_->log_trace("Stopping keepalive thread");
-      lock.unlock();
-      return;
-    }
-
-    int min_wait = 10;
-    for (auto &connection : connections_) {
-      int seconds_to_next = 0;
-      if (connection.second->sendKeepAliveIfNeeded(seconds_to_next)) {
-        logger_->log_debug("Sent keepalive to %s@%s:%hu if needed, next keepalive in %d s",
-           connection.first.username,
-           connection.first.hostname,
-           connection.first.port,
-           seconds_to_next);
-        if (seconds_to_next < min_wait) {
-          min_wait = seconds_to_next;
-        }
-      } else {
-        logger_->log_debug("Failed to send keepalive to %s@%s:%hu",
-                           connection.first.username,
-                           connection.first.hostname,
-                           connection.first.port);
-      }
-    }
-
-    /* Avoid busy loops */
-    if (min_wait < 1) {
-      min_wait = 1;
-    }
-
-    logger_->log_trace("Keepalive thread is going to sleep for %d s", min_wait);
-    keepalive_cv_.wait_for(lock, std::chrono::seconds(min_wait), [this] {
-      return !running_;
-    });
-    if (!running_) {
-      lock.unlock();
-      return;
-    }
-  }
 }
 
 void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
@@ -404,25 +280,12 @@ void PutSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, c
   }
   context->getProperty(ProxyType.getName(), proxy_type_);
 
-  if (use_keepalive_on_timeout_ && !keepalive_thread_.joinable()) {
-    running_ = true;
-    keepalive_thread_ = std::thread(&PutSFTP::keepaliveThreadFunc, this);
-  }
+  startKeepaliveThreadIfNeeded();
 }
 
 void PutSFTP::notifyStop() {
   logger_->log_debug("Got notifyStop, stopping keepalive thread and clearing connections");
-  if (keepalive_thread_.joinable()) {
-    {
-      std::lock_guard<std::mutex> lock(connections_mutex_);
-      running_ = false;
-      keepalive_cv_.notify_one();
-    }
-    keepalive_thread_.join();
-  }
-  /* The thread is no longer running, we don't have to lock */
-  connections_.clear();
-  lru_.clear();
+  cleanupConnectionCache();
 }
 
 PutSFTP::ReadCallback::ReadCallback(const std::string& target_path,
@@ -575,56 +438,15 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   }
 
   /* Get SFTPClient from cache or create it */
-  const PutSFTP::ConnectionCacheKey connection_cache_key = {hostname, port, username, proxy_type_, proxy_host, proxy_port};
-  auto client = getConnectionFromCache(connection_cache_key);
+  const SFTPProcessorBase::ConnectionCacheKey connection_cache_key = {hostname, port, username, proxy_type_, proxy_host, proxy_port, proxy_username};
+  auto client = getOrCreateConnection(connection_cache_key,
+                                      password,
+                                      private_key_path,
+                                      private_key_passphrase,
+                                      proxy_password);
   if (client == nullptr) {
-    client = std::unique_ptr<utils::SFTPClient>(new utils::SFTPClient(hostname, port, username));
-    if (!IsNullOrEmpty(host_key_file_)) {
-      if (!client->setHostKeyFile(host_key_file_, strict_host_checking_)) {
-        logger_->log_error("Cannot set host key file");
-        context->yield();
-        return false;
-      }
-    }
-    if (!IsNullOrEmpty(password)) {
-      client->setPasswordAuthenticationCredentials(password);
-    }
-    if (!IsNullOrEmpty(private_key_path)) {
-      client->setPublicKeyAuthenticationCredentials(private_key_path, private_key_passphrase);
-    }
-    if (proxy_type_ != PROXY_TYPE_DIRECT) {
-      utils::HTTPProxy proxy;
-      proxy.host = proxy_host;
-      proxy.port = proxy_port;
-      proxy.username = proxy_username;
-      proxy.password = proxy_password;
-      if (!client->setProxy(
-          proxy_type_ == PROXY_TYPE_HTTP ? utils::SFTPClient::ProxyType::Http : utils::SFTPClient::ProxyType::Socks,
-          proxy)) {
-        logger_->log_error("Cannot set proxy");
-        context->yield();
-        return false;
-      }
-    }
-    if (!client->setConnectionTimeout(connection_timeout_)) {
-      logger_->log_error("Cannot set connection timeout");
-      context->yield();
-      return false;
-    }
-    client->setDataTimeout(data_timeout_);
-    client->setSendKeepAlive(use_keepalive_on_timeout_);
-    if (!client->setUseCompression(use_compression_)) {
-      logger_->log_error("Cannot set compression");
-      context->yield();
-      return false;
-    }
-
-    /* Connect to SFTP server */
-    if (!client->connect()) {
-      logger_->log_error("Cannot connect to SFTP server");
-      context->yield();
-      return false;
-    }
+    context->yield();
+    return false;
   }
 
   /*

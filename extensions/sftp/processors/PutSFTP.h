@@ -26,6 +26,7 @@
 #include <mutex>
 #include <thread>
 
+#include "SFTPProcessorBase.h"
 #include "utils/ByteArrayCallback.h"
 #include "FlowFileRecord.h"
 #include "core/Processor.h"
@@ -44,7 +45,7 @@ namespace nifi {
 namespace minifi {
 namespace processors {
 
-class PutSFTP : public core::Processor {
+ class PutSFTP : public SFTPProcessorBase {
  public:
 
   static constexpr char const *CONFLICT_RESOLUTION_REPLACE = "REPLACE";
@@ -53,10 +54,6 @@ class PutSFTP : public core::Processor {
   static constexpr char const *CONFLICT_RESOLUTION_REJECT = "REJECT";
   static constexpr char const *CONFLICT_RESOLUTION_FAIL = "FAIL";
   static constexpr char const *CONFLICT_RESOLUTION_NONE = "NONE";
-
-  static constexpr char const *PROXY_TYPE_DIRECT = "DIRECT";
-  static constexpr char const *PROXY_TYPE_HTTP = "HTTP";
-  static constexpr char const *PROXY_TYPE_SOCKS = "SOCKS";
 
   static constexpr char const* ProcessorName = "PutSFTP";
 
@@ -135,39 +132,9 @@ class PutSFTP : public core::Processor {
 
   bool create_directory_;
   uint64_t batch_size_;
-  int64_t connection_timeout_;
-  int64_t data_timeout_;
   std::string conflict_resolution_;
   bool reject_zero_byte_;
   bool dot_rename_;
-  std::string host_key_file_;
-  bool strict_host_checking_;
-  bool use_keepalive_on_timeout_;
-  bool use_compression_;
-  std::string proxy_type_;
-
-  static constexpr size_t CONNECTION_CACHE_MAX_SIZE = 8U;
-  struct ConnectionCacheKey {
-    std::string hostname;
-    uint16_t port;
-    std::string username;
-    std::string proxy_type;
-    std::string proxy_host;
-    uint16_t proxy_port;
-
-    bool operator<(const ConnectionCacheKey& other) const;
-    bool operator==(const ConnectionCacheKey& other) const;
-  };
-  std::mutex connections_mutex_;
-  std::map<ConnectionCacheKey, std::unique_ptr<utils::SFTPClient>> connections_;
-  std::list<ConnectionCacheKey> lru_;
-  std::unique_ptr<utils::SFTPClient> getConnectionFromCache(const ConnectionCacheKey& key);
-  void addConnectionToCache(const ConnectionCacheKey& key, std::unique_ptr<utils::SFTPClient>&& connection);
-
-  std::thread keepalive_thread_;
-  bool running_;
-  std::condition_variable keepalive_cv_;
-  void keepaliveThreadFunc();
 
   bool processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session);
 };
