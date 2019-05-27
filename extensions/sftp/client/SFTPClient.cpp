@@ -505,7 +505,7 @@ bool SFTPClient::getFile(const std::string& path, io::BaseStream& output, int64_
     total_read += read_ret;
     int remaining = read_ret;
     while (remaining > 0) {
-      int write_ret = output.writeData(buf.data() + (buf.size() - remaining), remaining);
+      int write_ret = output.writeData(buf.data() + (read_ret - remaining), remaining);
       if (write_ret < 0) {
         last_error_ = LIBSSH2_FX_OK;
         logger_->log_error("Failed to write output");

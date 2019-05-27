@@ -49,14 +49,15 @@
 #include "processors/FetchSFTP.h"
 #include "processors/GenerateFlowFile.h"
 #include "processors/LogAttribute.h"
-#include "processors/ExtractText.h"
 #include "processors/UpdateAttribute.h"
+#include "processors/PutFile.h"
 #include "tools/SFTPTestServer.h"
 
 class FetchSFTPTestsFixture {
  public:
   FetchSFTPTestsFixture()
-  : src_dir(strdup("/tmp/sftps.XXXXXX")) {
+  : src_dir(strdup("/tmp/sftps.XXXXXX"))
+  , dst_dir(strdup("/tmp/sftpd.XXXXXX")) {
     LogTestController::getInstance().setTrace<TestPlan>();
     LogTestController::getInstance().setDebug<minifi::FlowController>();
     LogTestController::getInstance().setDebug<minifi::SchedulingAgent>();
@@ -66,13 +67,15 @@ class FetchSFTPTestsFixture {
     LogTestController::getInstance().setDebug<processors::GenerateFlowFile>();
     LogTestController::getInstance().setTrace<minifi::utils::SFTPClient>();
     LogTestController::getInstance().setTrace<processors::FetchSFTP>();
-    LogTestController::getInstance().setTrace<processors::ExtractText>();
+    LogTestController::getInstance().setTrace<processors::PutFile>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
     LogTestController::getInstance().setDebug<SFTPTestServer>();
 
-    // Create temporary directory
+    // Create temporary directories
     testController.createTempDirectory(src_dir);
     REQUIRE(src_dir != nullptr);
+    testController.createTempDirectory(dst_dir);
+    REQUIRE(dst_dir != nullptr);
 
     // Start SFTP server
     sftp_server = std::unique_ptr<SFTPTestServer>(new SFTPTestServer(src_dir));
@@ -99,6 +102,10 @@ class FetchSFTPTestsFixture {
           core::Relationship("not.found", "d"),
           core::Relationship("permission.denied", "d")},
           true);
+    put_file = plan->addProcessor("PutFile",
+         "PutFile",
+         core::Relationship("success", "d"),
+         true);
 
     // Configure GetFile processor
     plan->setProperty(generate_flow_file, "File Size", "0B");
@@ -114,10 +121,16 @@ class FetchSFTPTestsFixture {
     plan->setProperty(fetch_sftp, "Strict Host Key Checking", "false");
     plan->setProperty(fetch_sftp, "Send Keep Alive On Timeout", "true");
     plan->setProperty(fetch_sftp, "Use Compression", "false");
+
+    // Configure PutFile processor
+    plan->setProperty(put_file, "Directory", std::string(dst_dir) + "/${path}");
+    plan->setProperty(put_file, "Conflict Resolution Strategy", processors::PutFile::CONFLICT_RESOLUTION_STRATEGY_FAIL);
+    plan->setProperty(put_file, "Create Missing Directories", "true");
   }
 
   virtual ~FetchSFTPTestsFixture() {
     free(src_dir);
+    free(dst_dir);
     LogTestController::getInstance().reset();
   }
 
@@ -132,14 +145,31 @@ class FetchSFTPTestsFixture {
     file.close();
   }
 
+  // Test target file
+  void testFile(const std::string& relative_path, const std::string& expected_content) {
+    std::stringstream resultFile;
+    resultFile << dst_dir << "/" << relative_path;
+    std::ifstream file(resultFile.str());
+    REQUIRE(true == file.good());
+    std::stringstream content;
+    std::vector<char> buffer(1024U);
+    while (file) {
+      file.read(buffer.data(), buffer.size());
+      content << std::string(buffer.data(), file.gcount());
+    }
+    REQUIRE(expected_content == content.str());
+  }
+
  protected:
   char *src_dir;
+  char *dst_dir;
   std::unique_ptr<SFTPTestServer> sftp_server;
   TestController testController;
   std::shared_ptr<TestPlan> plan;
   std::shared_ptr<core::Processor> generate_flow_file;
   std::shared_ptr<core::Processor> update_attribute;
   std::shared_ptr<core::Processor> fetch_sftp;
+  std::shared_ptr<core::Processor> put_file;
 };
 
 TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch one file", "[PutSFTP][basic]") {
@@ -148,4 +178,12 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch one file", "[PutSFTP][b
   plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
 
   testController.runSession(plan, true);
+
+  testFile("nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
 }
