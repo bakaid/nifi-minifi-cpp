@@ -95,8 +95,6 @@ class FetchSFTP : public SFTPProcessorBase {
   static constexpr char const* ATTRIBUTE_SFTP_REMOTE_HOST = "sftp.remote.host";
   static constexpr char const* ATTRIBUTE_SFTP_REMOTE_PORT= "sftp.remote.port";
   static constexpr char const* ATTRIBUTE_SFTP_REMOTE_FILENAME = "sftp.remote.filename";
-  static constexpr char const* ATTRIBUTE_FILENAME = "filename";
-  static constexpr char const* ATTRIBUTE_PATH = "path";
 
   virtual void onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) override;
   virtual void initialize() override;

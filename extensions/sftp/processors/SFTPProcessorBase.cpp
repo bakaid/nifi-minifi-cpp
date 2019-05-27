@@ -258,6 +258,54 @@ std::unique_ptr<utils::SFTPClient> SFTPProcessorBase::getOrCreateConnection(
   return client;
 }
 
+SFTPProcessorBase::CreateDirectoryHierarchyError SFTPProcessorBase::createDirectoryHierarchy(
+    utils::SFTPClient& client,
+    const std::string& remote_path,
+    bool disable_directory_listing) {
+  bool should_create_directory = disable_directory_listing;
+  if (!disable_directory_listing) {
+    LIBSSH2_SFTP_ATTRIBUTES attrs;
+    if (!client.stat(remote_path, true /*follow_symlinks*/, attrs)) {
+      if (client.getLastError() != utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
+        logger_->log_error("Failed to stat %s", remote_path.c_str());
+      }
+      should_create_directory = true;
+    } else {
+      if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+        logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
+        return CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_A_DIRECTORY;
+      }
+      logger_->log_debug("Found remote directory %s", remote_path.c_str());
+    }
+  }
+  if (should_create_directory) {
+    (void) client.createDirectoryHierarchy(remote_path);
+    if (!disable_directory_listing) {
+      LIBSSH2_SFTP_ATTRIBUTES attrs;
+      if (!client.stat(remote_path, true /*follow_symlinks*/, attrs)) {
+        auto last_error = client.getLastError();
+        if (last_error == utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
+          logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
+          return CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_FOUND;
+        } else if (last_error == utils::SFTPError::SFTP_ERROR_PERMISSION_DENIED) {
+          logger_->log_error("Permission denied when reading remote directory %s after creating it", remote_path.c_str());
+          return CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_PERMISSION_DENIED;
+        } else {
+          logger_->log_error("Failed to stat %s", remote_path.c_str());
+          return CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_STAT_FAILED;
+        }
+      } else {
+        if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+          logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
+          return CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_A_DIRECTORY;
+        }
+      }
+    }
+  }
+
+  return CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_OK;
+}
+
 } /* namespace processors */
 } /* namespace minifi */
 } /* namespace nifi */

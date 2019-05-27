@@ -96,6 +96,15 @@ class SFTPProcessorBase : public core::Processor {
       const std::string& private_key_path,
       const std::string& private_key_passphrase,
       const std::string& proxy_password);
+
+  enum class CreateDirectoryHierarchyError : uint8_t {
+    CREATE_DIRECTORY_HIERARCHY_ERROR_OK = 0,
+    CREATE_DIRECTORY_HIERARCHY_ERROR_STAT_FAILED,
+    CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_A_DIRECTORY,
+    CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_FOUND,
+    CREATE_DIRECTORY_HIERARCHY_ERROR_PERMISSION_DENIED,
+  };
+  CreateDirectoryHierarchyError createDirectoryHierarchy(utils::SFTPClient& client, const std::string& remote_path, bool disable_directory_listing);
 };
 
 } /* namespace processors */

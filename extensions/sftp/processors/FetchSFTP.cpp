@@ -361,6 +361,7 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
     addConnectionToCache(connection_cache_key, std::move(client));
   };
 
+  /* Download file */
   WriteCallback write_callback(remote_file, *client);
   session->write(flow_file, &write_callback);
   if (!write_callback.commit()) {
@@ -384,15 +385,40 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
     }
   }
 
-  // TODO
+  /* Set attributes */
+  std::string parent_path;
+  std::string child_path;
+  std::tie(parent_path, child_path) = utils::file::FileUtils::split_path(remote_file, true /*force_posix*/);
 
   session->putAttribute(flow_file, ATTRIBUTE_SFTP_REMOTE_HOST, hostname);
   session->putAttribute(flow_file, ATTRIBUTE_SFTP_REMOTE_PORT, std::to_string(port));
-  session->putAttribute(flow_file, ATTRIBUTE_SFTP_REMOTE_FILENAME, remote_file); // TODO: only child
-  session->putAttribute(flow_file, ATTRIBUTE_FILENAME, remote_file); // TODO: only child
-  auto parent_path = utils::file::FileUtils::get_parent_path(remote_file);
+  session->putAttribute(flow_file, ATTRIBUTE_SFTP_REMOTE_FILENAME, remote_file);
+  flow_file->updateKeyedAttribute(FILENAME, child_path);
   if (!parent_path.empty()) {
-    session->putAttribute(flow_file, ATTRIBUTE_PATH, parent_path);
+    flow_file->updateKeyedAttribute(PATH, parent_path);
+  }
+
+  /* Execute completion strategy */
+  if (completion_strategy_ == COMPLETION_STRATEGY_DELETE_FILE) {
+    if (!client->removeFile(remote_file)) {
+      logger_->log_warn("Completion Strategy is Delete File, but failed to delete remote file \"%s\"", remote_file);
+    }
+  } else if (completion_strategy_ == COMPLETION_STRATEGY_MOVE_FILE) {
+    bool should_move = true;
+    if (create_directory_) {
+      auto res = createDirectoryHierarchy(*client, move_destination_directory, disable_directory_listing_);
+      if (res != SFTPProcessorBase::CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_OK) {
+        should_move = false;
+      }
+    }
+    if (!should_move) {
+      logger_->log_warn("Completion Strategy is Move File, but failed to create Move Destination Directory \"%s\"", move_destination_directory);
+    } else {
+      auto target_path = utils::file::FileUtils::concat_path(move_destination_directory, child_path);
+      if (!client->rename(remote_file, target_path, false /*overwrite*/)) {
+        logger_->log_warn("Completion Strategy is Move File, but failed to move file \"%s\" to \"%s\"", remote_file, target_path);
+      }
+    }
   }
 
   session->transfer(flow_file, Success);

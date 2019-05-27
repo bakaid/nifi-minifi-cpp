@@ -527,48 +527,26 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
 
   /* Create remote directory if needed */
   if (create_directory_) {
-    bool should_create_directory = disable_directory_listing;
-    if (!disable_directory_listing) {
-      LIBSSH2_SFTP_ATTRIBUTES attrs;
-      if (!client->stat(remote_path, true /*follow_symlinks*/, attrs)) {
-        if (client->getLastError() != utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
-          logger_->log_error("Failed to stat %s", remote_path.c_str());
-        }
-        should_create_directory = true;
-      } else {
-        if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
-          logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
-          session->transfer(flow_file, Failure);
-          put_connection_back_to_cache();
-          return true;
-        }
-        logger_->log_debug("Found remote directory %s", remote_path.c_str());
-      }
-    }
-    if (should_create_directory) {
-      (void) client->createDirectoryHierarchy(remote_path);
-      if (!disable_directory_listing) {
-        LIBSSH2_SFTP_ATTRIBUTES attrs;
-        if (!client->stat(remote_path, true /*follow_symlinks*/, attrs)) {
-          if (client->getLastError() == utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
-            logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
-            session->transfer(flow_file, Failure);
-            put_connection_back_to_cache();
-            return true;
-          } else {
-            logger_->log_error("Failed to stat %s", remote_path.c_str());
-            context->yield();
-            return false;
-          }
-        } else {
-          if ((attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && !LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
-            logger_->log_error("Remote path %s is not a directory", remote_path.c_str());
-            session->transfer(flow_file, Failure);
-            put_connection_back_to_cache();
-            return true;
-          }
-        }
-      }
+    auto res = createDirectoryHierarchy(*client, remote_path, disable_directory_listing);
+    switch (res) {
+      case SFTPProcessorBase::CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_OK:
+        break;
+      case SFTPProcessorBase::CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_STAT_FAILED:
+        context->yield();
+        return false;
+      case SFTPProcessorBase::CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_A_DIRECTORY:
+        session->transfer(flow_file, Failure);
+        put_connection_back_to_cache();
+        return true;
+      case SFTPProcessorBase::CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_NOT_FOUND:
+      case SFTPProcessorBase::CreateDirectoryHierarchyError::CREATE_DIRECTORY_HIERARCHY_ERROR_PERMISSION_DENIED:
+        session->transfer(flow_file, Failure);
+        put_connection_back_to_cache();
+        return true;
+      default:
+        logger_->log_error("Unknown createDirectoryHierarchy result: %hhu", static_cast<uint8_t>(res));
+        context->yield();
+        return false;
     }
   }
 

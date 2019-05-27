@@ -79,16 +79,14 @@ class FileUtils {
 
   FileUtils() = delete;
 
-  /**
-   * Deletes a directory, deleting recursively if delete_files_recursively is true
-   * @param path current path to delete
-   * @param delete_files_recursively deletes recursively
-   */
-
-  static char get_separator()
+  static char get_separator(bool force_posix = false)
   {
 #ifdef WIN32
-    return '\\';
+    if (force_posix) {
+      return '/';
+    } else {
+      return '\\';
+    }
 #else
     return '/';
 #endif
@@ -416,76 +414,99 @@ class FileUtils {
 #endif
   }
 
-  static std::string concat_path(const std::string& root, const std::string& child) {
+  static std::string concat_path(const std::string& root, const std::string& child, bool force_posix = false) {
     if (root.empty()) {
       return child;
     }
     std::stringstream new_path;
-    if (root.back() == get_separator()) {
+    if (root.back() == get_separator(force_posix)) {
       new_path << root << child;
     } else {
-      new_path << root << get_separator() << child;
+      new_path << root << get_separator(force_posix) << child;
     }
     return new_path.str();
   }
 
-  static std::string get_parent_path(const std::string& path) {
+  static std::tuple<std::string /*parent_path*/, std::string /*child_path*/> split_path(const std::string& path, bool force_posix = false) {
     if (path.empty()) {
-      /* Empty path has no parent */
-      return "";
+      /* Empty path has no parent and no child*/
+      return {"", ""};
     }
     bool absolute = false;
     size_t root_pos = 0U;
 #ifdef WIN32
-    if (path[0] == '\\') {
-      absolute = true;
-      if (path.size() < 2U) {
-        return "";
-      }
-      if (path[1] == '\\') {
-        if (path.size() >= 4U &&
-           (path[2] == '?' || path[2] == '.') &&
-            path[3] == '\\') {
-          /* Probably an UNC path */
-          root_pos = 4U;
-        } else {
-          /* Probably a \\server\-type path */
-          root_pos = 2U;
+    if (!force_posix) {
+      if (path[0] == '\\') {
+        absolute = true;
+        if (path.size() < 2U) {
+          return {"", ""};
         }
-        root_pos = path.find_first_of("\\", root_pos);
-        if (root_pos == std::string::npos) {
-          return "";
+        if (path[1] == '\\') {
+          if (path.size() >= 4U &&
+             (path[2] == '?' || path[2] == '.') &&
+              path[3] == '\\') {
+            /* Probably an UNC path */
+            root_pos = 4U;
+          } else {
+            /* Probably a \\server\-type path */
+            root_pos = 2U;
+          }
+          root_pos = path.find_first_of("\\", root_pos);
+          if (root_pos == std::string::npos) {
+            return {"", ""};
+          }
         }
+      } else if (path.size() >= 3U &&
+                 toupper(path[0]) >= 'A' &&
+                 toupper(path[0]) <= 'Z' &&
+                 path[1] == ':' &&
+                 path[2] == '\\') {
+        absolute = true;
+        root_pos = 2U;
       }
-    } else if (path.size() >= 3U &&
-               toupper(path[0]) >= 'A' &&
-               toupper(path[0]) <= 'Z' &&
-               path[1] == ':' &&
-               path[2] == '\\') {
-      absolute = true;
-      root_pos = 2U;
-    }
+    } else {
 #else
-    if (path[0] == '/') {
-      absolute = true;
-      root_pos = 0U;
-    }
+    if (true) {
 #endif
+      if (path[0] == '/') {
+        absolute = true;
+        root_pos = 0U;
+      }
+    }
+    /* Maybe we are just a single relative child */
+    if (!absolute && path.find(get_separator(force_posix)) == std::string::npos) {
+      return {"", path};
+    }
     /* Ignore trailing separators */
     size_t last_pos = path.size() - 1;
-    while (last_pos > root_pos && path[last_pos] == get_separator()) {
+    while (last_pos > root_pos && path[last_pos] == get_separator(force_posix)) {
       last_pos--;
     }
     if (absolute && last_pos == root_pos) {
       /* This means we are only a root */
-      return "";
+      return {"", ""};
     }
-    /* Find parent */
-    size_t last_separator = path.find_last_of(get_separator(), last_pos);
+    /* Find parent-child separator */
+    size_t last_separator = path.find_last_of(get_separator(force_posix), last_pos);
     if (last_separator == std::string::npos || last_separator < root_pos) {
-      return "";
+      return {"", ""};
     }
-    return path.substr(0, last_separator + 1);
+    std::string parent = path.substr(0, last_separator + 1);
+    std::string child = path.substr(last_separator + 1);
+
+    return {std::move(parent), std::move(child)};
+  }
+
+  static std::string get_parent_path(const std::string& path, bool force_posix = false) {
+    std::string parent_path;
+    std::tie(parent_path, std::ignore) = split_path(path, force_posix);
+    return parent_path;
+  }
+
+  static std::string get_child_path(const std::string& path, bool force_posix = false) {
+    std::string child_path;
+    std::tie(std::ignore, child_path) = split_path(path, force_posix);
+    return child_path;
   }
 
   /*
