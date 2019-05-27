@@ -306,14 +306,9 @@ int64_t PutSFTP::ReadCallback::process(std::shared_ptr<io::BaseStream> stream) {
       *stream,
       conflict_resolution_ == CONFLICT_RESOLUTION_REPLACE /*overwrite*/,
       stream->getSize() /*expected_size*/)) {
-    return -1;
+    throw client_.getLastError();
   }
-  write_succeeded_ = true;
   return stream->getSize();
-}
-
-bool PutSFTP::ReadCallback::commit() {
-  return write_succeeded_;
 }
 
 bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
@@ -567,9 +562,9 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
   logger_->log_debug("The target path is %s, final target path is %s", target_path.c_str(), final_target_path.c_str());
 
   ReadCallback read_callback(target_path.c_str(), *client, conflict_resolution_);
-  session->read(flow_file, &read_callback);
-
-  if (!read_callback.commit()) {
+  try {
+    session->read(flow_file, &read_callback);
+  } catch (const utils::SFTPError&) {
     session->transfer(flow_file, Failure);
     return true;
   }

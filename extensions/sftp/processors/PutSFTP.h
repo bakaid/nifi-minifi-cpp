@@ -116,7 +116,6 @@ namespace processors {
         const std::string& conflict_resolution);
     ~ReadCallback();
     virtual int64_t process(std::shared_ptr<io::BaseStream> stream) override;
-    bool commit();
 
    private:
     std::shared_ptr<logging::Logger> logger_;

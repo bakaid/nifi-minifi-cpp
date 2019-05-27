@@ -480,8 +480,16 @@ SFTPError SFTPClient::getLastError() {
 bool SFTPClient::getFile(const std::string& path, io::BaseStream& output, int64_t expected_size /*= -1*/) {
   LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), LIBSSH2_FXF_READ, 0);
   if (file_handle == nullptr) {
-    last_error_ = libssh2_sftp_last_error(sftp_session_);
-    logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(last_error_));
+    int ssh_errno = libssh2_session_last_errno(ssh_session_);
+    if (ssh_errno == LIBSSH2_ERROR_SFTP_PROTOCOL) {
+      last_error_ = libssh2_sftp_last_error(sftp_session_);
+      logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(last_error_));
+    } else {
+      last_error_ = SFTPError::SFTP_ERROR_IO_ERROR;
+      char *err_msg = nullptr;
+      libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
+      logger_->log_error("Failed to open remote file \"%s\" due to an underlying SSH error: %s", path.c_str(), err_msg);
+    }
     return false;
   }
   utils::ScopeGuard guard([&file_handle]() {
@@ -529,9 +537,16 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
   logger_->log_trace("Opening remote file \"%s\"", path.c_str());
   LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), flags, 0644);
   if (file_handle == nullptr) {
-    last_error_ = libssh2_sftp_last_error(sftp_session_);
-    logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(last_error_));
-    return false;
+    int ssh_errno = libssh2_session_last_errno(ssh_session_);
+    if (ssh_errno == LIBSSH2_ERROR_SFTP_PROTOCOL) {
+      last_error_ = libssh2_sftp_last_error(sftp_session_);
+      logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(last_error_));
+    } else {
+      last_error_ = SFTPError::SFTP_ERROR_IO_ERROR;
+      char *err_msg = nullptr;
+      libssh2_session_last_error(ssh_session_, &err_msg, nullptr, 0);
+      logger_->log_error("Failed to open remote file \"%s\" due to an underlying SSH error: %s", path.c_str(), err_msg);
+    }
   }
   utils::ScopeGuard guard([this, &file_handle, &path]() {
     logger_->log_trace("Closing remote file \"%s\"", path.c_str());

@@ -100,7 +100,7 @@ class FetchSFTPTestsFixture {
         { core::Relationship("success", "d"),
           core::Relationship("comms.failure", "d"),
           core::Relationship("not.found", "d"),
-          core::Relationship("permission.denied", "d")},
+          core::Relationship("permission.denied", "d") },
           true);
     put_file = plan->addProcessor("PutFile",
          "PutFile",
@@ -108,7 +108,7 @@ class FetchSFTPTestsFixture {
          true);
 
     // Configure GetFile processor
-    plan->setProperty(generate_flow_file, "File Size", "0B");
+    plan->setProperty(generate_flow_file, "File Size", "1B");
 
     // Configure FetchSFTP processor
     plan->setProperty(fetch_sftp, "Hostname", "localhost");
@@ -145,10 +145,18 @@ class FetchSFTPTestsFixture {
     file.close();
   }
 
-  // Test target file
-  void testFile(const std::string& relative_path, const std::string& expected_content) {
+  enum TestWhere {
+    IN_DESTINATION,
+    IN_SOURCE
+  };
+
+  void testFile(TestWhere where, const std::string& relative_path, const std::string& expected_content) {
     std::stringstream resultFile;
-    resultFile << dst_dir << "/" << relative_path;
+    if (where == IN_DESTINATION) {
+      resultFile << dst_dir << "/" << relative_path;
+    } else {
+      resultFile << src_dir << "/vfs/" << relative_path;
+    }
     std::ifstream file(resultFile.str());
     REQUIRE(true == file.good());
     std::stringstream content;
@@ -158,6 +166,18 @@ class FetchSFTPTestsFixture {
       content << std::string(buffer.data(), file.gcount());
     }
     REQUIRE(expected_content == content.str());
+  }
+
+  void testFileNotExists(TestWhere where, const std::string& relative_path) {
+    std::stringstream resultFile;
+    if (where == IN_DESTINATION) {
+      resultFile << dst_dir << "/" << relative_path;
+    } else {
+      resultFile << src_dir << "/vfs/" << relative_path;
+    }
+    std::ifstream file(resultFile.str());
+    REQUIRE(false == file.is_open());
+    REQUIRE(false == file.good());
   }
 
  protected:
@@ -172,14 +192,74 @@ class FetchSFTPTestsFixture {
   std::shared_ptr<core::Processor> put_file;
 };
 
-TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch one file", "[PutSFTP][basic]") {
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch one file", "[FetchSFTP][basic]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+
   createFile("nifi_test/tstFile.ext", "Test content 1");
 
+  testController.runSession(plan, true);
+
+  testFile(IN_SOURCE, "nifi_test/tstFile.ext", "Test content 1");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch non-existing file", "[FetchSFTP][basic]") {
   plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
 
   testController.runSession(plan, true);
 
-  testFile("nifi_test/tstFile.ext", "Test content 1");
+  REQUIRE(LogTestController::getInstance().contains("Failed to open remote file \"nifi_test/tstFile.ext\", error: LIBSSH2_FX_NO_SUCH_FILE"));
+  REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship not.found"));
+}
+
+#ifndef WIN32
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch non-readable file", "[FetchSFTP][basic]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+  REQUIRE(0 == chmod((std::string(src_dir) + "/vfs/nifi_test/tstFile.ext").c_str(), 0000));
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to open remote file \"nifi_test/tstFile.ext\", error: LIBSSH2_FX_PERMISSION_DENIED"));
+  REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship permission.denied"));
+}
+#endif
+
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch connection error", "[FetchSFTP][basic]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  /* Run it once normally to open the connection */
+  testController.runSession(plan, true);
+  plan->reset();
+
+  /* Stop the server to create a connection error */
+  sftp_server.reset();
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to open remote file \"nifi_test/tstFile.ext\" due to an underlying SSH error: Timeout waiting for status message"));
+  REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship comms.failure"));
+}
+
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete File", "[FetchSFTP][completion-strategy]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+  plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_DELETE_FILE);
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  testFileNotExists(IN_SOURCE, "nifi_test/tstFile.ext");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
 
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));

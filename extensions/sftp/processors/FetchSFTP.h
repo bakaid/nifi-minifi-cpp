@@ -107,13 +107,9 @@ class FetchSFTP : public SFTPProcessorBase {
                  utils::SFTPClient& client);
     ~WriteCallback();
     virtual int64_t process(std::shared_ptr<io::BaseStream> stream) override;
-    bool commit();
-    utils::SFTPError getError();
 
    private:
     std::shared_ptr<logging::Logger> logger_;
-    bool read_succeeded_;
-    utils::SFTPError error_;
     const std::string remote_file_;
     utils::SFTPClient& client_;
   };

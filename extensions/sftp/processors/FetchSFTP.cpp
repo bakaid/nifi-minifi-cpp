@@ -244,8 +244,6 @@ void FetchSFTP::notifyStop() {
 FetchSFTP::WriteCallback::WriteCallback(const std::string& remote_file,
                                     utils::SFTPClient& client)
     : logger_(logging::LoggerFactory<FetchSFTP::WriteCallback>::getLogger())
-    , read_succeeded_(false)
-    , error_(utils::SFTPError::SFTP_ERROR_OK)
     , remote_file_(remote_file)
     , client_(client) {
 }
@@ -256,20 +254,9 @@ FetchSFTP::WriteCallback::~WriteCallback() {
 int64_t FetchSFTP::WriteCallback::process(std::shared_ptr<io::BaseStream> stream) {
   if (!client_.getFile(remote_file_,
                        *stream)) {
-    read_succeeded_ = false;
-    error_ = client_.getLastError();
-    return -1;
+    throw client_.getLastError();
   }
-  read_succeeded_ = true;
   return stream->getSize();
-}
-
-bool FetchSFTP::WriteCallback::commit() {
-  return read_succeeded_;
-}
-
-utils::SFTPError FetchSFTP::WriteCallback::getError() {
-  return error_;
 }
 
 bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
@@ -363,9 +350,9 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
 
   /* Download file */
   WriteCallback write_callback(remote_file, *client);
-  session->write(flow_file, &write_callback);
-  if (!write_callback.commit()) {
-    utils::SFTPError error = write_callback.getError();
+  try {
+    session->write(flow_file, &write_callback);
+  } catch (const utils::SFTPError& error) {
     switch (error) {
       case utils::SFTPError::SFTP_ERROR_PERMISSION_DENIED:
         session->transfer(flow_file, PermissionDenied);
