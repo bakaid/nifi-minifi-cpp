@@ -430,7 +430,7 @@ class FileUtils {
   static std::tuple<std::string /*parent_path*/, std::string /*child_path*/> split_path(const std::string& path, bool force_posix = false) {
     if (path.empty()) {
       /* Empty path has no parent and no child*/
-      return {"", ""};
+      return std::make_tuple("", "");
     }
     bool absolute = false;
     size_t root_pos = 0U;
@@ -439,7 +439,7 @@ class FileUtils {
       if (path[0] == '\\') {
         absolute = true;
         if (path.size() < 2U) {
-          return {"", ""};
+          return std::make_tuple("", "");
         }
         if (path[1] == '\\') {
           if (path.size() >= 4U &&
@@ -453,7 +453,7 @@ class FileUtils {
           }
           root_pos = path.find_first_of("\\", root_pos);
           if (root_pos == std::string::npos) {
-            return {"", ""};
+            return std::make_tuple("", "");
           }
         }
       } else if (path.size() >= 3U &&
@@ -475,7 +475,7 @@ class FileUtils {
     }
     /* Maybe we are just a single relative child */
     if (!absolute && path.find(get_separator(force_posix)) == std::string::npos) {
-      return {"", path};
+      return std::make_tuple("", path);
     }
     /* Ignore trailing separators */
     size_t last_pos = path.size() - 1;
@@ -484,17 +484,17 @@ class FileUtils {
     }
     if (absolute && last_pos == root_pos) {
       /* This means we are only a root */
-      return {"", ""};
+      return std::make_tuple("", "");
     }
     /* Find parent-child separator */
     size_t last_separator = path.find_last_of(get_separator(force_posix), last_pos);
     if (last_separator == std::string::npos || last_separator < root_pos) {
-      return {"", ""};
+      return std::make_tuple("", "");
     }
     std::string parent = path.substr(0, last_separator + 1);
     std::string child = path.substr(last_separator + 1);
 
-    return {std::move(parent), std::move(child)};
+    return std::make_tuple(std::move(parent), std::move(child));
   }
 
   static std::string get_parent_path(const std::string& path, bool force_posix = false) {

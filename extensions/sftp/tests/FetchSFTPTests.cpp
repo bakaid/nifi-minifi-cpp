@@ -156,6 +156,10 @@ class FetchSFTPTestsFixture {
       resultFile << dst_dir << "/" << relative_path;
     } else {
       resultFile << src_dir << "/vfs/" << relative_path;
+#ifndef WIN32
+      /* Workaround for mina-sshd setting the read file's permissions to 0000 */
+      REQUIRE(0 == chmod(resultFile.str().c_str(), 0644));
+#endif
     }
     std::ifstream file(resultFile.str());
     REQUIRE(true == file.good());
@@ -174,6 +178,10 @@ class FetchSFTPTestsFixture {
       resultFile << dst_dir << "/" << relative_path;
     } else {
       resultFile << src_dir << "/vfs/" << relative_path;
+#ifndef WIN32
+      /* Workaround for mina-sshd setting the read file's permissions to 0000 */
+      REQUIRE(-1 == chmod(resultFile.str().c_str(), 0644));
+#endif
     }
     std::ifstream file(resultFile.str());
     REQUIRE(false == file.is_open());
@@ -250,7 +258,7 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch connection error", "[Fe
   REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship comms.failure"));
 }
 
-TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete File", "[FetchSFTP][completion-strategy]") {
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete File success", "[FetchSFTP][completion-strategy]") {
   plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
   plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_DELETE_FILE);
 
@@ -260,6 +268,80 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete Fi
 
   testFileNotExists(IN_SOURCE, "nifi_test/tstFile.ext");
   testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
+#ifndef WIN32
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete File fail", "[FetchSFTP][completion-strategy]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+  plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_DELETE_FILE);
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+  /* By making the parent directory non-writable we make it impossible do delete the source file */
+  REQUIRE(0 == chmod((std::string(src_dir) + "/vfs/nifi_test").c_str(), 0500));
+
+  testController.runSession(plan, true);
+
+  /* We should succeed even if the completion strategy fails */
+  testFile(IN_SOURCE, "nifi_test/tstFile.ext", "Test content 1");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to remove remote file \"nifi_test/tstFile.ext\", error: LIBSSH2_FX_PERMISSION_DENIED"));
+  REQUIRE(LogTestController::getInstance().contains("Completion Strategy is Delete File, but failed to delete remote file \"nifi_test/tstFile.ext\""));
+
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+#endif
+
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Move File success", "[FetchSFTP][completion-strategy]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+  plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_MOVE_FILE);
+  plan->setProperty(fetch_sftp, "Move Destination Directory", "nifi_done/");
+  plan->setProperty(fetch_sftp, "Create Directory", "true");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  testFileNotExists(IN_SOURCE, "nifi_test/tstFile.ext");
+  testFile(IN_SOURCE, "nifi_done/tstFile.ext", "Test content 1");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Move File fail", "[FetchSFTP][completion-strategy]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+  plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_MOVE_FILE);
+  plan->setProperty(fetch_sftp, "Move Destination Directory", "nifi_done/");
+
+  /* The completion strategy should fail because the target directory does not exist and we don't create it */
+  plan->setProperty(fetch_sftp, "Create Directory", "false");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  /* We should succeed even if the completion strategy fails */
+  testFileNotExists(IN_SOURCE, "nifi_done/tstFile.ext");
+  testFile(IN_SOURCE, "nifi_test/tstFile.ext", "Test content 1");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("Failed to rename remote file \"nifi_test/tstFile.ext\" to \"nifi_done/tstFile.ext\", error: LIBSSH2_FX_NO_SUCH_FILE"));
+  REQUIRE(LogTestController::getInstance().contains("Completion Strategy is Move File, but failed to move file \"nifi_test/tstFile.ext\" to \"nifi_done/tstFile.ext\""));
 
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));

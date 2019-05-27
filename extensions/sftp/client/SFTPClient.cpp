@@ -478,9 +478,24 @@ SFTPError SFTPClient::getLastError() {
 }
 
 bool SFTPClient::getFile(const std::string& path, io::BaseStream& output, int64_t expected_size /*= -1*/) {
-  LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), LIBSSH2_FXF_READ, 0);
+  /**
+   * SFTP servers should not set the mode of an existing file on open
+   * (see https://tools.ietf.org/html/draft-ietf-secsh-filexfer-13, Page 33
+   * "The 'attrs' field is ignored if an existing file is opened."
+   * Unfortunately this is a later SFTP version specification than implemented by most servers.)
+   * But because this is the intuitively correct behaviour (especially when opening a file for read only),
+   * most servers (OpenSSH for example) implement it this way.
+   * mina-sshd, the server we use for testing, however did not until recently,
+   * causing all files we read to be set to 0000.
+   * The fix to make it behave correctly has been merged back to master, but not yet released:
+   * https://github.com/apache/mina-sshd/commit/19adb39e4706929b6e5a1b2df056a2b2a29fac4d
+   * If we encounter real servers that behave like this, a workaround would be to stat before opening the file
+   * and "re-setting" the mode we read earlier on open.
+   */
+  LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), LIBSSH2_FXF_READ, 0 /*mode*/);
   if (file_handle == nullptr) {
     int ssh_errno = libssh2_session_last_errno(ssh_session_);
+    /* We can only get the sftp error in this case if the ssh error is a protocol error */
     if (ssh_errno == LIBSSH2_ERROR_SFTP_PROTOCOL) {
       last_error_ = libssh2_sftp_last_error(sftp_session_);
       logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(last_error_));
@@ -538,6 +553,7 @@ bool SFTPClient::putFile(const std::string& path, io::BaseStream& input, bool ov
   LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), flags, 0644);
   if (file_handle == nullptr) {
     int ssh_errno = libssh2_session_last_errno(ssh_session_);
+    /* We can only get the sftp error in this case if the ssh error is a protocol error */
     if (ssh_errno == LIBSSH2_ERROR_SFTP_PROTOCOL) {
       last_error_ = libssh2_sftp_last_error(sftp_session_);
       logger_->log_error("Failed to open remote file \"%s\", error: %s", path.c_str(), sftp_strerror(last_error_));
