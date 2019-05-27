@@ -96,3 +96,4 @@ endif ()
 
 SET (SFTP minifi-sftp PARENT_SCOPE)
 register_extension(minifi-sftp)
+

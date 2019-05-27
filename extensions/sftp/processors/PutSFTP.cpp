@@ -217,11 +217,11 @@ void PutSFTP::initialize() {
 
 PutSFTP::PutSFTP(std::string name, utils::Identifier uuid /*= utils::Identifier()*/)
   : SFTPProcessorBase(name, uuid),
-    logger_(logging::LoggerFactory<PutSFTP>::getLogger()),
     create_directory_(false),
     batch_size_(0),
     reject_zero_byte_(false),
     dot_rename_(false) {
+  logger_ = logging::LoggerFactory<PutSFTP>::getLogger();
 }
 
 PutSFTP::~PutSFTP() {
@@ -464,9 +464,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     target_path_ss << remote_path << "/" << filename;
     auto target_path = target_path_ss.str();
     LIBSSH2_SFTP_ATTRIBUTES attrs;
-    bool file_not_exists;
-    if (!client->stat(target_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
-      if (!file_not_exists) {
+    if (!client->stat(target_path, true /*follow_symlinks*/, attrs)) {
+      if (client->getLastError() != utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
         logger_->log_error("Failed to stat %s", target_path.c_str());
         session->transfer(flow_file, Failure);
         return true;
@@ -502,9 +501,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
           possible_resolved_filename_ss << i << "." << filename;
           possible_resolved_filename = possible_resolved_filename_ss.str();
           auto possible_resolved_path = remote_path + "/" + possible_resolved_filename;
-          bool file_not_exists;
-          if (!client->stat(possible_resolved_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
-            if (file_not_exists) {
+          if (!client->stat(possible_resolved_path, true /*follow_symlinks*/, attrs)) {
+            if (client->getLastError() == utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
               unique_name_generated = true;
               break;
             } else {
@@ -532,9 +530,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
     bool should_create_directory = disable_directory_listing;
     if (!disable_directory_listing) {
       LIBSSH2_SFTP_ATTRIBUTES attrs;
-      bool file_not_exists;
-      if (!client->stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
-        if (!file_not_exists) {
+      if (!client->stat(remote_path, true /*follow_symlinks*/, attrs)) {
+        if (client->getLastError() != utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
           logger_->log_error("Failed to stat %s", remote_path.c_str());
         }
         should_create_directory = true;
@@ -552,9 +549,8 @@ bool PutSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, c
       (void) client->createDirectoryHierarchy(remote_path);
       if (!disable_directory_listing) {
         LIBSSH2_SFTP_ATTRIBUTES attrs;
-        bool file_not_exists;
-        if (!client->stat(remote_path, true /*follow_symlinks*/, attrs, file_not_exists)) {
-          if (file_not_exists) {
+        if (!client->stat(remote_path, true /*follow_symlinks*/, attrs)) {
+          if (client->getLastError() == utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS) {
             logger_->log_error("Could not find remote directory %s after creating it", remote_path.c_str());
             session->transfer(flow_file, Failure);
             put_connection_back_to_cache();
