@@ -491,6 +491,7 @@ bool SFTPClient::getFile(const std::string& path, io::BaseStream& output, int64_
    * https://github.com/apache/mina-sshd/commit/19adb39e4706929b6e5a1b2df056a2b2a29fac4d
    * If we encounter real servers that behave like this, a workaround would be to stat before opening the file
    * and "re-setting" the mode we read earlier on open.
+   * An another option would be to patch libssh2 to not send permissions in attrs when opening a file for read only.
    */
   LIBSSH2_SFTP_HANDLE *file_handle = libssh2_sftp_open(sftp_session_, path.c_str(), LIBSSH2_FXF_READ, 0 /*mode*/);
   if (file_handle == nullptr) {

@@ -119,8 +119,6 @@ class FetchSFTP : public SFTPProcessorBase {
   std::string completion_strategy_;
   bool create_directory_;
   bool disable_directory_listing_;
-
-  bool processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session);
 };
 
 REGISTER_RESOURCE(FetchSFTP, "Fetches the content of a file from a remote SFTP server and overwrites the contents of an incoming FlowFile with the content of the remote file.")

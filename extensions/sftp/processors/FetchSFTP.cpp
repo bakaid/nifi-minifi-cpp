@@ -52,27 +52,28 @@ namespace processors {
 
 core::Property FetchSFTP::Hostname(
     core::PropertyBuilder::createProperty("Hostname")->withDescription("The fully qualified hostname or IP address of the remote system")
-        ->supportsExpressionLanguage(true)->build());
+        ->isRequired(true)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::Port(
     core::PropertyBuilder::createProperty("Port")->withDescription("The port that the remote system is listening on for file transfers")
-        ->supportsExpressionLanguage(true)->build());
+        ->isRequired(true)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::Username(
     core::PropertyBuilder::createProperty("Username")->withDescription("Username")
-        ->supportsExpressionLanguage(true)->build());
+        ->isRequired(true)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::Password(
     core::PropertyBuilder::createProperty("Password")->withDescription("Password for the user account")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::PrivateKeyPath(
     core::PropertyBuilder::createProperty("Private Key Path")->withDescription("The fully qualified path to the Private Key file")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::PrivateKeyPassphrase(
     core::PropertyBuilder::createProperty("Private Key Passphrase")->withDescription("Password for the private key")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::RemoteFile(
     core::PropertyBuilder::createProperty("Remote File")->withDescription("The fully qualified filename on the remote system")
-        ->supportsExpressionLanguage(true)->build());
+        ->isRequired(true)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::CompletionStrategy(
     core::PropertyBuilder::createProperty("Completion Strategy")->withDescription("Specifies what to do with the original file on the server once it has been pulled into NiFi. If the Completion Strategy fails, a warning will be logged but the data will still be transferred.")
+        ->isRequired(true)
         ->withAllowableValues<std::string>({COMPLETION_STRATEGY_NONE,
                                             COMPLETION_STRATEGY_MOVE_FILE,
                                             COMPLETION_STRATEGY_DELETE_FILE})
@@ -81,10 +82,10 @@ core::Property FetchSFTP::MoveDestinationDirectory(
     core::PropertyBuilder::createProperty("Move Destination Directory")->withDescription("The directory on the remote server to move the original file to once it has been ingested into NiFi. "
                                                                                          "This property is ignored unless the Completion Strategy is set to 'Move File'. "
                                                                                          "The specified directory must already exist on the remote system if 'Create Directory' is disabled, or the rename will fail.")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::CreateDirectory(
     core::PropertyBuilder::createProperty("Create Directory")->withDescription("Specifies whether or not the remote directory should be created if it does not exist.")
-        ->withDefaultValue<bool>(false)->build());
+        ->isRequired(true)->withDefaultValue<bool>(false)->build());
 core::Property FetchSFTP::DisableDirectoryListing(
     core::PropertyBuilder::createProperty("Disable Directory Listing")->withDescription("Control how 'Move Destination Directory' is created when 'Completion Strategy' is 'Move File' and 'Create Directory' is enabled. "
                                                                                         "If set to 'true', directory listing is not performed prior to create missing directories. "
@@ -96,22 +97,22 @@ core::Property FetchSFTP::DisableDirectoryListing(
         ->isRequired(false)->withDefaultValue<bool>(false)->build());
 core::Property FetchSFTP::ConnectionTimeout(
     core::PropertyBuilder::createProperty("Connection Timeout")->withDescription("Amount of time to wait before timing out while creating a connection")
-        ->withDefaultValue<core::TimePeriodValue>("30 sec")->build());
+        ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("30 sec")->build());
 core::Property FetchSFTP::DataTimeout(
     core::PropertyBuilder::createProperty("Data Timeout")->withDescription("When transferring a file between the local and remote system, this value specifies how long is allowed to elapse without any data being transferred between systems")
-        ->withDefaultValue<core::TimePeriodValue>("30 sec")->build());
+        ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("30 sec")->build());
 core::Property FetchSFTP::SendKeepaliveOnTimeout(
     core::PropertyBuilder::createProperty("Send Keep Alive On Timeout")->withDescription("Indicates whether or not to send a single Keep Alive message when SSH socket times out")
-        ->withDefaultValue<bool>(true)->build());
+        ->isRequired(true)->withDefaultValue<bool>(true)->build());
 core::Property FetchSFTP::HostKeyFile(
     core::PropertyBuilder::createProperty("Host Key File")->withDescription("If supplied, the given file will be used as the Host Key; otherwise, no use host key file will be used")
         ->isRequired(false)->build());
 core::Property FetchSFTP::StrictHostKeyChecking(
     core::PropertyBuilder::createProperty("Strict Host Key Checking")->withDescription("Indicates whether or not strict enforcement of hosts keys should be applied")
-        ->withDefaultValue<bool>(false)->build());
+        ->isRequired(true)->withDefaultValue<bool>(false)->build());
 core::Property FetchSFTP::UseCompression(
     core::PropertyBuilder::createProperty("Use Compression")->withDescription("Indicates whether or not ZLIB compression should be used when transferring files")
-        ->withDefaultValue<bool>(false)->build());
+        ->isRequired(true)->withDefaultValue<bool>(false)->build());
 core::Property FetchSFTP::ProxyType(
     core::PropertyBuilder::createProperty("Proxy Type")->withDescription("Specifies the Proxy Configuration Controller Service to proxy network requests. If set, it supersedes proxy settings configured per component. "
                                                                          "Supported proxies: HTTP + AuthN, SOCKS + AuthN")
@@ -122,16 +123,16 @@ core::Property FetchSFTP::ProxyType(
         ->withDefaultValue(PROXY_TYPE_DIRECT)->build());
 core::Property FetchSFTP::ProxyHost(
     core::PropertyBuilder::createProperty("Proxy Host")->withDescription("The fully qualified hostname or IP address of the proxy server")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::ProxyPort(
     core::PropertyBuilder::createProperty("Proxy Port")->withDescription("The port of the proxy server")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::HttpProxyUsername(
     core::PropertyBuilder::createProperty("Http Proxy Username")->withDescription("Http Proxy Username")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 core::Property FetchSFTP::HttpProxyPassword(
     core::PropertyBuilder::createProperty("Http Proxy Password")->withDescription("Http Proxy Password")
-        ->supportsExpressionLanguage(true)->isRequired(false)->build());
+        ->isRequired(false)->supportsExpressionLanguage(true)->build());
 
 core::Relationship FetchSFTP::Success("success", "All FlowFiles that are received are routed to success");
 core::Relationship FetchSFTP::CommsFailure("comms.failure", "Any FlowFile that could not be fetched from the remote server due to a communications failure will be transferred to this Relationship.");
@@ -259,10 +260,10 @@ int64_t FetchSFTP::WriteCallback::process(std::shared_ptr<io::BaseStream> stream
   return stream->getSize();
 }
 
-bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
+void FetchSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
   std::shared_ptr<FlowFileRecord> flow_file = std::static_pointer_cast<FlowFileRecord>(session->get());
   if (flow_file == nullptr) {
-    return false;
+    return;
   }
 
   /* Parse possibly FlowFile-dependent properties */
@@ -283,12 +284,12 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
   if (!context->getProperty(Hostname, hostname, flow_file)) {
     logger_->log_error("Hostname attribute is missing");
     context->yield();
-    return false;
+    return;
   }
   if (!context->getProperty(Port, value, flow_file)) {
     logger_->log_error("Port attribute is missing or invalid");
     context->yield();
-    return false;
+    return;
   } else {
     int port_tmp;
     if (!core::Property::StringToInt(value, port_tmp) ||
@@ -296,7 +297,7 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
         port_tmp > std::numeric_limits<uint16_t>::max()) {
       logger_->log_error("Port attribute \"%s\" is invalid", value);
       context->yield();
-      return false;
+      return;
     } else {
       port = static_cast<uint16_t>(port_tmp);
     }
@@ -304,7 +305,7 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
   if (!context->getProperty(Username, username, flow_file)) {
     logger_->log_error("Username attribute is missing");
     context->yield();
-    return false;
+    return;
   }
   context->getProperty(Password, password, flow_file);
   context->getProperty(PrivateKeyPath, private_key_path, flow_file);
@@ -320,7 +321,7 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
         port_tmp > std::numeric_limits<uint16_t>::max()) {
       logger_->log_error("Proxy Port attribute \"%s\" is invalid", value);
       context->yield();
-      return false;
+      return;
     } else {
       proxy_port = static_cast<uint16_t>(port_tmp);
     }
@@ -337,7 +338,7 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
                                       proxy_password);
   if (client == nullptr) {
     context->yield();
-    return false;
+    return;
   }
 
   /*
@@ -357,18 +358,18 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
       case utils::SFTPError::SFTP_ERROR_PERMISSION_DENIED:
         session->transfer(flow_file, PermissionDenied);
         put_connection_back_to_cache();
-        return true;
+        return;
       case utils::SFTPError::SFTP_ERROR_FILE_NOT_EXISTS:
         session->transfer(flow_file, NotFound);
         put_connection_back_to_cache();
-        return true;
+        return;
       case utils::SFTPError::SFTP_ERROR_COMMUNICATIONS_FAILURE:
       case utils::SFTPError::SFTP_ERROR_IO_ERROR:
         session->transfer(flow_file, CommsFailure);
-        return true;
+        return;
       default:
         session->transfer(flow_file, PermissionDenied); // TODO
-        return true;
+        return;
     }
   }
 
@@ -410,11 +411,6 @@ bool FetchSFTP::processOne(const std::shared_ptr<core::ProcessContext> &context,
 
   session->transfer(flow_file, Success);
   put_connection_back_to_cache();
-  return true;
-}
-
-void FetchSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-  this->processOne(context, session);
 }
 
 } /* namespace processors */
