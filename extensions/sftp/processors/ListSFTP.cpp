@@ -33,6 +33,10 @@
 #include <vector>
 
 #include "utils/ByteArrayCallback.h"
+#include "utils/TimeUtil.h"
+#include "utils/StringUtils.h"
+#include "utils/ScopeGuard.h"
+#include "utils/file/FileUtils.h"
 #include "core/FlowFile.h"
 #include "core/logging/Logger.h"
 #include "core/ProcessContext.h"
@@ -40,9 +44,6 @@
 #include "io/DataStream.h"
 #include "io/StreamFactory.h"
 #include "ResourceClaim.h"
-#include "utils/StringUtils.h"
-#include "utils/ScopeGuard.h"
-#include "utils/file/FileUtils.h"
 
 namespace org {
 namespace apache {
@@ -297,7 +298,7 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
   if (!context->getProperty(MinimumFileSize.getName(), minimum_file_size_)) {
     logger_->log_error("Minimum File Size attribute is invalid");
   }
-  context->getProperty(MaximumFileSize.getName(), maximum_file_size_);
+//  context->getProperty(MaximumFileSize.getName(), maximum_file_size_);
 
   startKeepaliveThreadIfNeeded();
 }
@@ -308,11 +309,6 @@ void ListSFTP::notifyStop() {
 }
 
 void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-  std::shared_ptr<FlowFileRecord> flow_file = std::static_pointer_cast<FlowFileRecord>(session->get());
-  if (flow_file == nullptr) {
-    return;
-  }
-
   /* Parse EL-supporting properties */
   std::string hostname;
   uint16_t port = 0U;
@@ -328,12 +324,12 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   uint64_t entity_tracking_time_window = 0U;
 
   std::string value;
-  if (!context->getProperty(Hostname, hostname, flow_file)) {
+  if (!context->getProperty(Hostname.getName(), hostname)) {
     logger_->log_error("Hostname attribute is missing");
     context->yield();
     return;
   }
-  if (!context->getProperty(Port, value, flow_file)) {
+  if (!context->getProperty(Port.getName(), value)) {
     logger_->log_error("Port attribute is missing or invalid");
     context->yield();
     return;
@@ -349,18 +345,18 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
       port = static_cast<uint16_t>(port_tmp);
     }
   }
-  if (!context->getProperty(Username, username, flow_file)) {
+  if (!context->getProperty(Username.getName(), username)) {
     logger_->log_error("Username attribute is missing");
     context->yield();
     return;
   }
-  context->getProperty(Password, password, flow_file);
-  context->getProperty(PrivateKeyPath, private_key_path, flow_file);
-  context->getProperty(PrivateKeyPassphrase, private_key_passphrase, flow_file);
-  context->getProperty(Password, password, flow_file);
-  context->getProperty(RemotePath, remote_path, flow_file);
-  context->getProperty(ProxyHost, proxy_host, flow_file);
-  if (context->getProperty(ProxyPort, value, flow_file) && !value.empty()) {
+  context->getProperty(Password.getName(), password);
+  context->getProperty(PrivateKeyPath.getName(), private_key_path);
+  context->getProperty(PrivateKeyPassphrase.getName(), private_key_passphrase);
+  context->getProperty(Password.getName(), password);
+  context->getProperty(RemotePath.getName(), remote_path);
+  context->getProperty(ProxyHost.getName(), proxy_host);
+  if (context->getProperty(ProxyPort.getName(), value) && !value.empty()) {
     int port_tmp;
     if (!core::Property::StringToInt(value, port_tmp) ||
         port_tmp < std::numeric_limits<uint16_t>::min() ||
@@ -372,8 +368,8 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
       proxy_port = static_cast<uint16_t>(port_tmp);
     }
   }
-  context->getProperty(HttpProxyUsername, proxy_username, flow_file);
-  context->getProperty(HttpProxyPassword, proxy_password, flow_file);
+  context->getProperty(HttpProxyUsername.getName(), proxy_username);
+  context->getProperty(HttpProxyPassword.getName(), proxy_password);
   if (context->getProperty(EntityTrackingTimeWindow.getName(), value)) {
     core::TimeUnit unit;
     if (!core::Property::StringToTime(value, entity_tracking_time_window, unit) ||
@@ -407,9 +403,88 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     addConnectionToCache(connection_cache_key, std::move(client));
   };
 
+  /* List root path */
+  std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> children;
+  if (!client->listDirectory(remote_path, follow_symlink_, children)) {
+    context->yield();
+    return;
+  }
+  for (auto&& child : children) {
+    std::string filename;
+    LIBSSH2_SFTP_ATTRIBUTES attrs;
+    std::tie(filename, std::ignore, attrs) = std::move(child);
 
+    if (filename.empty()) {
+      logger_->log_error("Listing directory \"%s\" returned an empty filename", remote_path.c_str());
+    }
+    if (filename == "." || filename == "..") {
+      continue;
+    }
+    if (ignore_dotted_files_ && filename[0] == '.') {
+      logger_->log_debug("Ignoring \"%s/%s\" because Ignore Dotted Files is true", remote_path.c_str(), filename.c_str());
+      continue;
+    }
 
-  session->transfer(flow_file, Success);
+    if (!(attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ||
+        !(attrs.flags & LIBSSH2_SFTP_ATTR_UIDGID) ||
+        !(attrs.flags & LIBSSH2_SFTP_ATTR_SIZE) ||
+        !(attrs.flags & LIBSSH2_SFTP_ATTR_ACMODTIME)) {
+      // TODO: maybe do a fallback stat here
+      logger_->log_error("Failed to get all attributes in stat for \"%s/%s\"", remote_path.c_str(), filename.c_str());
+      continue;
+    }
+
+    if (LIBSSH2_SFTP_S_ISREG(attrs.permissions)) {
+      /* Convert mtime to string */
+      if (attrs.mtime > std::numeric_limits<int64_t>::max()) {
+        logger_->log_error("Modification date %lu larger than int64_t max", attrs.mtime);
+        continue;
+      }
+      std::string mtime_str;
+      if (!getDateTimeStr(static_cast<int64_t>(attrs.mtime), mtime_str)) {
+        logger_->log_error("Failed to convert modification date %lu to string", attrs.mtime);
+        continue;
+      }
+
+      /* Create FlowFile */
+      std::shared_ptr<FlowFileRecord> flow_file = std::static_pointer_cast<FlowFileRecord>(session->create());
+      if (flow_file == nullptr) {
+        logger_->log_error("Failed to create FlowFileRecord");
+        return;
+      }
+
+      /* Set attributes */
+      session->putAttribute(flow_file, ATTRIBUTE_SFTP_REMOTE_HOST, hostname);
+      session->putAttribute(flow_file, ATTRIBUTE_SFTP_REMOTE_PORT, std::to_string(port));
+      session->putAttribute(flow_file, ATTRIBUTE_SFTP_LISTING_USER, username);
+
+      /* uid and gid */
+      session->putAttribute(flow_file, ATTRIBUTE_FILE_OWNER, std::to_string(attrs.uid));
+      session->putAttribute(flow_file, ATTRIBUTE_FILE_GROUP, std::to_string(attrs.gid));
+
+      /* permissions */
+      std::stringstream ss;
+      ss << std::setfill('0') << std::setw(4) << std::oct << (attrs.permissions & 0777);
+      session->putAttribute(flow_file, ATTRIBUTE_FILE_PERMISSIONS, ss.str());
+
+      /* filesize */
+      session->putAttribute(flow_file, ATTRIBUTE_FILE_SIZE, std::to_string(attrs.filesize));
+
+      /* mtime */
+      session->putAttribute(flow_file, ATTRIBUTE_FILE_LASTMODIFIEDTIME, mtime_str);
+
+      flow_file->updateKeyedAttribute(FILENAME, filename);
+      flow_file->updateKeyedAttribute(PATH, remote_path);
+
+      session->transfer(flow_file, Success);
+    } else if (LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
+
+    } else {
+      logger_->log_debug("Skipping non-regular, non-directory file \"%s\"", filename.c_str());
+      continue;
+    }
+  }
+
   put_connection_back_to_cache();
 }
 

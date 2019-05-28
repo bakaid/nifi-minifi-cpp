@@ -139,7 +139,7 @@ class FetchSFTPTestsFixture {
     std::fstream file;
     std::stringstream ss;
     ss << src_dir << "/vfs/" << relative_path;
-    REQUIRE(0 == utils::file::FileUtils::create_dir(utils::file::FileUtils::get_parent_path(ss.str())));
+    utils::file::FileUtils::create_dir(utils::file::FileUtils::get_parent_path(ss.str())); // TODO
     file.open(ss.str(), std::ios::out);
     file << content;
     file.close();
