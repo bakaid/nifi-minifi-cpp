@@ -81,7 +81,7 @@ core::Property FetchSFTP::MoveDestinationDirectory(
     core::PropertyBuilder::createProperty("Move Destination Directory")->withDescription("The directory on the remote server to move the original file to once it has been ingested into NiFi. "
                                                                                          "This property is ignored unless the Completion Strategy is set to 'Move File'. "
                                                                                          "The specified directory must already exist on the remote system if 'Create Directory' is disabled, or the rename will fail.")
-        ->isRequired(false)->build());
+        ->supportsExpressionLanguage(true)->isRequired(false)->build());
 core::Property FetchSFTP::CreateDirectory(
     core::PropertyBuilder::createProperty("Create Directory")->withDescription("Specifies whether or not the remote directory should be created if it does not exist.")
         ->withDefaultValue<bool>(false)->build());

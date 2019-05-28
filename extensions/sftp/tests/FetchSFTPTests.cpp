@@ -218,6 +218,28 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch one file", "[FetchSFTP]
   REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
 }
 
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP public key authentication", "[FetchSFTP][basic]") {
+  plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
+  plan->setProperty(fetch_sftp, "Private Key Path", utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"));
+  plan->setProperty(fetch_sftp, "Private Key Passphrase", "privatekeypassword");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  testFile(IN_SOURCE, "nifi_test/tstFile.ext", "Test content 1");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("Successfully authenticated with publickey"));
+
+  REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
 TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch non-existing file", "[FetchSFTP][basic]") {
   plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
 
@@ -343,6 +365,46 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Move File
   REQUIRE(LogTestController::getInstance().contains("Failed to rename remote file \"nifi_test/tstFile.ext\" to \"nifi_done/tstFile.ext\", error: LIBSSH2_FX_NO_SUCH_FILE"));
   REQUIRE(LogTestController::getInstance().contains("Completion Strategy is Move File, but failed to move file \"nifi_test/tstFile.ext\" to \"nifi_done/tstFile.ext\""));
 
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
+TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP expression language test", "[FetchSFTP]") {
+  plan->setProperty(update_attribute, "attr_Hostname", "localhost", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Port", std::to_string(sftp_server->getPort()), true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Username", "nifiuser", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Password", "nifipassword", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Private Key Path",
+  utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"), true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Private Key Passphrase", "privatekeypassword", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Remote File", "nifi_test/tstFile.ext", true /*dynamic*/);
+  plan->setProperty(update_attribute, "attr_Move Destination Directory", "nifi_done/", true /*dynamic*/);
+
+  plan->setProperty(fetch_sftp, "Hostname", "${'attr_Hostname'}");
+  plan->setProperty(fetch_sftp, "Port", "${'attr_Port'}");
+  plan->setProperty(fetch_sftp, "Username", "${'attr_Username'}");
+  plan->setProperty(fetch_sftp, "Password", "${'attr_Password'}");
+  plan->setProperty(fetch_sftp, "Private Key Path", "${'attr_Private Key Path'}");
+  plan->setProperty(fetch_sftp, "Private Key Passphrase", "${'attr_Private Key Passphrase'}");
+  plan->setProperty(fetch_sftp, "Remote File", "${'attr_Remote File'}");
+  plan->setProperty(fetch_sftp, "Move Destination Directory", "${'attr_Move Destination Directory'}");
+
+  plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_MOVE_FILE);
+  plan->setProperty(fetch_sftp, "Create Directory", "true");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  testFileNotExists(IN_SOURCE, "nifi_test/tstFile.ext");
+  testFile(IN_SOURCE, "nifi_done/tstFile.ext", "Test content 1");
+  testFile(IN_DESTINATION, "nifi_test/tstFile.ext", "Test content 1");
+
+  REQUIRE(LogTestController::getInstance().contains("Successfully authenticated with publickey"));
+  REQUIRE(LogTestController::getInstance().contains("from FetchSFTP to relationship success"));
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.filename value:nifi_test/tstFile.ext"));
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
   REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
