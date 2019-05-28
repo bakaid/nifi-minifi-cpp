@@ -148,3 +148,22 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files", "[ListSFTP][ba
 
   testController.runSession(plan, true);
 }
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files, one in a subdir, no recursion", "[ListSFTP][basic]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+
+  createFile("nifi_test/file1.ext", "Test content 1");
+  createFile("nifi_test/subdir/file2.ext", "Test with longer content 2");
+
+  testController.runSession(plan, true);
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files, one in a subdir, with recursion", "[ListSFTP][basic]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+  plan->setProperty(list_sftp, "Search Recursively", "true");
+
+  createFile("nifi_test/file1.ext", "Test content 1");
+  createFile("nifi_test/subdir/file2.ext", "Test with longer content 2");
+
+  testController.runSession(plan, true);
+}

@@ -404,45 +404,60 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   };
 
   /* List root path */
-  std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> children;
-  if (!client->listDirectory(remote_path, follow_symlink_, children)) {
+  std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> root_children;
+  if (!client->listDirectory(remote_path, follow_symlink_, root_children)) {
     context->yield();
     return;
   }
-  for (auto&& child : children) {
+
+  /* Populate with initial children */
+  std::deque<std::tuple<std::string /*parent_path*/, std::string /* filename */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> children;
+  for (auto& root_child : root_children) {
+    // TODO: filter
+    children.emplace_back(remote_path, std::move(std::get<0>(root_child)), std::move(std::get<2>(root_child)));
+  }
+
+  /* Process children */
+  while (!children.empty()) {
+    std::string parent_path;
     std::string filename;
     LIBSSH2_SFTP_ATTRIBUTES attrs;
-    std::tie(filename, std::ignore, attrs) = std::move(child);
+    std::tie(parent_path, filename, attrs) = std::move(children.front());
+    children.pop_front();
 
     if (filename.empty()) {
-      logger_->log_error("Listing directory \"%s\" returned an empty filename", remote_path.c_str());
+      logger_->log_error("Listing directory \"%s\" returned an empty filename", parent_path.c_str());
     }
     if (filename == "." || filename == "..") {
       continue;
     }
     if (ignore_dotted_files_ && filename[0] == '.') {
-      logger_->log_debug("Ignoring \"%s/%s\" because Ignore Dotted Files is true", remote_path.c_str(), filename.c_str());
+      logger_->log_debug("Ignoring \"%s/%s\" because Ignore Dotted Files is true", parent_path.c_str(), filename.c_str());
       continue;
     }
 
-    if (!(attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ||
-        !(attrs.flags & LIBSSH2_SFTP_ATTR_UIDGID) ||
-        !(attrs.flags & LIBSSH2_SFTP_ATTR_SIZE) ||
-        !(attrs.flags & LIBSSH2_SFTP_ATTR_ACMODTIME)) {
+    if (!(attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS)) {
       // TODO: maybe do a fallback stat here
-      logger_->log_error("Failed to get all attributes in stat for \"%s/%s\"", remote_path.c_str(), filename.c_str());
+      logger_->log_error("Failed to get permissions in stat for \"%s/%s\"", parent_path.c_str(), filename.c_str());
       continue;
     }
 
     if (LIBSSH2_SFTP_S_ISREG(attrs.permissions)) {
+      if (!(attrs.flags & LIBSSH2_SFTP_ATTR_UIDGID) ||
+          !(attrs.flags & LIBSSH2_SFTP_ATTR_SIZE) ||
+          !(attrs.flags & LIBSSH2_SFTP_ATTR_ACMODTIME)) {
+        // TODO: maybe do a fallback stat here
+        logger_->log_error("Failed to get all attributes in stat for \"%s/%s\"", parent_path.c_str(), filename.c_str());
+        continue;
+      }
       /* Convert mtime to string */
       if (attrs.mtime > std::numeric_limits<int64_t>::max()) {
-        logger_->log_error("Modification date %lu larger than int64_t max", attrs.mtime);
+        logger_->log_error("Modification date %lu of \"%s/%s\" larger than int64_t max", attrs.mtime, parent_path.c_str(), filename.c_str());
         continue;
       }
       std::string mtime_str;
       if (!getDateTimeStr(static_cast<int64_t>(attrs.mtime), mtime_str)) {
-        logger_->log_error("Failed to convert modification date %lu to string", attrs.mtime);
+        logger_->log_error("Failed to convert modification date %lu of \"%s/%s\" to string", attrs.mtime, parent_path.c_str(), filename.c_str());
         continue;
       }
 
@@ -470,15 +485,28 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
       /* filesize */
       session->putAttribute(flow_file, ATTRIBUTE_FILE_SIZE, std::to_string(attrs.filesize));
 
-      /* mtime */
+      /* mtime */;
       session->putAttribute(flow_file, ATTRIBUTE_FILE_LASTMODIFIEDTIME, mtime_str);
 
       flow_file->updateKeyedAttribute(FILENAME, filename);
-      flow_file->updateKeyedAttribute(PATH, remote_path);
+      flow_file->updateKeyedAttribute(PATH, parent_path);
 
       session->transfer(flow_file, Success);
     } else if (LIBSSH2_SFTP_S_ISDIR(attrs.permissions)) {
-
+      if (!search_recursively_) {
+        continue;
+      }
+      std::stringstream ss;
+      ss << parent_path << "/" << filename;
+      auto new_parent_path = ss.str();
+      std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> dir_children;
+      if (!client->listDirectory(new_parent_path, follow_symlink_, dir_children)) {
+        continue;
+      }
+      for (auto& dir_child : dir_children) {
+        // TODO: filter
+        children.emplace_back(new_parent_path, std::move(std::get<0>(dir_child)), std::move(std::get<2>(dir_child)));
+      }
     } else {
       logger_->log_debug("Skipping non-regular, non-directory file \"%s\"", filename.c_str());
       continue;
