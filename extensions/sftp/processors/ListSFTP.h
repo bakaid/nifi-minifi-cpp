@@ -25,6 +25,11 @@
 #include <map>
 #include <mutex>
 #include <thread>
+#ifndef WIN32
+#include <regex.h>
+#else
+#include <regex>
+#endif
 
 #include "SFTPProcessorBase.h"
 #include "utils/ByteArrayCallback.h"
@@ -125,6 +130,15 @@ class ListSFTP : public SFTPProcessorBase {
   bool follow_symlink_;
   std::string file_filter_regex_;
   std::string path_filter_regex_;
+  bool file_filter_regex_set_;
+  bool path_filter_regex_set_;
+#ifndef WIN32
+  regex_t compiled_file_filter_regex_;
+  regex_t compiled_path_filter_regex_;
+#else
+  std::regex compiled_file_filter_regex_;
+  std::regex compiled_path_filter_regex_;
+#endif
   bool ignore_dotted_files_;
   std::string target_system_timestamp_precision_;
   std::string entity_tracking_initial_listing_target_;

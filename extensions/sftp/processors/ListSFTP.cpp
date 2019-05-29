@@ -220,6 +220,8 @@ ListSFTP::ListSFTP(std::string name, utils::Identifier uuid /*= utils::Identifie
     : SFTPProcessorBase(name, uuid)
     , search_recursively_(false)
     , follow_symlink_(false)
+    , file_filter_regex_set_(false)
+    , path_filter_regex_set_(false)
     , ignore_dotted_files_(false)
     , minimum_file_age_(0U)
     , maximum_file_age_(0U)
@@ -229,6 +231,10 @@ ListSFTP::ListSFTP(std::string name, utils::Identifier uuid /*= utils::Identifie
 }
 
 ListSFTP::~ListSFTP() {
+#ifndef WIN32
+  regfree(&compiled_file_filter_regex_);
+  regfree(&compiled_path_filter_regex_);
+#endif
 }
 
 void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
@@ -244,8 +250,36 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
   } else {
     utils::StringUtils::StringToBool(value, follow_symlink_);
   }
-  context->getProperty(FileFilterRegex.getName(), file_filter_regex_);
-  context->getProperty(PathFilterRegex.getName(), path_filter_regex_);
+  if (context->getProperty(FileFilterRegex.getName(), file_filter_regex_)) {
+#ifndef WIN32
+    int ret = regcomp(&compiled_file_filter_regex_, file_filter_regex_.c_str(), 0);
+    if (ret != 0) {
+      logger_->log_error("Failed to compile File Filter Regex \"%s\"", file_filter_regex_.c_str());
+    } else {
+      file_filter_regex_set_ = true;
+    }
+#else
+    compiled_file_filter_regex_ = std::regex(file_filter_regex_);
+    file_filter_regex_set_ = true;
+#endif
+  } else {
+    file_filter_regex_set_ = false;
+  }
+  if (context->getProperty(PathFilterRegex.getName(), path_filter_regex_)) {
+#ifndef WIN32
+    int ret = regcomp(&compiled_path_filter_regex_, path_filter_regex_.c_str(), 0);
+    if (ret != 0) {
+      logger_->log_error("Failed to compile File Filter Regex \"%s\"", path_filter_regex_.c_str());
+    } else {
+      path_filter_regex_set_ = true;
+    }
+#else
+    compiled_path_filter_regex_ = std::regex(path_filter_regex_);
+    path_filter_regex_set_ = true;
+#endif
+  } else {
+    path_filter_regex_set_ = false;
+  }
   if (!context->getProperty(IgnoreDottedFiles.getName(), value)) {
     logger_->log_error("Ignore Dotted Files attribute is missing or invalid");
   } else {
@@ -298,7 +332,11 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
   if (!context->getProperty(MinimumFileSize.getName(), minimum_file_size_)) {
     logger_->log_error("Minimum File Size attribute is invalid");
   }
-//  context->getProperty(MaximumFileSize.getName(), maximum_file_size_);
+  if (context->getProperty(MaximumFileSize.getName(), value)) {
+    if (!core::DataSizeValue::StringToInt(value, maximum_file_size_)) {
+      logger_->log_error("Maximum File Size attribute is invalid");
+    }
+  }
 
   startKeepaliveThreadIfNeeded();
 }
@@ -375,7 +413,7 @@ bool ListSFTP::filterFile(const std::string& parent_path, const std::string& fil
                        parent_path.c_str(),
                        filename.c_str(),
                        file_age,
-                       maximum_file_size_);
+                       maximum_file_age_);
     return false;
   }
 
@@ -396,6 +434,25 @@ bool ListSFTP::filterFile(const std::string& parent_path, const std::string& fil
                        maximum_file_size_);
     return false;
   }
+
+  /* File Filter Regex */
+  if (file_filter_regex_set_) {
+    bool match = false;
+#ifndef WIN32
+    int ret = regexec(&compiled_file_filter_regex_, filename.c_str(), static_cast<size_t>(0), nullptr, 0);
+    match = ret == 0;
+#else
+    match = std::regex_match(filename, compiled_file_filter_regex_);
+#endif
+    if (!match) {
+      logger_->log_debug("Ignoring \"%s/%s\" because it did not match the File Filter Regex \"%s\"",
+                         parent_path.c_str(),
+                         filename.c_str(),
+                         file_filter_regex_);
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -403,6 +460,27 @@ bool ListSFTP::filterDirectory(const std::string& parent_path, const std::string
   if (!search_recursively_) {
     return false;
   }
+
+  /* Path Filter Regex */
+  if (path_filter_regex_set_) {
+    std::stringstream ss;
+    ss << parent_path << "/" << filename;
+    auto dir_path = ss.str();
+    bool match = false;
+#ifndef WIN32
+    int ret = regexec(&compiled_path_filter_regex_, dir_path.c_str(), static_cast<size_t>(0), nullptr, 0);
+    match = ret == 0;
+#else
+    match = std::regex_match(dir_path, compiled_path_filter_regex_);
+#endif
+    if (!match) {
+      logger_->log_debug("Not recursing into \"%s\" because it did not match the Path Filter Regex \"%s\"",
+                         dir_path.c_str(),
+                         path_filter_regex_);
+      return false;
+    }
+  }
+
   return true;
 }
 

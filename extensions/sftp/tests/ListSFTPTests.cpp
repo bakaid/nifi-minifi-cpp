@@ -176,3 +176,42 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Minimum File Age too young", "[
 
   testController.runSession(plan, true);
 }
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Minimum File Size too small", "[ListSFTP][file-size]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+  plan->setProperty(list_sftp, "Minimum File Size", "1 MB");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Maximum File Size too large", "[ListSFTP][file-size]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+  plan->setProperty(list_sftp, "Maximum File Size", "4 B");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP File Filter Regex", "[ListSFTP][file-filter-regex]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+  plan->setProperty(list_sftp, "File Filter Regex", "^.*2.*$");
+
+  createFile("nifi_test/file1.ext", "Test content 1");
+  createFile("nifi_test/file2.ext", "Test with longer content 2");
+
+  testController.runSession(plan, true);
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Path Filter Regex", "[ListSFTP][path-filter-regex]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+  plan->setProperty(list_sftp, "Search Recursively", "true");
+  plan->setProperty(list_sftp, "Path Filter Regex", "^.*foobar.*$");
+
+  createFile("nifi_test/file1.ext", "Test content 1");
+  createFile("nifi_test/subdir/file2.ext", "Test with longer content 2");
+
+  testController.runSession(plan, true);
+}
