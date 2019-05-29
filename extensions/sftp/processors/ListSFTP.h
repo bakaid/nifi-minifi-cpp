@@ -132,6 +132,20 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t maximum_file_age_;
   uint64_t minimum_file_size_;
   uint64_t maximum_file_size_;
+
+  struct Child {
+    Child();
+    Child(const std::string& parent_path_, std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>&& sftp_child);
+
+    bool directory;
+    std::string parent_path;
+    std::string filename;
+    LIBSSH2_SFTP_ATTRIBUTES attrs;
+  };
+
+  bool filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child);
+  bool filterFile(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
+  bool filterDirectory(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
 };
 
 REGISTER_RESOURCE(ListSFTP, "Performs a listing of the files residing on an SFTP server. "

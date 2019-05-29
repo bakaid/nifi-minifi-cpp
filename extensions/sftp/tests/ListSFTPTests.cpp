@@ -167,3 +167,12 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files, one in a subdir
 
   testController.runSession(plan, true);
 }
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Minimum File Age too young", "[ListSFTP][file-age]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+  plan->setProperty(list_sftp, "Minimum File Age", "1 min");
+
+  createFile("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+}
