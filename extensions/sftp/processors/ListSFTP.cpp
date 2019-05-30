@@ -28,6 +28,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <list>
 #include <string>
 #include <utility>
 #include <vector>
@@ -174,6 +175,11 @@ core::Property ListSFTP::MaximumFileSize(
 
 core::Relationship ListSFTP::Success("success", "All FlowFiles that are received are routed to success");
 
+const std::map<std::string, uint64_t> ListSFTP::LISTING_LAG_MAP = {
+  {ListSFTP::TARGET_SYSTEM_TIMESTAMP_PRECISION_SECONDS, 1000},
+  {ListSFTP::TARGET_SYSTEM_TIMESTAMP_PRECISION_MINUTES, 60000},
+};
+
 void ListSFTP::initialize() {
   logger_->log_trace("Initializing FetchSFTP");
 
@@ -227,6 +233,7 @@ ListSFTP::ListSFTP(std::string name, utils::Identifier uuid /*= utils::Identifie
     , maximum_file_age_(0U)
     , minimum_file_size_(0U)
     , maximum_file_size_(0U)
+    , already_loaded_from_cache_(false)
     , last_listed_latest_entry_timestamp_(0U)
     , last_processed_latest_entry_timestamp_(0U) {
   logger_ = logging::LoggerFactory<ListSFTP>::getLogger();
@@ -359,6 +366,12 @@ ListSFTP::Child::Child(const std::string& parent_path_, std::tuple<std::string /
   directory = LIBSSH2_SFTP_S_ISDIR(attrs.permissions);
 }
 
+std::string ListSFTP::Child::getPath() const {
+  std::stringstream ss;
+  ss << parent_path << "/" << filename;
+  return ss.str();
+}
+
 bool ListSFTP::filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child) {
   const std::string& filename = std::get<0>(sftp_child);
   const LIBSSH2_SFTP_ATTRIBUTES& attrs = std::get<2>(sftp_child);
@@ -401,7 +414,7 @@ bool ListSFTP::filterFile(const std::string& parent_path, const std::string& fil
   }
 
   /* Age */
-  time_t now = time(nullptr);
+  time_t now = time(nullptr); // TODO
   int64_t file_age = (now - attrs.mtime) * 1000;
   if (file_age < minimum_file_age_) {
     logger_->log_debug("Ignoring \"%s/%s\" because it is younger than the Minimum File Age: %ld ms < %lu ms",
@@ -546,11 +559,128 @@ void ListSFTP::listByTrackingTimestamps(
     uint16_t port,
     const std::string& username,
     std::vector<Child>&& files) {
-  uint64_t min_timestamp_to_list_millis = last_listed_latest_entry_timestamp_;
+  uint64_t min_timestamp_to_list = last_listed_latest_entry_timestamp_;
 
-  // TODO: read state
+  if (!already_loaded_from_cache_) {
+    // TODO: load from cache
+    already_loaded_from_cache_ = true;
+  }
 
+  std::chrono::time_point<std::chrono::steady_clock> current_run_time = std::chrono::steady_clock::now();
+  time_t now = time(nullptr);
 
+  std::map<uint64_t /*timestamp*/, std::list<Child>> ordered_files;
+  bool target_system_has_seconds = false;
+  for (auto&& file : files) {
+    uint64_t timestamp = file.attrs.mtime * 1000;
+    target_system_has_seconds |= timestamp % 60000 != 0;
+
+    bool new_file = min_timestamp_to_list == 0U || (timestamp >= min_timestamp_to_list && timestamp >= last_processed_latest_entry_timestamp_);
+    if (new_file) {
+      auto& files_for_timestamp = ordered_files[timestamp];
+      files_for_timestamp.emplace_back(std::move(file));
+    }
+  }
+
+  uint64_t latest_listed_entry_timestamp_this_cycle = 0U;
+  size_t flow_files_created = 0U;
+  if (ordered_files.size() > 0) {
+    latest_listed_entry_timestamp_this_cycle = std::prev(ordered_files.end())->first;
+
+    std::string remote_system_timestamp_precision;
+    if (target_system_timestamp_precision_ == TARGET_SYSTEM_TIMESTAMP_PRECISION_AUTO_DETECT) {
+      if (target_system_has_seconds) {
+        logger_->log_debug("Precision auto detection detected second precision");
+        remote_system_timestamp_precision = TARGET_SYSTEM_TIMESTAMP_PRECISION_SECONDS;
+      } else {
+        logger_->log_debug("Precision auto detection detected minute precision");
+        remote_system_timestamp_precision = TARGET_SYSTEM_TIMESTAMP_PRECISION_MINUTES;
+      }
+    } else if (target_system_timestamp_precision_ == TARGET_SYSTEM_TIMESTAMP_PRECISION_MINUTES) {
+        remote_system_timestamp_precision = TARGET_SYSTEM_TIMESTAMP_PRECISION_MINUTES;
+    } else {
+      /*
+       * We only have seconds-precision timestamps, TARGET_SYSTEM_TIMESTAMP_PRECISION_MILLISECONDS makes no real sense here,
+       * so we will treat it as TARGET_SYSTEM_TIMESTAMP_PRECISION_SECONDS.
+       */
+      remote_system_timestamp_precision = TARGET_SYSTEM_TIMESTAMP_PRECISION_SECONDS;
+    }
+    uint64_t listing_lag = LISTING_LAG_MAP.at(remote_system_timestamp_precision);
+    logger_->log_debug("The listing lag is %lu ms", listing_lag);
+
+    if (latest_listed_entry_timestamp_this_cycle == last_listed_latest_entry_timestamp_) {
+      const auto& latest_files = ordered_files.at(latest_listed_entry_timestamp_this_cycle);
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(current_run_time - last_run_time_).count() < listing_lag ||
+          (latest_listed_entry_timestamp_this_cycle == last_processed_latest_entry_timestamp_ &&
+          std::all_of(latest_files.begin(), latest_files.end(), [this](const Child& child) {
+            return latest_identifiers_processed_.count(child.getPath()) == 1U;
+          }))) {
+        context->yield();
+        return;
+      }
+    } else {
+      uint64_t minimum_reliable_timestamp = now * 1000 - listing_lag;
+      if (remote_system_timestamp_precision == TARGET_SYSTEM_TIMESTAMP_PRECISION_SECONDS) {
+        minimum_reliable_timestamp -= minimum_reliable_timestamp % 1000;
+      } else {
+        minimum_reliable_timestamp -= minimum_reliable_timestamp % 60000;
+      }
+      if (minimum_reliable_timestamp < latest_listed_entry_timestamp_this_cycle) {
+        logger_->log_debug("Skipping files with latest timestamp because their modification date is not smaller than the minimum reliable timestamp: %lu ms >= %lu ms",
+            latest_listed_entry_timestamp_this_cycle,
+            minimum_reliable_timestamp);
+        ordered_files.erase(latest_listed_entry_timestamp_this_cycle);
+      }
+    }
+
+    for (auto& files_for_timestamp : ordered_files) {
+      if (files_for_timestamp.first == last_processed_latest_entry_timestamp_) {
+        /* Filter out previously processed entities. */
+        for (auto it = files_for_timestamp.second.begin(); it != files_for_timestamp.second.end();) {
+          if (latest_identifiers_processed_.count(it->getPath()) != 0U) {
+            it = files_for_timestamp.second.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+      for (const auto& file : files_for_timestamp.second) {
+        /* Create the FlowFile for this path */
+        if (createAndTransferFlowFileFromChild(session, hostname, port, username, file)) {
+          flow_files_created++;
+        } else {
+          // TODO
+        }
+      }
+    }
+  }
+
+  if (latest_listed_entry_timestamp_this_cycle != 0U) {
+    bool processed_new_files = flow_files_created > 0U;
+    if (processed_new_files) {
+      auto last_files_it = std::prev(ordered_files.end());
+      if (last_files_it->first != last_processed_latest_entry_timestamp_) {
+        latest_identifiers_processed_.clear();
+      }
+
+      for (const auto& last_file : last_files_it->second) {
+        latest_identifiers_processed_.insert(last_file.getPath());
+      }
+
+      last_processed_latest_entry_timestamp_ = last_files_it->first;
+    }
+
+    last_run_time_ = current_run_time;
+
+    if (latest_listed_entry_timestamp_this_cycle != last_listed_latest_entry_timestamp_ || processed_new_files) {
+      last_listed_latest_entry_timestamp_ = latest_listed_entry_timestamp_this_cycle;
+      // TODO: persist
+    }
+  } else {
+    logger_->log_debug("There are no files to list. Yielding.");
+    context->yield();
+    return;
+  }
 }
 
 void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
@@ -690,11 +820,16 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     }
   }
 
-  for (const auto& file : files) {
-    if (!createAndTransferFlowFileFromChild(session, hostname, port, username, file)) {
-      context->yield();
-      return;
-    }
+//  for (const auto& file : files) {
+//    if (!createAndTransferFlowFileFromChild(session, hostname, port, username, file)) {
+//      context->yield();
+//      return;
+//    }
+//  }
+  if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
+    listByTrackingTimestamps(context, session, hostname, port, username, std::move(files));
+  } else {
+    // TODO: entity tracking
   }
 
   put_connection_back_to_cache();

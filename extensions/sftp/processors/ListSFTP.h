@@ -25,6 +25,7 @@
 #include <map>
 #include <mutex>
 #include <thread>
+#include <chrono>
 #ifndef WIN32
 #include <regex.h>
 #else
@@ -118,6 +119,8 @@ class ListSFTP : public SFTPProcessorBase {
   static constexpr char const* ATTRIBUTE_FILE_SIZE = "file.size";
   static constexpr char const* ATTRIBUTE_FILE_LASTMODIFIEDTIME = "file.lastModifiedTime";
 
+  static const std::map<std::string, uint64_t> LISTING_LAG_MAP;
+
   virtual void onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) override;
   virtual void initialize() override;
   virtual void onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) override;
@@ -147,18 +150,22 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t minimum_file_size_;
   uint64_t maximum_file_size_;
 
-  uint64_t last_listed_latest_entry_timestamp_;
-  uint64_t last_processed_latest_entry_timestamp_;
-
   struct Child {
     Child();
     Child(const std::string& parent_path_, std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>&& sftp_child);
+    std::string getPath() const;
 
     bool directory;
     std::string parent_path;
     std::string filename;
     LIBSSH2_SFTP_ATTRIBUTES attrs;
   };
+
+  bool already_loaded_from_cache_;
+  std::chrono::time_point<std::chrono::steady_clock> last_run_time_;
+  uint64_t last_listed_latest_entry_timestamp_;
+  uint64_t last_processed_latest_entry_timestamp_;
+  std::set<std::string> latest_identifiers_processed_;
 
   bool filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child);
   bool filterFile(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
