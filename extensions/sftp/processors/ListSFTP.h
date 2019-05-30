@@ -147,6 +147,9 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t minimum_file_size_;
   uint64_t maximum_file_size_;
 
+  uint64_t last_listed_latest_entry_timestamp_;
+  uint64_t last_processed_latest_entry_timestamp_;
+
   struct Child {
     Child();
     Child(const std::string& parent_path_, std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>&& sftp_child);
@@ -160,6 +163,21 @@ class ListSFTP : public SFTPProcessorBase {
   bool filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child);
   bool filterFile(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
   bool filterDirectory(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
+
+  bool createAndTransferFlowFileFromChild(
+      const std::shared_ptr<core::ProcessSession>& session,
+      const std::string& hostname,
+      uint16_t port,
+      const std::string& username,
+      const Child& child);
+
+  void listByTrackingTimestamps(
+      const std::shared_ptr<core::ProcessContext>& context,
+      const std::shared_ptr<core::ProcessSession>& session,
+      const std::string& hostname,
+      uint16_t port,
+      const std::string& username,
+      std::vector<Child>&& files);
 };
 
 REGISTER_RESOURCE(ListSFTP, "Performs a listing of the files residing on an SFTP server. "
