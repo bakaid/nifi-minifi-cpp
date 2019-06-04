@@ -119,13 +119,21 @@ class ListSFTPTestsFixture {
     std::fstream file;
     std::stringstream ss;
     ss << src_dir << "/vfs/" << relative_path;
-    utils::file::FileUtils::create_dir(utils::file::FileUtils::get_parent_path(ss.str()));
+    auto full_path = ss.str();
+    std::deque<std::string> parent_dirs;
+    std::string parent_dir = full_path;
+    while ((parent_dir = utils::file::FileUtils::get_parent_path(parent_dir)) != "") {
+      parent_dirs.push_front(parent_dir);
+    }
+    for (const auto& dir : parent_dirs) {
+      utils::file::FileUtils::create_dir(dir);
+    }
     file.open(ss.str(), std::ios::out);
     file << content;
     file.close();
     if (modification_timestamp != 0U) {
 #ifndef WIN32
-      REQUIRE(true == utils::file::FileUtils::set_last_write_time(ss.str(), modification_timestamp));
+      REQUIRE(true == utils::file::FileUtils::set_last_write_time(full_path, modification_timestamp));
 #endif
     }
   }
@@ -281,3 +289,78 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Path Filter Regex", "[ListSFTP]
   REQUIRE(LogTestController::getInstance().contains("Not recursing into \"nifi_test/notbar\" because it did not match the Path Filter Regex \"^.*foobar.*$\""));
   REQUIRE(false == LogTestController::getInstance().contains("key:filename value:file3.ext"));
 }
+
+#ifndef WIN32
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Follow symlink false file symlink", "[ListSFTP][follow-symlink]") {
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  auto file1 = std::string(src_dir) + "/vfs/nifi_test/file1.ext";
+  auto file2 = std::string(src_dir) + "/vfs/nifi_test/file2.ext";
+  REQUIRE(0 == symlink(file1.c_str(), file2.c_str()));
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Skipping non-regular, non-directory file \"nifi_test/file2.ext\""));
+}
+#endif
+
+#ifndef WIN32
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Follow symlink true file symlink", "[ListSFTP][follow-symlink]") {
+  plan->setProperty(list_sftp, "Follow symlink", "true");
+
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  auto file1 = std::string(src_dir) + "/vfs/nifi_test/file1.ext";
+  auto file2 = std::string(src_dir) + "/vfs/nifi_test/file2.ext";
+  REQUIRE(0 == symlink(file1.c_str(), file2.c_str()));
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
+}
+#endif
+
+#ifndef WIN32
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Follow symlink false directory symlink", "[ListSFTP][follow-symlink]") {
+  plan->setProperty(list_sftp, "Search Recursively", "true");
+
+  createFileWithModificationTimeDiff("nifi_test/dir1/file1.ext", "Test content 1");
+  auto dir1 = std::string(src_dir) + "/vfs/nifi_test/dir1";
+  auto dir2 = std::string(src_dir) + "/vfs/nifi_test/dir2";
+  REQUIRE(0 == symlink(dir1.c_str(), dir2.c_str()));
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Skipping non-regular, non-directory file \"nifi_test/dir2\""));
+}
+#endif
+
+#ifndef WIN32
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Follow symlink true directory symlink", "[ListSFTP][follow-symlink]") {
+  plan->setProperty(list_sftp, "Search Recursively", "true");
+  plan->setProperty(list_sftp, "Follow symlink", "true");
+
+  createFileWithModificationTimeDiff("nifi_test/dir1/file1.ext", "Test content 1");
+  auto dir1 = std::string(src_dir) + "/vfs/nifi_test/dir1";
+  auto dir2 = std::string(src_dir) + "/vfs/nifi_test/dir2";
+  REQUIRE(0 == symlink(dir1.c_str(), dir2.c_str()));
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/dir1"));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test/dir2"));
+}
+#endif
+
+/**
+ * - basic auth tests
+ * - EL tests
+ * - Follow symlink	tests
+ *  - directory
+ *  - file
+ * - Listing strategy tests
+ *  - Listing Timestamps
+ *  - Listing Entities
+ */

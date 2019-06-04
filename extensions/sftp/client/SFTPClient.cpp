@@ -730,8 +730,10 @@ bool SFTPClient::listDirectory(const std::string& path, bool follow_symlinks,
       break;
     }
     if (follow_symlinks && attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS && LIBSSH2_SFTP_S_ISLNK(attrs.permissions)) {
+      std::stringstream new_path;
+      new_path << path << "/" << filename.data();
       auto orig_attrs = attrs;
-      if (!this->stat(path, true /*follow_symlinks*/, attrs)) {
+      if (!this->stat(new_path.str(), true /*follow_symlinks*/, attrs)) {
         attrs = orig_attrs;
       }
     }
