@@ -102,6 +102,8 @@ class ListSFTPTestsFixture {
     plan->setProperty(list_sftp, "Target System Timestamp Precision", processors::ListSFTP::TARGET_SYSTEM_TIMESTAMP_PRECISION_AUTO_DETECT);
     plan->setProperty(list_sftp, "Minimum File Age", "0 sec");
     plan->setProperty(list_sftp, "Minimum File Size", "0 B");
+    plan->setProperty(list_sftp, "Target System Timestamp Precision", "Seconds");
+    plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
 
     // Configure LogAttribute processor
     plan->setProperty(log_attribute, "FlowFiles To Log", "0");
@@ -113,7 +115,7 @@ class ListSFTPTestsFixture {
   }
 
   // Create source file
-  void createFile(const std::string& relative_path, const std::string& content) {
+  void createFile(const std::string& relative_path, const std::string& content, uint64_t modification_timestamp = 0U) {
     std::fstream file;
     std::stringstream ss;
     ss << src_dir << "/vfs/" << relative_path;
@@ -121,6 +123,16 @@ class ListSFTPTestsFixture {
     file.open(ss.str(), std::ios::out);
     file << content;
     file.close();
+    if (modification_timestamp != 0U) {
+#ifndef WIN32
+      REQUIRE(true == utils::file::FileUtils::set_last_write_time(ss.str(), modification_timestamp));
+#endif
+    }
+  }
+
+  void createFileWithModificationTimeDiff(const std::string& relative_path, const std::string& content, int64_t modification_timediff = -300 /*5 minutes ago*/) {
+    time_t now = time(nullptr);
+    return createFile(relative_path, content, now + modification_timediff);
   }
 
  protected:
@@ -133,85 +145,140 @@ class ListSFTPTestsFixture {
 };
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list one file", "[ListSFTP][basic]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
-
-  createFile("nifi_test/tstFile.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
 
   testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list one file writes attributes", "[ListSFTP][basic]") {
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  auto file = std::string(src_dir) + "/vfs/nifi_test/tstFile.ext";
+  auto mtime = utils::file::FileUtils::last_write_time(file);
+  std::string mtime_str;
+  REQUIRE(true == getDateTimeStr(mtime, mtime_str));
+  uint64_t uid, gid;
+  REQUIRE(true == utils::file::FileUtils::get_uid_gid(file, uid, gid));
+
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.host value:localhost"));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.remote.port value:" + std::to_string(sftp_server->getPort())));
+  REQUIRE(LogTestController::getInstance().contains("key:sftp.listing.user value:nifiuser"));
+  REQUIRE(LogTestController::getInstance().contains("key:file.owner value:" + std::to_string(uid)));
+  REQUIRE(LogTestController::getInstance().contains("key:file.group value:" + std::to_string(gid)));
+  REQUIRE(LogTestController::getInstance().contains("key:file.permissions value:0644"));
+  REQUIRE(LogTestController::getInstance().contains("key:file.size value:14"));
+  REQUIRE(LogTestController::getInstance().contains("key:file.lastModifiedTime value:" + mtime_str));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:path value:nifi_test"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files", "[ListSFTP][basic]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
-
-  createFile("nifi_test/file1.ext", "Test content 1");
-  createFile("nifi_test/file2.ext", "Test with longer content 2");
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/file2.ext", "Test with longer content 2");
 
   testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
 }
 
-TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files, one in a subdir, no recursion", "[ListSFTP][basic]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
-
-  createFile("nifi_test/file1.ext", "Test content 1");
-  createFile("nifi_test/subdir/file2.ext", "Test with longer content 2");
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files one in a subdir no recursion", "[ListSFTP][basic]") {
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/subdir/file2.ext", "Test with longer content 2");
 
   testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:file2.ext"));
 }
 
-TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files, one in a subdir, with recursion", "[ListSFTP][basic]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list two files one in a subdir with recursion", "[ListSFTP][basic]") {
   plan->setProperty(list_sftp, "Search Recursively", "true");
 
-  createFile("nifi_test/file1.ext", "Test content 1");
-  createFile("nifi_test/subdir/file2.ext", "Test with longer content 2");
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/subdir/file2.ext", "Test with longer content 2");
 
   testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Minimum File Age too young", "[ListSFTP][file-age]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
-  plan->setProperty(list_sftp, "Minimum File Age", "1 min");
+  plan->setProperty(list_sftp, "Minimum File Age", "2 hours");
 
-  createFile("nifi_test/tstFile.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
 
   testController.runSession(plan, true);
+
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Ignoring \"nifi_test/tstFile.ext\" because it is younger than the Minimum File Age"));
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Maximum File Age too old", "[ListSFTP][file-age]") {
+  plan->setProperty(list_sftp, "Maximum File Age", "1 min");
+
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Ignoring \"nifi_test/tstFile.ext\" because it is older than the Maximum File Age"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Minimum File Size too small", "[ListSFTP][file-size]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
   plan->setProperty(list_sftp, "Minimum File Size", "1 MB");
 
-  createFile("nifi_test/tstFile.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
 
   testController.runSession(plan, true);
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Ignoring \"nifi_test/tstFile.ext\" because it is smaller than the Minimum File Size: 14 B < 1048576 B"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Maximum File Size too large", "[ListSFTP][file-size]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
   plan->setProperty(list_sftp, "Maximum File Size", "4 B");
 
-  createFile("nifi_test/tstFile.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
 
   testController.runSession(plan, true);
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Ignoring \"nifi_test/tstFile.ext\" because it is larger than the Maximum File Size: 14 B > 4 B"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP File Filter Regex", "[ListSFTP][file-filter-regex]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
   plan->setProperty(list_sftp, "File Filter Regex", "^.*2.*$");
 
-  createFile("nifi_test/file1.ext", "Test content 1");
-  createFile("nifi_test/file2.ext", "Test with longer content 2");
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/file2.ext", "Test with longer content 2");
 
   testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("Ignoring \"nifi_test/file1.ext\" because it did not match the File Filter Regex \"^.*2.*$\""));
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:file2.ext"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Path Filter Regex", "[ListSFTP][path-filter-regex]") {
-  plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
   plan->setProperty(list_sftp, "Search Recursively", "true");
   plan->setProperty(list_sftp, "Path Filter Regex", "^.*foobar.*$");
 
-  createFile("nifi_test/file1.ext", "Test content 1");
-  createFile("nifi_test/subdir/file2.ext", "Test with longer content 2");
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+  createFileWithModificationTimeDiff("nifi_test/foobar/file2.ext", "Test content 2");
+  createFileWithModificationTimeDiff("nifi_test/notbar/file3.ext", "Test with longer content 3");
 
   testController.runSession(plan, true);
+
+  /* file1.ext is in the root */
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  /* file2.ext is in a matching subdirectory */
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
+  /* file3.ext is in a non-matching subdirectory */
+  REQUIRE(LogTestController::getInstance().contains("Not recursing into \"nifi_test/notbar\" because it did not match the Path Filter Regex \"^.*foobar.*$\""));
+  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:file3.ext"));
 }

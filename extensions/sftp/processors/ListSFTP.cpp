@@ -172,6 +172,10 @@ core::Property ListSFTP::MinimumFileSize(
 core::Property ListSFTP::MaximumFileSize(
     core::PropertyBuilder::createProperty("Maximum File Size")->withDescription("The maximum size that a file must be in order to be pulled")
         ->isRequired(false)->build()); // TODO: validator
+core::Property ListSFTP::StateFile(
+    core::PropertyBuilder::createProperty("State File")->withDescription("Specifies the file that should be used for storing state about"
+                                                                         " what data has been ingested so that upon restart MiNiFi can resume from where it left off")
+        ->isRequired(false)->build()); // TODO
 
 core::Relationship ListSFTP::Success("success", "All FlowFiles that are received are routed to success");
 
@@ -214,6 +218,7 @@ void ListSFTP::initialize() {
   properties.insert(MaximumFileAge);
   properties.insert(MinimumFileSize);
   properties.insert(MaximumFileSize);
+  properties.insert(StateFile);
   setSupportedProperties(properties);
 
   // Set the supported relationships
@@ -346,6 +351,26 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
       logger_->log_error("Maximum File Size attribute is invalid");
     }
   }
+  if (context->getProperty(StateFile.getName(), value)) {
+    std::stringstream ss;
+    ss << value << "." << getUUIDStr() << ".TrackingTimestamp";
+    auto new_tracking_timestamps_state_filename = ss.str();
+    if (new_tracking_timestamps_state_filename != tracking_timestamps_state_filename_) {
+      if (!tracking_timestamps_state_filename_.empty()) {
+        if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
+          logger_->log_error("Unable to delete old TrackingTimestamp state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+        }
+      }
+    }
+    tracking_timestamps_state_filename_ = new_tracking_timestamps_state_filename;
+  } else {
+    if (!tracking_timestamps_state_filename_.empty()) {
+      if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
+        logger_->log_error("Unable to delete old TrackingTimestamp state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+      }
+    }
+    tracking_timestamps_state_filename_.clear();
+  }
 
   startKeepaliveThreadIfNeeded();
 }
@@ -353,6 +378,18 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
 void ListSFTP::notifyStop() {
   logger_->log_debug("Got notifyStop, stopping keepalive thread and clearing connections");
   cleanupConnectionCache();
+}
+
+void ListSFTP::onPropertyModified(const core::Property &/*old_property*/, const core::Property &new_property) {
+  if (new_property.getName() == Hostname.getName() ||
+      new_property.getName() == Username.getName() ||
+      new_property.getName() == RemotePath.getName()) {
+    already_loaded_from_cache_ = false;
+    last_run_time_ = std::chrono::time_point<std::chrono::steady_clock>();
+    last_listed_latest_entry_timestamp_ = 0U;
+    last_processed_latest_entry_timestamp_ = 0U;
+    latest_identifiers_processed_.clear();
+  }
 }
 
 ListSFTP::Child::Child()
@@ -552,17 +589,99 @@ bool ListSFTP::createAndTransferFlowFileFromChild(
   return true;
 }
 
+bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+  std::ofstream file(tracking_timestamps_state_filename_);
+  if (!file.is_open()) {
+    logger_->log_error("Failed to store state to state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+    return false;
+  }
+  file << "hostname=" << hostname << "\n";
+  file << "username=" << username << "\n";
+  file << "remote_path=" << remote_path << "\n";
+  file << "listing.timestamp=" << last_listed_latest_entry_timestamp_ << "\n";
+  file << "processed.timestamp=" << last_processed_latest_entry_timestamp_ << "\n";
+  size_t i = 0;
+  for (const auto& identifier : latest_identifiers_processed_) {
+    file << "id." << i << "=" << identifier << "\n";
+    ++i;
+  }
+  file.close();
+  return true;
+}
+
+bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+  std::ifstream file(tracking_timestamps_state_filename_);
+  if (!file.is_open()) {
+    logger_->log_error("Failed to open state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+    return false;
+  }
+  std::string state_hostname;
+  std::string state_username;
+  std::string state_remote_path;
+  uint64_t state_listing_timestamp;
+  uint64_t state_processed_timestamp;
+  std::set<std::string> state_ids;
+
+  std::string line;
+  while (std::getline(file, line)) {
+    size_t separator_pos = line.find('=');
+    if (separator_pos == std::string::npos) {
+      // TODO: log
+    }
+    std::string key = line.substr(0, separator_pos);
+    std::string value = line.substr(separator_pos);
+    if (key == "hostname") {
+      state_hostname = std::move(value);
+    } else if (key == "username") {
+      state_username = std::move(value);
+    } else if (key == "remote_path") {
+      state_remote_path = std::move(value);
+    } else if (key == "listing.timestamp") {
+      try {
+        state_listing_timestamp = stoull(value);
+      } catch (...) {
+        // TODO: log
+      }
+    } else if (key == "processed.timestamp") {
+      try {
+        state_processed_timestamp = stoull(value);
+      } catch (...) {
+        // TODO: log
+      }
+    } else if (key.compare(0, strlen("id."), "id.") == 0) {
+      state_ids.emplace(std::move(value));
+    } else {
+      // TODO: log
+    }
+  }
+  file.close();
+
+  if (state_hostname != hostname ||
+      state_username != username ||
+      state_remote_path != remote_path) {
+    // TODO: log
+    return false;
+  }
+
+  last_listed_latest_entry_timestamp_ = state_listing_timestamp;
+  last_processed_latest_entry_timestamp_ = state_processed_timestamp;
+  latest_identifiers_processed_ = std::move(state_ids);
+
+  return true;
+}
+
 void ListSFTP::listByTrackingTimestamps(
     const std::shared_ptr<core::ProcessContext>& context,
     const std::shared_ptr<core::ProcessSession>& session,
     const std::string& hostname,
     uint16_t port,
     const std::string& username,
+    const std::string& remote_path,
     std::vector<Child>&& files) {
   uint64_t min_timestamp_to_list = last_listed_latest_entry_timestamp_;
 
-  if (!already_loaded_from_cache_) {
-    // TODO: load from cache
+  if (!already_loaded_from_cache_ && !tracking_timestamps_state_filename_.empty()) {
+    updateFromTrackingTimestampsCache(hostname, username, remote_path);
     already_loaded_from_cache_ = true;
   }
 
@@ -674,7 +793,9 @@ void ListSFTP::listByTrackingTimestamps(
 
     if (latest_listed_entry_timestamp_this_cycle != last_listed_latest_entry_timestamp_ || processed_new_files) {
       last_listed_latest_entry_timestamp_ = latest_listed_entry_timestamp_this_cycle;
-      // TODO: persist
+      if (!tracking_timestamps_state_filename_.empty()) {
+        persistTrackingTimestampsCache(hostname, username, remote_path);
+      }
     }
   } else {
     logger_->log_debug("There are no files to list. Yielding.");
@@ -820,14 +941,8 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     }
   }
 
-//  for (const auto& file : files) {
-//    if (!createAndTransferFlowFileFromChild(session, hostname, port, username, file)) {
-//      context->yield();
-//      return;
-//    }
-//  }
   if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
-    listByTrackingTimestamps(context, session, hostname, port, username, std::move(files));
+    listByTrackingTimestamps(context, session, hostname, port, username, remote_path, std::move(files));
   } else {
     // TODO: entity tracking
   }

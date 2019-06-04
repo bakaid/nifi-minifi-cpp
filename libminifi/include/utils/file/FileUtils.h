@@ -33,6 +33,7 @@
 #else
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <utime.h>
 #include <dirent.h>
 #include <errno.h>
 #endif
@@ -44,12 +45,16 @@
 #include <fcntl.h>
 #ifdef WIN32
 #define stat _stat
+#define utime _utime64
+#define utimbuf __utimbuf64
 #include <direct.h>
 #include <windows.h> // winapi
 #include <sys/stat.h> // stat
 #include <tchar.h> // _tcscpy,_tcscat,_tcscmp
 #include <string> // string
 #include <algorithm> // replace
+#include <sys/types.h>
+#include <sys/utime.h> // _utime64
 #endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -196,6 +201,13 @@ class FileUtils {
     }
 #endif
     return 0;
+  }
+
+  static bool set_last_write_time(const std::string &path, uint64_t write_time) {
+    struct utimbuf utim;
+    utim.actime = write_time;
+    utim.modtime = write_time;
+    return utime(path.c_str(), &utim) == 0U;
   }
 
 #ifndef WIN32

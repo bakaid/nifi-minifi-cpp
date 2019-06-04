@@ -105,6 +105,7 @@ class ListSFTP : public SFTPProcessorBase {
   static core::Property MaximumFileAge;
   static core::Property MinimumFileSize;
   static core::Property MaximumFileSize;
+  static core::Property StateFile;
 
   // Supported Relationships
   static core::Relationship Success;
@@ -125,6 +126,7 @@ class ListSFTP : public SFTPProcessorBase {
   virtual void initialize() override;
   virtual void onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) override;
   virtual void notifyStop() override;
+  virtual void onPropertyModified(const core::Property &old_property, const core::Property &new_property) override;
 
  private:
 
@@ -149,6 +151,7 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t maximum_file_age_;
   uint64_t minimum_file_size_;
   uint64_t maximum_file_size_;
+  std::string tracking_timestamps_state_filename_;
 
   struct Child {
     Child();
@@ -178,12 +181,16 @@ class ListSFTP : public SFTPProcessorBase {
       const std::string& username,
       const Child& child);
 
+  bool persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
+  bool updateFromTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
+
   void listByTrackingTimestamps(
       const std::shared_ptr<core::ProcessContext>& context,
       const std::shared_ptr<core::ProcessSession>& session,
       const std::string& hostname,
       uint16_t port,
       const std::string& username,
+      const std::string& remote_path,
       std::vector<Child>&& files);
 };
 
