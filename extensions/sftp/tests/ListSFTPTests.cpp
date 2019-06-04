@@ -259,9 +259,8 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP File Filter Regex", "[ListSFTP]
 
   testController.runSession(plan, true);
 
-  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
   REQUIRE(LogTestController::getInstance().contains("Ignoring \"nifi_test/file1.ext\" because it did not match the File Filter Regex \"^.*2.*$\""));
-  REQUIRE(false == LogTestController::getInstance().contains("key:filename value:file2.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
 }
 
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Path Filter Regex", "[ListSFTP][path-filter-regex]") {
