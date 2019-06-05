@@ -77,14 +77,31 @@ class ListSFTPTestsFixture {
     REQUIRE(true == sftp_server->start());
 
     // Build MiNiFi processing graph
+    createPlan();
+  }
+
+  virtual ~ListSFTPTestsFixture() {
+    free(src_dir);
+    LogTestController::getInstance().reset();
+  }
+
+  void createPlan(utils::Identifier* list_sftp_uuid = nullptr) {
     plan = testController.createPlan();
-    list_sftp = plan->addProcessor(
-        "ListSFTP",
-        "ListSFTP");
+    if (list_sftp_uuid == nullptr) {
+      list_sftp = plan->addProcessor(
+          "ListSFTP",
+          "ListSFTP");
+    } else {
+      list_sftp = plan->addProcessor(
+          "ListSFTP",
+          *list_sftp_uuid,
+          "ListSFTP",
+          {core::Relationship("success", "d")});
+    }
     log_attribute = plan->addProcessor("LogAttribute",
-        "LogAttribute",
-        core::Relationship("success", "d"),
-        true);
+                                       "LogAttribute",
+                                       core::Relationship("success", "d"),
+                                       true);
 
     // Configure ListSFTP processor
     plan->setProperty(list_sftp, "Listing Strategy", processors::ListSFTP::LISTING_STRATEGY_TRACKING_TIMESTAMPS);
@@ -108,11 +125,6 @@ class ListSFTPTestsFixture {
 
     // Configure LogAttribute processor
     plan->setProperty(log_attribute, "FlowFiles To Log", "0");
-  }
-
-  virtual ~ListSFTPTestsFixture() {
-    free(src_dir);
-    LogTestController::getInstance().reset();
   }
 
   // Create source file
@@ -442,5 +454,87 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Tracking Timestamps one file an
 
   REQUIRE(false == LogTestController::getInstance().contains("key:filename value:file1.ext"));
   REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Tracking Timestamps restore state", "[ListSFTP][tracking-timestamps]") {
+  plan->setProperty(list_sftp, "Listing Strategy", "Tracking Timestamps");
+
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+
+  utils::Identifier list_sftp_uuid;
+  REQUIRE(true == list_sftp->getUUID(list_sftp_uuid));
+  createPlan(&list_sftp_uuid);
+  plan->setProperty(list_sftp, "Listing Strategy", "Tracking Timestamps");
+  LogTestController::getInstance().resetStream(LogTestController::getInstance().log_output);
+
+  createFileWithModificationTimeDiff("nifi_test/file2.ext", "Test content 2", -240 /* 4 minutes ago */);
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Successfully loaded state file"));
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Tracking Timestamps restore state changed configuration", "[ListSFTP][tracking-timestamps]") {
+  plan->setProperty(list_sftp, "Listing Strategy", "Tracking Timestamps");
+
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+
+  utils::Identifier list_sftp_uuid;
+  REQUIRE(true == list_sftp->getUUID(list_sftp_uuid));
+  createPlan(&list_sftp_uuid);
+  plan->setProperty(list_sftp, "Listing Strategy", "Tracking Timestamps");
+  plan->setProperty(list_sftp, "Remote Path", "/nifi_test");
+  LogTestController::getInstance().resetStream(LogTestController::getInstance().log_output);
+
+  createFileWithModificationTimeDiff("nifi_test/file2.ext", "Test content 2", -240 /* 4 minutes ago */);
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("was created with different settings than the current ones, ignoring. "
+                                                    "Hostname: \"localhost\" vs. \"localhost\", "
+                                                    "Username: \"nifiuser\" vs. \"nifiuser\", "
+                                                    "Remote Path: \"nifi_test\" vs. \"/nifi_test\""));
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP Tracking Timestamps changed configuration", "[ListSFTP][tracking-timestamps]") {
+  plan->setProperty(list_sftp, "Listing Strategy", "Tracking Timestamps");
+
+  createFileWithModificationTimeDiff("nifi_test/file1.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
+
+  plan->reset();
+  LogTestController::getInstance().resetStream(LogTestController::getInstance().log_output);
+  plan->setProperty(list_sftp, "Remote Path", "/nifi_test");
+
+  createFileWithModificationTimeDiff("nifi_test/file2.ext", "Test content 2", -240 /* 4 minutes ago */);
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("was created with different settings than the current ones, ignoring. "
+  "Hostname: \"localhost\" vs. \"localhost\", "
+  "Username: \"nifiuser\" vs. \"nifiuser\", "
+  "Remote Path: \"nifi_test\" vs. \"/nifi_test\""));
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:file1.ext"));
   REQUIRE(LogTestController::getInstance().contains("key:filename value:file2.ext"));
 }

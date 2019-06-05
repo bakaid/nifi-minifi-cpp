@@ -428,15 +428,23 @@ void ListSFTP::notifyStop() {
   cleanupConnectionCache();
 }
 
-void ListSFTP::onPropertyModified(const core::Property &/*old_property*/, const core::Property &new_property) {
-  if (new_property.getName() == Hostname.getName() ||
+void ListSFTP::onPropertyModified(const core::Property &old_property, const core::Property &new_property) {
+  std::cerr << "old_property: " << old_property.getValue().to_string() << ", new_property: " << new_property.getValue().to_string() << std::endl;
+  if (/*old_property != new_property &&*/
+     (new_property.getName() == ListingStrategy.getName() ||
+      new_property.getName() == Hostname.getName() ||
       new_property.getName() == Username.getName() ||
-      new_property.getName() == RemotePath.getName()) {
+      new_property.getName() == RemotePath.getName())) {
+    logger_->log_debug("Important properties have been reconfigured, invalidating in-memory cache");
+
     already_loaded_from_cache_ = false;
+
     last_run_time_ = std::chrono::time_point<std::chrono::steady_clock>();
     last_listed_latest_entry_timestamp_ = 0U;
     last_processed_latest_entry_timestamp_ = 0U;
     latest_identifiers_processed_.clear();
+
+    already_listed_entities_.clear();
   }
 }
 
@@ -748,7 +756,11 @@ void ListSFTP::listByTrackingTimestamps(
   uint64_t min_timestamp_to_list = last_listed_latest_entry_timestamp_;
 
   if (!already_loaded_from_cache_ && !tracking_timestamps_state_filename_.empty()) {
-    updateFromTrackingTimestampsCache(hostname, username, remote_path);
+    if (updateFromTrackingTimestampsCache(hostname, username, remote_path)) {
+      logger_->log_debug("Successfully loaded state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+    } else {
+      logger_->log_debug("Failed to load state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+    }
     already_loaded_from_cache_ = true;
   }
 
@@ -1264,18 +1276,6 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
     listByTrackingTimestamps(context, session, hostname, port, username, remote_path, std::move(files));
   } else {
-//    already_listed_entities_.emplace(std::piecewise_construct, std::forward_as_tuple("cica"), std::forward_as_tuple(20U, 50U));
-//    already_listed_entities_.emplace(std::piecewise_construct, std::forward_as_tuple("mica"), std::forward_as_tuple(220U, 450U));
-//    already_listed_entities_.emplace(std::piecewise_construct, std::forward_as_tuple("alma"), std::forward_as_tuple(120U, 850U));
-//    tracking_entities_state_filename_ = "/tmp/trackingstate";
-//    tracking_entities_state_json_filename_ = "/tmp/trackingstate.json";
-//    persistTrackingEntitiesCache(hostname, username, remote_path);
-//    already_listed_entities_.clear();
-//    updateFromTrackingEntitiesCache(hostname, username, remote_path);
-//    std::cerr << "already_listed_entities_ size: " << already_listed_entities_.size() << std::endl;
-//    for (const auto& entity : already_listed_entities_) {
-//      std::cerr << "Entity name: " << entity.first << ", timestamp: " << entity.second.timestamp << ", size: " << entity.second.size << std::endl;
-//    }
     listByTrackingEntities(context, session, hostname, port, username, remote_path, entity_tracking_time_window, std::move(files));
   }
 
