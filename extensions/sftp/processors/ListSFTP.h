@@ -151,7 +151,6 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t maximum_file_age_;
   uint64_t minimum_file_size_;
   uint64_t maximum_file_size_;
-  std::string tracking_timestamps_state_filename_;
 
   struct Child {
     Child();
@@ -165,10 +164,23 @@ class ListSFTP : public SFTPProcessorBase {
   };
 
   bool already_loaded_from_cache_;
+
+  std::string tracking_timestamps_state_filename_;
   std::chrono::time_point<std::chrono::steady_clock> last_run_time_;
   uint64_t last_listed_latest_entry_timestamp_;
   uint64_t last_processed_latest_entry_timestamp_;
   std::set<std::string> latest_identifiers_processed_;
+
+  std::string tracking_entities_state_filename_;
+  std::string tracking_entities_state_json_filename_;
+  struct ListedEntity {
+    uint64_t timestamp;
+    uint64_t size;
+
+    ListedEntity();
+    ListedEntity(uint64_t timestamp, uint64_t size);
+  };
+  std::unordered_map<std::string, ListedEntity> already_listed_entities_;
 
   bool filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child);
   bool filterFile(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
@@ -184,6 +196,9 @@ class ListSFTP : public SFTPProcessorBase {
   bool persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
   bool updateFromTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
 
+  bool persistTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
+  bool updateFromTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
+
   void listByTrackingTimestamps(
       const std::shared_ptr<core::ProcessContext>& context,
       const std::shared_ptr<core::ProcessSession>& session,
@@ -191,6 +206,16 @@ class ListSFTP : public SFTPProcessorBase {
       uint16_t port,
       const std::string& username,
       const std::string& remote_path,
+      std::vector<Child>&& files);
+
+  void listByTrackingEntities(
+      const std::shared_ptr<core::ProcessContext>& context,
+      const std::shared_ptr<core::ProcessSession>& session,
+      const std::string& hostname,
+      uint16_t port,
+      const std::string& username,
+      const std::string& remote_path,
+      uint64_t entity_tracking_time_window,
       std::vector<Child>&& files);
 };
 

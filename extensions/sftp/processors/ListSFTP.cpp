@@ -46,6 +46,11 @@
 #include "io/StreamFactory.h"
 #include "ResourceClaim.h"
 
+#include "rapidjson/document.h"
+#include "rapidjson/ostreamwrapper.h"
+#include "rapidjson/istreamwrapper.h"
+#include "rapidjson/writer.h"
+
 namespace org {
 namespace apache {
 namespace nifi {
@@ -352,24 +357,67 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
     }
   }
   if (context->getProperty(StateFile.getName(), value)) {
-    std::stringstream ss;
-    ss << value << "." << getUUIDStr() << ".TrackingTimestamp";
-    auto new_tracking_timestamps_state_filename = ss.str();
-    if (new_tracking_timestamps_state_filename != tracking_timestamps_state_filename_) {
-      if (!tracking_timestamps_state_filename_.empty()) {
-        if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
-          logger_->log_error("Unable to delete old TrackingTimestamp state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+    if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
+      std::stringstream ss;
+      ss << value << "." << getUUIDStr() << ".TrackingTimestamp";
+      auto new_tracking_timestamps_state_filename = ss.str();
+      if (new_tracking_timestamps_state_filename != tracking_timestamps_state_filename_) {
+        if (!tracking_timestamps_state_filename_.empty()) {
+          if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
+            logger_->log_error("Unable to delete old TrackingTimestamp state file \"%s\"",
+                               tracking_timestamps_state_filename_.c_str());
+          }
         }
       }
-    }
-    tracking_timestamps_state_filename_ = new_tracking_timestamps_state_filename;
-  } else {
-    if (!tracking_timestamps_state_filename_.empty()) {
-      if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
-        logger_->log_error("Unable to delete old TrackingTimestamp state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+      tracking_timestamps_state_filename_ = new_tracking_timestamps_state_filename;
+    } else {
+      std::stringstream ss;
+      ss << value << "." << getUUIDStr() << ".TrackingEntities";
+      auto new_tracking_entities_state_filename = ss.str();
+      ss << ".json";
+      auto new_tracking_entities_state_json_filename = ss.str();
+      if (new_tracking_entities_state_filename != tracking_entities_state_filename_) {
+        if (!tracking_entities_state_filename_.empty()) {
+          if (unlink(tracking_entities_state_filename_.c_str()) != 0) {
+            logger_->log_error("Unable to delete old TrackingEntities state file \"%s\"",
+                               tracking_entities_state_filename_.c_str());
+          }
+        }
+        if (!tracking_entities_state_json_filename_.empty()) {
+          if (unlink(tracking_entities_state_json_filename_.c_str()) != 0) {
+            logger_->log_error("Unable to delete old TrackingEntities json state file \"%s\"",
+                               tracking_entities_state_json_filename_.c_str());
+          }
+        }
       }
+      tracking_entities_state_filename_ = new_tracking_entities_state_filename;
+      tracking_entities_state_json_filename_ = new_tracking_entities_state_json_filename;
     }
-    tracking_timestamps_state_filename_.clear();
+  } else {
+    if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
+      if (!tracking_timestamps_state_filename_.empty()) {
+        if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
+          logger_->log_error("Unable to delete old TrackingTimestamp state file \"%s\"",
+                             tracking_timestamps_state_filename_.c_str());
+        }
+      }
+      tracking_timestamps_state_filename_.clear();
+    } else {
+      if (!tracking_entities_state_filename_.empty()) {
+        if (unlink(tracking_entities_state_filename_.c_str()) != 0) {
+          logger_->log_error("Unable to delete old TrackingEntities state file \"%s\"",
+                             tracking_entities_state_filename_.c_str());
+        }
+      }
+      tracking_entities_state_filename_.clear();
+      if (!tracking_entities_state_json_filename_.empty()) {
+        if (unlink(tracking_entities_state_json_filename_.c_str()) != 0) {
+          logger_->log_error("Unable to delete old TrackingEntities json state file \"%s\"",
+                             tracking_entities_state_json_filename_.c_str());
+        }
+      }
+      tracking_entities_state_json_filename_.clear();
+    }
   }
 
   startKeepaliveThreadIfNeeded();
@@ -589,6 +637,16 @@ bool ListSFTP::createAndTransferFlowFileFromChild(
   return true;
 }
 
+ListSFTP::ListedEntity::ListedEntity()
+    : timestamp(0U)
+    , size(0U) {
+}
+
+ListSFTP::ListedEntity::ListedEntity(uint64_t timestamp_, uint64_t size_)
+    : timestamp(timestamp_)
+    , size(size_) {
+}
+
 bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
   std::ofstream file(tracking_timestamps_state_filename_);
   if (!file.is_open()) {
@@ -626,10 +684,10 @@ bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, co
   while (std::getline(file, line)) {
     size_t separator_pos = line.find('=');
     if (separator_pos == std::string::npos) {
-      // TODO: log
+      logger_->log_warn("None key-value line found in state file \"%s\": \"%s\"", tracking_timestamps_state_filename_.c_str(), line.c_str());
     }
     std::string key = line.substr(0, separator_pos);
-    std::string value = line.substr(separator_pos);
+    std::string value = line.substr(separator_pos + 1);
     if (key == "hostname") {
       state_hostname = std::move(value);
     } else if (key == "username") {
@@ -640,18 +698,20 @@ bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, co
       try {
         state_listing_timestamp = stoull(value);
       } catch (...) {
-        // TODO: log
+        logger_->log_error("listing.timestamp is not an uint64 in state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+        return false;
       }
     } else if (key == "processed.timestamp") {
       try {
         state_processed_timestamp = stoull(value);
       } catch (...) {
-        // TODO: log
+        logger_->log_error("processed.timestamp is not an uint64 in state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+        return false;
       }
     } else if (key.compare(0, strlen("id."), "id.") == 0) {
       state_ids.emplace(std::move(value));
     } else {
-      // TODO: log
+      logger_->log_warn("Unknown key found in state file \"%s\": \"%s\"", tracking_timestamps_state_filename_.c_str(), key.c_str());
     }
   }
   file.close();
@@ -659,7 +719,14 @@ bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, co
   if (state_hostname != hostname ||
       state_username != username ||
       state_remote_path != remote_path) {
-    // TODO: log
+    logger_->log_error("State file \"%s\" was created with different settings than the current ones, ignoring. "
+                       "Hostname: \"%s\" vs. \"%s\", "
+                       "Username: \"%s\" vs. \"%s\", "
+                       "Remote Path: \"%s\" vs. \"%s\"",
+                       tracking_timestamps_state_filename_.c_str(),
+                       state_hostname, hostname,
+                       state_username, username,
+                       state_remote_path, remote_path);
     return false;
   }
 
@@ -698,6 +765,8 @@ void ListSFTP::listByTrackingTimestamps(
     if (new_file) {
       auto& files_for_timestamp = ordered_files[timestamp];
       files_for_timestamp.emplace_back(std::move(file));
+    } else {
+      logger_->log_trace("Skipping \"%s\", because it is not new.", file.getPath().c_str());
     }
   }
 
@@ -729,11 +798,22 @@ void ListSFTP::listByTrackingTimestamps(
 
     if (latest_listed_entry_timestamp_this_cycle == last_listed_latest_entry_timestamp_) {
       const auto& latest_files = ordered_files.at(latest_listed_entry_timestamp_this_cycle);
-      if (std::chrono::duration_cast<std::chrono::milliseconds>(current_run_time - last_run_time_).count() < listing_lag ||
-          (latest_listed_entry_timestamp_this_cycle == last_processed_latest_entry_timestamp_ &&
+      uint64_t elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(current_run_time - last_run_time_).count();
+      if (elapsed_time < listing_lag) {
+        logger_->log_debug("The latest listed entry timestamp is the same as the last listed entry timestamp (%lu) "
+                           "and the listing lag has not yet elapsed (%lu ms < % lu ms). Yielding.",
+                           latest_listed_entry_timestamp_this_cycle,
+                           elapsed_time,
+                           listing_lag);
+        context->yield();
+        return;
+      }
+      if (latest_listed_entry_timestamp_this_cycle == last_processed_latest_entry_timestamp_ &&
           std::all_of(latest_files.begin(), latest_files.end(), [this](const Child& child) {
             return latest_identifiers_processed_.count(child.getPath()) == 1U;
-          }))) {
+          })) {
+        logger_->log_debug("The latest listed entry timestamp is the same as the last listed entry timestamp (%lu) "
+                           "and all files for that timestamp has been processed. Yielding.", latest_listed_entry_timestamp_this_cycle);
         context->yield();
         return;
       }
@@ -768,7 +848,9 @@ void ListSFTP::listByTrackingTimestamps(
         if (createAndTransferFlowFileFromChild(session, hostname, port, username, file)) {
           flow_files_created++;
         } else {
-          // TODO
+          logger_->log_error("Failed to emit FlowFile for \"%s\"", file.filename);
+          context->yield();
+          return;
         }
       }
     }
@@ -801,6 +883,244 @@ void ListSFTP::listByTrackingTimestamps(
     logger_->log_debug("There are no files to list. Yielding.");
     context->yield();
     return;
+  }
+}
+
+bool ListSFTP::persistTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+  std::ofstream file(tracking_entities_state_filename_);
+  if (!file.is_open()) {
+    logger_->log_error("Failed to store state to state file \"%s\"", tracking_entities_state_filename_.c_str());
+    return false;
+  }
+  file << "hostname=" << hostname << "\n";
+  file << "username=" << username << "\n";
+  file << "remote_path=" << remote_path << "\n";
+  file << "json_state_file=" << tracking_entities_state_json_filename_ << "\n";
+  file.close();
+
+  std::ofstream json_file(tracking_entities_state_json_filename_);
+  if (!json_file.is_open()) {
+    logger_->log_error("Failed to store state to state json file \"%s\"", tracking_entities_state_json_filename_.c_str());
+    return false;
+  }
+
+  rapidjson::Document entities(rapidjson::kObjectType);
+  rapidjson::Document::AllocatorType& alloc = entities.GetAllocator();
+  for (const auto& already_listed_entity : already_listed_entities_) {
+    rapidjson::Value entity(rapidjson::kObjectType);
+    entity.AddMember("timestamp", already_listed_entity.second.timestamp, alloc);
+    entity.AddMember("size", already_listed_entity.second.size, alloc);
+    entities.AddMember(rapidjson::Value(already_listed_entity.first.c_str(), alloc), std::move(entity), alloc);
+  }
+
+  rapidjson::OStreamWrapper osw(json_file);
+  rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
+  entities.Accept(writer);
+
+  return true;
+}
+
+bool ListSFTP::updateFromTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+  std::ifstream file(tracking_entities_state_filename_);
+  if (!file.is_open()) {
+    logger_->log_error("Failed to open state file \"%s\"", tracking_entities_state_filename_.c_str());
+    return false;
+  }
+  std::string state_hostname;
+  std::string state_username;
+  std::string state_remote_path;
+  std::string state_json_state_file;
+
+  std::string line;
+  while (std::getline(file, line)) {
+    size_t separator_pos = line.find('=');
+    if (separator_pos == std::string::npos) {
+      logger_->log_warn("None key-value line found in state file \"%s\": \"%s\"", tracking_entities_state_filename_.c_str(), line.c_str());
+      continue;
+    }
+    std::string key = line.substr(0, separator_pos);
+    std::string value = line.substr(separator_pos + 1);
+    if (key == "hostname") {
+      state_hostname = std::move(value);
+    } else if (key == "username") {
+      state_username = std::move(value);
+    } else if (key == "remote_path") {
+      state_remote_path = std::move(value);
+    } else if (key == "json_state_file") {
+      state_json_state_file = std::move(value);
+    } else {
+      logger_->log_warn("Unknown key found in state file \"%s\": \"%s\"", tracking_entities_state_filename_.c_str(), key.c_str());
+    }
+  }
+  file.close();
+
+  if (state_hostname != hostname ||
+      state_username != username ||
+      state_remote_path != remote_path) {
+    logger_->log_error("State file \"%s\" was created with different settings than the current ones, ignoring. "
+                       "Hostname: \"%s\" vs. \"%s\", "
+                       "Username: \"%s\" vs. \"%s\", "
+                       "Remote Path: \"%s\" vs. \"%s\"",
+                       tracking_entities_state_filename_.c_str(),
+                       state_hostname, hostname,
+                       state_username, username,
+                       state_remote_path, remote_path);
+    return false;
+  }
+
+  if (state_json_state_file.empty()) {
+    logger_->log_error("Could not found state json file path in state file \"%s\"", tracking_entities_state_filename_.c_str());
+    return false;
+  }
+
+  std::ifstream json_file(state_json_state_file);
+  if (!json_file.is_open()) {
+    logger_->log_error("Failed to open state json file \"%s\"", state_json_state_file.c_str());
+    return false;
+  }
+
+  try {
+    rapidjson::IStreamWrapper isw(json_file);
+    rapidjson::Document d;
+    rapidjson::ParseResult res = d.ParseStream(isw);
+    if (!res) {
+      logger_->log_error("Failed to parse json state file \"%s\"", state_json_state_file.c_str());
+      return false;
+    }
+    if (!d.IsObject()) {
+      logger_->log_error("Json state file \"%s\" root is not an object", state_json_state_file.c_str());
+      return false;
+    }
+
+    std::unordered_map<std::string, ListedEntity> new_already_listed_entities;
+    for (const auto &already_listed_entity : d.GetObject()) {
+      auto it = already_listed_entity.value.FindMember("timestamp");
+      if (it == already_listed_entity.value.MemberEnd() || !it->value.IsUint64()) {
+        logger_->log_error("Json state file \"%s\" timestamp missing or malformatted for entity \"%s\"",
+            state_json_state_file.c_str(),
+            already_listed_entity.name.GetString());
+        continue;
+      }
+      uint64_t timestamp = it->value.GetUint64();
+      it = already_listed_entity.value.FindMember("size");
+      if (it == already_listed_entity.value.MemberEnd() || !it->value.IsUint64()) {
+        logger_->log_error("Json state file \"%s\" size missing or malformatted for entity \"%s\"",
+                           state_json_state_file.c_str(),
+                           already_listed_entity.name.GetString());
+        continue;
+      }
+      uint64_t size = it->value.GetUint64();
+      new_already_listed_entities.emplace(std::piecewise_construct,
+                                          std::forward_as_tuple(already_listed_entity.name.GetString()),
+                                          std::forward_as_tuple(timestamp, size));
+    }
+    already_listed_entities_ = std::move(new_already_listed_entities);
+  } catch (std::exception& e) {
+    logger_->log_error("Exception while parsing json state file \"%s\": %s", state_json_state_file.c_str(), e.what());
+    return false;
+  }
+
+  return true;
+}
+
+void ListSFTP::listByTrackingEntities(
+    const std::shared_ptr<core::ProcessContext>& context,
+    const std::shared_ptr<core::ProcessSession>& session,
+    const std::string& hostname,
+    uint16_t port,
+    const std::string& username,
+    const std::string& remote_path,
+    uint64_t entity_tracking_time_window,
+    std::vector<Child>&& files) {
+  bool initial_listing = false;
+  if (!already_loaded_from_cache_ && !tracking_entities_state_filename_.empty()) {
+    if (!updateFromTrackingEntitiesCache(hostname, username, remote_path)) {
+      initial_listing = true;
+    }
+    already_loaded_from_cache_ = true;
+  }
+
+  time_t now = time(nullptr);
+  uint64_t min_timestamp_to_list = (initial_listing && entity_tracking_initial_listing_target_ == ENTITY_TRACKING_INITIAL_LISTING_TARGET_ALL_AVAILABLE)
+      ? 0U : (now * 1000 - entity_tracking_time_window);
+
+  for (auto it = files.begin(); it != files.end(); ) {
+    if (it->attrs.mtime * 1000 < min_timestamp_to_list) {
+      logger_->log_trace("Skipping \"%s\" because it has an older timestamp than the minimum timestamp to list: %lu < %lu",
+          it->getPath(), it->attrs.mtime * 1000, min_timestamp_to_list);
+      it = files.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  if (files.size() == 0U) {
+    logger_->log_debug("No entities to list within the tracking time window");
+    context->yield();
+    return;
+  }
+
+  std::vector<Child> updated_entities;
+  std::copy_if(std::make_move_iterator(files.begin()),
+               std::make_move_iterator(files.end()),
+               std::back_inserter(updated_entities),
+               [&](const Child& child) {
+     auto already_listed_it = already_listed_entities_.find(child.getPath());
+     if (already_listed_it == already_listed_entities_.end()) {
+       logger_->log_trace("Found new file \"%s\"", child.getPath());
+       return true;
+     }
+
+     if (child.attrs.mtime * 1000 > already_listed_it->second.timestamp) {
+       logger_->log_trace("Found file \"%s\" with newer timestamp: %lu -> %lu",
+           child.getPath(),
+           already_listed_it->second.timestamp,
+           child.attrs.mtime * 1000);
+       return true;
+     }
+
+     if (child.attrs.filesize != already_listed_it->second.size) {
+       logger_->log_trace("Found file \"%s\" with different size: %lu -> %lu",
+                          child.getPath(),
+                          already_listed_it->second.size,
+                          child.attrs.filesize);
+       return true;
+     }
+
+     logger_->log_trace("Skipping file \"%s\" because it has not changed", child.getPath());
+     return false;
+  });
+
+  std::vector<std::string> old_entity_ids;
+  for (const auto& already_listed_entity : already_listed_entities_) {
+    if (already_listed_entity.second.timestamp < min_timestamp_to_list) {
+      old_entity_ids.emplace_back(already_listed_entity.first);
+    }
+  }
+
+  if (updated_entities.empty() && old_entity_ids.empty()) {
+    context->yield();
+    return;
+  }
+
+  for (const auto& old_entity_id : old_entity_ids) {
+    already_listed_entities_.erase(old_entity_id);
+  }
+
+  for (const auto& updated_entity : updated_entities) {
+    /* Create the FlowFile for this path */
+    if (!createAndTransferFlowFileFromChild(session, hostname, port, username, updated_entity)) {
+      logger_->log_error("Failed to emit FlowFile for \"%s\"", updated_entity.getPath());
+      context->yield();
+      return;
+    }
+    already_listed_entities_[updated_entity.getPath()] = ListedEntity(updated_entity.attrs.mtime * 1000, updated_entity.attrs.filesize);
+  }
+
+  session->commit(); // TODO
+
+  if (!tracking_entities_state_filename_.empty()) {
+    persistTrackingEntitiesCache(hostname, username, remote_path);
   }
 }
 
@@ -944,7 +1264,19 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
     listByTrackingTimestamps(context, session, hostname, port, username, remote_path, std::move(files));
   } else {
-    // TODO: entity tracking
+//    already_listed_entities_.emplace(std::piecewise_construct, std::forward_as_tuple("cica"), std::forward_as_tuple(20U, 50U));
+//    already_listed_entities_.emplace(std::piecewise_construct, std::forward_as_tuple("mica"), std::forward_as_tuple(220U, 450U));
+//    already_listed_entities_.emplace(std::piecewise_construct, std::forward_as_tuple("alma"), std::forward_as_tuple(120U, 850U));
+//    tracking_entities_state_filename_ = "/tmp/trackingstate";
+//    tracking_entities_state_json_filename_ = "/tmp/trackingstate.json";
+//    persistTrackingEntitiesCache(hostname, username, remote_path);
+//    already_listed_entities_.clear();
+//    updateFromTrackingEntitiesCache(hostname, username, remote_path);
+//    std::cerr << "already_listed_entities_ size: " << already_listed_entities_.size() << std::endl;
+//    for (const auto& entity : already_listed_entities_) {
+//      std::cerr << "Entity name: " << entity.first << ", timestamp: " << entity.second.timestamp << ", size: " << entity.second.size << std::endl;
+//    }
+    listByTrackingEntities(context, session, hostname, port, username, remote_path, entity_tracking_time_window, std::move(files));
   }
 
   put_connection_back_to_cache();
