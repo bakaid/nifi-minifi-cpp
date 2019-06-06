@@ -171,6 +171,7 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t last_processed_latest_entry_timestamp_;
   std::set<std::string> latest_identifiers_processed_;
 
+  bool initial_listing_complete_;
   std::string tracking_entities_state_filename_;
   std::string tracking_entities_state_json_filename_;
   struct ListedEntity {
