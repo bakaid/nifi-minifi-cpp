@@ -172,6 +172,44 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list one file", "[ListSFTP][bas
   REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
 }
 
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP public key authentication", "[ListSFTP][basic]") {
+  plan->setProperty(list_sftp, "Remote File", "nifi_test/tstFile.ext");
+  plan->setProperty(list_sftp, "Private Key Path", utils::file::FileUtils::concat_path(utils::file::FileUtils::get_executable_dir(), "resources/id_rsa"));
+  plan->setProperty(list_sftp, "Private Key Passphrase", "privatekeypassword");
+
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(LogTestController::getInstance().contains("Successfully authenticated with publickey"));
+
+  REQUIRE(LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("key:filename value:tstFile.ext"));
+}
+
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list non-existing dir", "[ListSFTP][basic]") {
+  plan->setProperty(list_sftp, "Remote Path", "nifi_test2/");
+
+  testController.runSession(plan, true);
+
+  REQUIRE(false == LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("Failed to open remote directory \"nifi_test2\", error: LIBSSH2_FX_NO_SUCH_FILE"));
+  REQUIRE(LogTestController::getInstance().contains("There are no files to list. Yielding."));
+}
+
+#ifndef WIN32
+TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list non-readable dir", "[ListSFTP][basic]") {
+  createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
+  REQUIRE(0 == chmod((std::string(src_dir) + "/vfs/nifi_test").c_str(), 0000));
+
+  testController.runSession(plan, true);
+
+  REQUIRE(false == LogTestController::getInstance().contains("from ListSFTP to relationship success"));
+  REQUIRE(LogTestController::getInstance().contains("Failed to open remote directory \"nifi_test\", error: LIBSSH2_FX_PERMISSION_DENIED"));
+  REQUIRE(LogTestController::getInstance().contains("There are no files to list. Yielding."));
+}
+#endif
+
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list one file writes attributes", "[ListSFTP][basic]") {
   createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
 
