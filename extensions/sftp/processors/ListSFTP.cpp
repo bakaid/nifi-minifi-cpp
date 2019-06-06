@@ -180,7 +180,7 @@ core::Property ListSFTP::MaximumFileSize(
 core::Property ListSFTP::StateFile(
     core::PropertyBuilder::createProperty("State File")->withDescription("Specifies the file that should be used for storing state about"
                                                                          " what data has been ingested so that upon restart MiNiFi can resume from where it left off")
-        ->isRequired(false)->build()); // TODO
+        ->isRequired(true)->withDefaultValue("ListSFTP")->build());
 
 core::Relationship ListSFTP::Success("success", "All FlowFiles that are received are routed to success");
 
@@ -260,6 +260,10 @@ ListSFTP::~ListSFTP() {
 void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
   std::string value;
   context->getProperty(ListingStrategy.getName(), listing_strategy_);
+  if (!last_listing_strategy_.empty() && last_listing_strategy_ != listing_strategy_) {
+    invalidateCache();
+  }
+  last_listing_strategy_ = listing_strategy_;
   if (!context->getProperty(SearchRecursively.getName(), value)) {
     logger_->log_error("Search Recursively attribute is missing or invalid");
   } else {
@@ -357,68 +361,42 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
       logger_->log_error("Maximum File Size attribute is invalid");
     }
   }
-  if (context->getProperty(StateFile.getName(), value)) {
-    if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
-      std::stringstream ss;
-      ss << value << "." << getUUIDStr() << ".TrackingTimestamps";
-      auto new_tracking_timestamps_state_filename = ss.str();
-      if (new_tracking_timestamps_state_filename != tracking_timestamps_state_filename_) {
-        if (!tracking_timestamps_state_filename_.empty()) {
-          if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
-            logger_->log_error("Unable to delete old Tracking Timestamps state file \"%s\"",
-                               tracking_timestamps_state_filename_.c_str());
-          }
-        }
-      }
-      tracking_timestamps_state_filename_ = new_tracking_timestamps_state_filename;
-    } else {
-      std::stringstream ss;
-      ss << value << "." << getUUIDStr() << ".TrackingEntities";
-      auto new_tracking_entities_state_filename = ss.str();
-      ss << ".json";
-      auto new_tracking_entities_state_json_filename = ss.str();
-      if (new_tracking_entities_state_filename != tracking_entities_state_filename_) {
-        if (!tracking_entities_state_filename_.empty()) {
-          if (unlink(tracking_entities_state_filename_.c_str()) != 0) {
-            logger_->log_error("Unable to delete old Tracking Entities state file \"%s\"",
-                               tracking_entities_state_filename_.c_str());
-          }
-        }
-        if (!tracking_entities_state_json_filename_.empty()) {
-          if (unlink(tracking_entities_state_json_filename_.c_str()) != 0) {
-            logger_->log_error("Unable to delete old Tracking Entities json state file \"%s\"",
-                               tracking_entities_state_json_filename_.c_str());
-          }
-        }
-      }
-      tracking_entities_state_filename_ = new_tracking_entities_state_filename;
-      tracking_entities_state_json_filename_ = new_tracking_entities_state_json_filename;
-    }
-  } else {
-    if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
+  context->getProperty(StateFile.getName(), value);
+  if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
+    std::stringstream ss;
+    ss << value << "." << getUUIDStr() << ".TrackingTimestamps";
+    auto new_tracking_timestamps_state_filename = ss.str();
+    if (new_tracking_timestamps_state_filename != tracking_timestamps_state_filename_) {
       if (!tracking_timestamps_state_filename_.empty()) {
         if (unlink(tracking_timestamps_state_filename_.c_str()) != 0) {
           logger_->log_error("Unable to delete old Tracking Timestamps state file \"%s\"",
                              tracking_timestamps_state_filename_.c_str());
         }
       }
-      tracking_timestamps_state_filename_.clear();
-    } else {
+    }
+    tracking_timestamps_state_filename_ = new_tracking_timestamps_state_filename;
+  } else {
+    std::stringstream ss;
+    ss << value << "." << getUUIDStr() << ".TrackingEntities";
+    auto new_tracking_entities_state_filename = ss.str();
+    ss << ".json";
+    auto new_tracking_entities_state_json_filename = ss.str();
+    if (new_tracking_entities_state_filename != tracking_entities_state_filename_) {
       if (!tracking_entities_state_filename_.empty()) {
         if (unlink(tracking_entities_state_filename_.c_str()) != 0) {
           logger_->log_error("Unable to delete old Tracking Entities state file \"%s\"",
                              tracking_entities_state_filename_.c_str());
         }
       }
-      tracking_entities_state_filename_.clear();
       if (!tracking_entities_state_json_filename_.empty()) {
         if (unlink(tracking_entities_state_json_filename_.c_str()) != 0) {
           logger_->log_error("Unable to delete old Tracking Entities json state file \"%s\"",
                              tracking_entities_state_json_filename_.c_str());
         }
       }
-      tracking_entities_state_json_filename_.clear();
     }
+    tracking_entities_state_filename_ = new_tracking_entities_state_filename;
+    tracking_entities_state_json_filename_ = new_tracking_entities_state_json_filename;
   }
 
   startKeepaliveThreadIfNeeded();
@@ -429,25 +407,18 @@ void ListSFTP::notifyStop() {
   cleanupConnectionCache();
 }
 
-void ListSFTP::onPropertyModified(const core::Property &old_property, const core::Property &new_property) {
-  std::cerr << "old_property: " << old_property.getValue().to_string() << ", new_property: " << new_property.getValue().to_string() << std::endl;
-  if (/*old_property != new_property &&*/
-     (new_property.getName() == ListingStrategy.getName() ||
-      new_property.getName() == Hostname.getName() ||
-      new_property.getName() == Username.getName() ||
-      new_property.getName() == RemotePath.getName())) {
-    logger_->log_warn("Important properties have been reconfigured, invalidating in-memory cache");
+void ListSFTP::invalidateCache() {
+  logger_->log_warn("Important properties have been reconfigured, invalidating in-memory cache");
 
-    already_loaded_from_cache_ = false;
+  already_loaded_from_cache_ = false;
 
-    last_run_time_ = std::chrono::time_point<std::chrono::steady_clock>();
-    last_listed_latest_entry_timestamp_ = 0U;
-    last_processed_latest_entry_timestamp_ = 0U;
-    latest_identifiers_processed_.clear();
+  last_run_time_ = std::chrono::time_point<std::chrono::steady_clock>();
+  last_listed_latest_entry_timestamp_ = 0U;
+  last_processed_latest_entry_timestamp_ = 0U;
+  latest_identifiers_processed_.clear();
 
-    initial_listing_complete_ = false;
-    already_listed_entities_.clear();
-  }
+  initial_listing_complete_ = false;
+  already_listed_entities_.clear();
 }
 
 ListSFTP::Child::Child()
@@ -1161,6 +1132,10 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     context->yield();
     return;
   }
+  if (!last_hostname_.empty() && last_hostname_ != hostname) {
+    invalidateCache();
+  }
+  last_hostname_ = hostname;
   if (!context->getProperty(Port.getName(), value)) {
     logger_->log_error("Port attribute is missing or invalid");
     context->yield();
@@ -1182,6 +1157,10 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     context->yield();
     return;
   }
+  if (!last_username_.empty() && last_username_ != username) {
+    invalidateCache();
+  }
+  last_username_ = username;
   context->getProperty(Password.getName(), password);
   context->getProperty(PrivateKeyPath.getName(), private_key_path);
   context->getProperty(PrivateKeyPassphrase.getName(), private_key_passphrase);
@@ -1191,6 +1170,10 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   while (remote_path.size() > 1U && remote_path.back() == '/') {
     remote_path.resize(remote_path.size() - 1);
   }
+  if (!last_remote_path_.empty() && last_remote_path_ != remote_path) {
+    invalidateCache();
+  }
+  last_remote_path_ = remote_path;
   context->getProperty(ProxyHost.getName(), proxy_host);
   if (context->getProperty(ProxyPort.getName(), value) && !value.empty()) {
     int port_tmp;

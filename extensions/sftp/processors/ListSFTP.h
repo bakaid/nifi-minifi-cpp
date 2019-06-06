@@ -126,7 +126,6 @@ class ListSFTP : public SFTPProcessorBase {
   virtual void initialize() override;
   virtual void onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) override;
   virtual void notifyStop() override;
-  virtual void onPropertyModified(const core::Property &old_property, const core::Property &new_property) override;
 
  private:
 
@@ -151,6 +150,11 @@ class ListSFTP : public SFTPProcessorBase {
   uint64_t maximum_file_age_;
   uint64_t minimum_file_size_;
   uint64_t maximum_file_size_;
+
+  std::string last_listing_strategy_;
+  std::string last_hostname_;
+  std::string last_username_;
+  std::string last_remote_path_;
 
   struct Child {
     Child();
@@ -182,6 +186,8 @@ class ListSFTP : public SFTPProcessorBase {
     ListedEntity(uint64_t timestamp, uint64_t size);
   };
   std::unordered_map<std::string, ListedEntity> already_listed_entities_;
+
+  void invalidateCache();
 
   bool filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child);
   bool filterFile(const std::string& parent_path, const std::string& filename, const LIBSSH2_SFTP_ATTRIBUTES& attrs);
