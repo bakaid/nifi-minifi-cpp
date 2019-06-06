@@ -1135,8 +1135,6 @@ void ListSFTP::listByTrackingEntities(
 
   initial_listing_complete_ = true;
 
-  session->commit(); // TODO
-
   if (!tracking_entities_state_filename_.empty()) {
     persistTrackingEntitiesCache(hostname, username, remote_path);
   }
@@ -1259,9 +1257,7 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     if (directory.parent_path.empty()) {
       new_parent_path = directory.filename;
     } else {
-      std::stringstream ss;
-      ss << directory.parent_path << "/" << directory.filename;
-      new_parent_path = ss.str();
+      new_parent_path = directory.getPath();
     }
     std::vector<std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>> dir_children;
     if (!client->listDirectory(new_parent_path, follow_symlink_, dir_children)) {
