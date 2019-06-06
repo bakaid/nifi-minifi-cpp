@@ -34,6 +34,9 @@
 #include <functional>
 #include <iterator>
 #include <random>
+#ifndef WIN32
+#include <unistd.h>
+#endif
 
 #include "TestBase.h"
 #include "utils/StringUtils.h"
@@ -107,7 +110,7 @@ class FetchSFTPTestsFixture {
          core::Relationship("success", "d"),
          true);
 
-    // Configure GetFile processor
+    // Configure GenerateFlowFile processor
     plan->setProperty(generate_flow_file, "File Size", "1B");
 
     // Configure FetchSFTP processor
@@ -251,6 +254,11 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch non-existing file", "[F
 
 #ifndef WIN32
 TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP fetch non-readable file", "[FetchSFTP][basic]") {
+  if (getuid() == 0) {
+    std::cerr << "!!!! This test does NOT work as root. Exiting. !!!!" << std::endl;
+    return;
+  }
+
   plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
 
   createFile("nifi_test/tstFile.ext", "Test content 1");
@@ -300,6 +308,10 @@ TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete Fi
 
 #ifndef WIN32
 TEST_CASE_METHOD(FetchSFTPTestsFixture, "FetchSFTP Completion Strategy Delete File fail", "[FetchSFTP][completion-strategy]") {
+  if (getuid() == 0) {
+    std::cerr << "!!!! This test does NOT work as root. Exiting. !!!!" << std::endl;
+    return;
+  }
   plan->setProperty(fetch_sftp, "Remote File", "nifi_test/tstFile.ext");
   plan->setProperty(fetch_sftp, "Completion Strategy", processors::FetchSFTP::COMPLETION_STRATEGY_DELETE_FILE);
 

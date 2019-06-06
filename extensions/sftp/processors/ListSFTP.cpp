@@ -170,13 +170,13 @@ core::Property ListSFTP::MinimumFileAge(
 core::Property ListSFTP::MaximumFileAge(
     core::PropertyBuilder::createProperty("Maximum File Age")->withDescription("The maximum age that a file must be in order to be pulled; "
                                                                                "any file older than this amount of time (according to last modification date) will be ignored")
-        ->isRequired(false)->build()); // TODO: validator
+        ->isRequired(false)->build());
 core::Property ListSFTP::MinimumFileSize(
     core::PropertyBuilder::createProperty("Minimum File Size")->withDescription("The minimum size that a file must be in order to be pulled")
         ->isRequired(true)->withDefaultValue<core::DataSizeValue>("0 B")->build());
 core::Property ListSFTP::MaximumFileSize(
     core::PropertyBuilder::createProperty("Maximum File Size")->withDescription("The maximum size that a file must be in order to be pulled")
-        ->isRequired(false)->build()); // TODO: validator
+        ->isRequired(false)->build());
 core::Property ListSFTP::StateFile(
     core::PropertyBuilder::createProperty("State File")->withDescription("Specifies the file that should be used for storing state about"
                                                                          " what data has been ingested so that upon restart MiNiFi can resume from where it left off")
@@ -436,7 +436,7 @@ void ListSFTP::onPropertyModified(const core::Property &old_property, const core
       new_property.getName() == Hostname.getName() ||
       new_property.getName() == Username.getName() ||
       new_property.getName() == RemotePath.getName())) {
-    logger_->log_debug("Important properties have been reconfigured, invalidating in-memory cache");
+    logger_->log_warn("Important properties have been reconfigured, invalidating in-memory cache");
 
     already_loaded_from_cache_ = false;
 

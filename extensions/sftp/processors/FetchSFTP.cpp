@@ -368,7 +368,7 @@ void FetchSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, 
         session->transfer(flow_file, CommsFailure);
         return;
       default:
-        session->transfer(flow_file, PermissionDenied); // TODO
+        session->transfer(flow_file, PermissionDenied);
         return;
     }
   }

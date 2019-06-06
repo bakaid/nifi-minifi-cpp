@@ -34,6 +34,9 @@
 #include <functional>
 #include <iterator>
 #include <random>
+#ifndef WIN32
+#include <unistd.h>
+#endif
 
 #include "TestBase.h"
 #include "utils/StringUtils.h"
@@ -199,6 +202,10 @@ TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list non-existing dir", "[ListS
 
 #ifndef WIN32
 TEST_CASE_METHOD(ListSFTPTestsFixture, "ListSFTP list non-readable dir", "[ListSFTP][basic]") {
+  if (getuid() == 0) {
+    std::cerr << "!!!! This test does NOT work as root. Exiting. !!!!" << std::endl;
+    return;
+  }
   createFileWithModificationTimeDiff("nifi_test/tstFile.ext", "Test content 1");
   REQUIRE(0 == chmod((std::string(src_dir) + "/vfs/nifi_test").c_str(), 0000));
 
