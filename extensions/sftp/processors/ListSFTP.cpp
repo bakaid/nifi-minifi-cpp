@@ -252,8 +252,12 @@ ListSFTP::ListSFTP(std::string name, utils::Identifier uuid /*= utils::Identifie
 
 ListSFTP::~ListSFTP() {
 #ifndef WIN32
-  regfree(&compiled_file_filter_regex_);
-  regfree(&compiled_path_filter_regex_);
+  if (file_filter_regex_set_) {
+    regfree(&compiled_file_filter_regex_);
+  }
+  if (path_filter_regex_set_) {
+    regfree(&compiled_path_filter_regex_);
+  }
 #endif
 }
 
@@ -276,30 +280,48 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
   }
   if (context->getProperty(FileFilterRegex.getName(), file_filter_regex_)) {
 #ifndef WIN32
+    if (file_filter_regex_set_) {
+      regfree(&compiled_file_filter_regex_);
+    }
     int ret = regcomp(&compiled_file_filter_regex_, file_filter_regex_.c_str(), 0);
     if (ret != 0) {
       logger_->log_error("Failed to compile File Filter Regex \"%s\"", file_filter_regex_.c_str());
+      file_filter_regex_set_ = false;
     } else {
       file_filter_regex_set_ = true;
     }
 #else
-    compiled_file_filter_regex_ = std::regex(file_filter_regex_);
-    file_filter_regex_set_ = true;
+    try {
+      compiled_file_filter_regex_ = std::regex(file_filter_regex_);
+      file_filter_regex_set_ = true;
+    } catch (std::regex_error&) {
+      logger_->log_error("Failed to compile File Filter Regex \"%s\"", file_filter_regex_.c_str());
+      file_filter_regex_set_ = false;
+    }
 #endif
   } else {
     file_filter_regex_set_ = false;
   }
   if (context->getProperty(PathFilterRegex.getName(), path_filter_regex_)) {
 #ifndef WIN32
+    if (path_filter_regex_set_) {
+      regfree(&compiled_path_filter_regex_);
+    }
     int ret = regcomp(&compiled_path_filter_regex_, path_filter_regex_.c_str(), 0);
     if (ret != 0) {
-      logger_->log_error("Failed to compile File Filter Regex \"%s\"", path_filter_regex_.c_str());
+      logger_->log_error("Failed to compile Path Filter Regex \"%s\"", path_filter_regex_.c_str());
+      file_filter_regex_set_ = false;
     } else {
       path_filter_regex_set_ = true;
     }
 #else
-    compiled_path_filter_regex_ = std::regex(path_filter_regex_);
-    path_filter_regex_set_ = true;
+    try {
+      compiled_path_filter_regex_ = std::regex(path_filter_regex_);
+      path_filter_regex_set_ = true;
+    } catch (std::regex_error&) {
+      logger_->log_error("Failed to compile Path Filter Regex \"%s\"", path_filter_regex_.c_str());
+      path_filter_regex_set_ = false;
+    }
 #endif
   } else {
     path_filter_regex_set_ = false;
@@ -375,7 +397,7 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
       }
     }
     tracking_timestamps_state_filename_ = new_tracking_timestamps_state_filename;
-  } else {
+  } else if (listing_strategy_ == LISTING_STRATEGY_TRACKING_ENTITIES) {
     std::stringstream ss;
     ss << value << "." << getUUIDStr() << ".TrackingEntities";
     auto new_tracking_entities_state_filename = ss.str();
@@ -397,6 +419,8 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
     }
     tracking_entities_state_filename_ = new_tracking_entities_state_filename;
     tracking_entities_state_json_filename_ = new_tracking_entities_state_json_filename;
+  } else {
+    logger_->log_error("Unknown Listing Strategy: \"%s\"", listing_strategy_.c_str());
   }
 
   startKeepaliveThreadIfNeeded();
@@ -480,7 +504,7 @@ bool ListSFTP::filterFile(const std::string& parent_path, const std::string& fil
   }
 
   /* Age */
-  time_t now = time(nullptr); // TODO
+  time_t now = time(nullptr);
   int64_t file_age = (now - attrs.mtime) * 1000;
   if (file_age < minimum_file_age_) {
     logger_->log_debug("Ignoring \"%s/%s\" because it is younger than the Minimum File Age: %ld ms < %lu ms",
@@ -728,6 +752,7 @@ void ListSFTP::listByTrackingTimestamps(
     std::vector<Child>&& files) {
   uint64_t min_timestamp_to_list = last_listed_latest_entry_timestamp_;
 
+  /* Load state from cache file if needed */
   if (!already_loaded_from_cache_ && !tracking_timestamps_state_filename_.empty()) {
     if (updateFromTrackingTimestampsCache(hostname, username, remote_path)) {
       logger_->log_debug("Successfully loaded Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
@@ -740,6 +765,7 @@ void ListSFTP::listByTrackingTimestamps(
   std::chrono::time_point<std::chrono::steady_clock> current_run_time = std::chrono::steady_clock::now();
   time_t now = time(nullptr);
 
+  /* Order children by timestamp and try to detect timestamp precision if needed  */
   std::map<uint64_t /*timestamp*/, std::list<Child>> ordered_files;
   bool target_system_has_seconds = false;
   for (auto&& file : files) {
@@ -781,9 +807,11 @@ void ListSFTP::listByTrackingTimestamps(
     uint64_t listing_lag = LISTING_LAG_MAP.at(remote_system_timestamp_precision);
     logger_->log_debug("The listing lag is %lu ms", listing_lag);
 
+    /* If the latest listing time is equal to the last listing time, there are no entries with a newer timestamp than previously seen */
     if (latest_listed_entry_timestamp_this_cycle == last_listed_latest_entry_timestamp_) {
       const auto& latest_files = ordered_files.at(latest_listed_entry_timestamp_this_cycle);
       uint64_t elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(current_run_time - last_run_time_).count();
+      /* If a precision-specific listing lag has not yet elapsed since out last execution, we wait. */
       if (elapsed_time < listing_lag) {
         logger_->log_debug("The latest listed entry timestamp is the same as the last listed entry timestamp (%lu) "
                            "and the listing lag has not yet elapsed (%lu ms < % lu ms). Yielding.",
@@ -793,6 +821,10 @@ void ListSFTP::listByTrackingTimestamps(
         context->yield();
         return;
       }
+      /*
+       * If we have already processed the entities with the newest timestamp,
+       * and there are no new entities with that timestamp, there is nothing to do.
+       */
       if (latest_listed_entry_timestamp_this_cycle == last_processed_latest_entry_timestamp_ &&
           std::all_of(latest_files.begin(), latest_files.end(), [this](const Child& child) {
             return latest_identifiers_processed_.count(child.getPath()) == 1U;
@@ -803,12 +835,14 @@ void ListSFTP::listByTrackingTimestamps(
         return;
       }
     } else {
+      /* Determine the minimum reliable timestamp based on precision */
       uint64_t minimum_reliable_timestamp = now * 1000 - listing_lag;
       if (remote_system_timestamp_precision == TARGET_SYSTEM_TIMESTAMP_PRECISION_SECONDS) {
         minimum_reliable_timestamp -= minimum_reliable_timestamp % 1000;
       } else {
         minimum_reliable_timestamp -= minimum_reliable_timestamp % 60000;
       }
+      /* If the latest timestamp is not old enough, we wait another cycle */
       if (minimum_reliable_timestamp < latest_listed_entry_timestamp_this_cycle) {
         logger_->log_debug("Skipping files with latest timestamp because their modification date is not smaller than the minimum reliable timestamp: %lu ms >= %lu ms",
             latest_listed_entry_timestamp_this_cycle,
@@ -841,6 +875,7 @@ void ListSFTP::listByTrackingTimestamps(
     }
   }
 
+  /* If we have a listing timestamp, it is worth persisting the state */
   if (latest_listed_entry_timestamp_this_cycle != 0U) {
     bool processed_new_files = flow_files_created > 0U;
     if (processed_new_files) {
@@ -1017,6 +1052,7 @@ void ListSFTP::listByTrackingEntities(
     const std::string& remote_path,
     uint64_t entity_tracking_time_window,
     std::vector<Child>&& files) {
+  /* Load state from cache file if needed */
   if (!already_loaded_from_cache_ && !tracking_entities_state_filename_.empty()) {
     if (updateFromTrackingEntitiesCache(hostname, username, remote_path)) {
       logger_->log_debug("Successfully loaded Tracking Entities state file \"%s\"", tracking_entities_state_filename_.c_str());
@@ -1031,6 +1067,7 @@ void ListSFTP::listByTrackingEntities(
   uint64_t min_timestamp_to_list = (!initial_listing_complete_ && entity_tracking_initial_listing_target_ == ENTITY_TRACKING_INITIAL_LISTING_TARGET_ALL_AVAILABLE)
       ? 0U : (now * 1000 - entity_tracking_time_window);
 
+  /* Skip files not in the tracking window */
   for (auto it = files.begin(); it != files.end(); ) {
     if (it->attrs.mtime * 1000 < min_timestamp_to_list) {
       logger_->log_trace("Skipping \"%s\" because it has an older timestamp than the minimum timestamp to list: %lu < %lu",
@@ -1047,6 +1084,7 @@ void ListSFTP::listByTrackingEntities(
     return;
   }
 
+  /* Find files that have been updated */
   std::vector<Child> updated_entities;
   std::copy_if(std::make_move_iterator(files.begin()),
                std::make_move_iterator(files.end()),
@@ -1078,6 +1116,7 @@ void ListSFTP::listByTrackingEntities(
      return false;
   });
 
+  /* Find entities in the tracking cache that are no longer in the tracking window */
   std::vector<std::string> old_entity_ids;
   for (const auto& already_listed_entity : already_listed_entities_) {
     if (already_listed_entity.second.timestamp < min_timestamp_to_list) {
@@ -1085,11 +1124,13 @@ void ListSFTP::listByTrackingEntities(
     }
   }
 
+  /* If we have no new files and no expired tracked entities, we have nothing to do */
   if (updated_entities.empty() && old_entity_ids.empty()) {
     context->yield();
     return;
   }
 
+  /* Remove expired entities */
   for (const auto& old_entity_id : old_entity_ids) {
     already_listed_entities_.erase(old_entity_id);
   }
@@ -1258,10 +1299,15 @@ void ListSFTP::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
     }
   }
 
+  /* Process the files with the appropriate tracking strategy */
   if (listing_strategy_ == LISTING_STRATEGY_TRACKING_TIMESTAMPS) {
     listByTrackingTimestamps(context, session, hostname, port, username, remote_path, std::move(files));
-  } else {
+  } else if (listing_strategy_ == LISTING_STRATEGY_TRACKING_ENTITIES) {
     listByTrackingEntities(context, session, hostname, port, username, remote_path, entity_tracking_time_window, std::move(files));
+  } else {
+    logger_->log_error("Unknown Listing Strategy: \"%s\"", listing_strategy_.c_str());
+    context->yield();
+    return;
   }
 
   put_connection_back_to_cache();

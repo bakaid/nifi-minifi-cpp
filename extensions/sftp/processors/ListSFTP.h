@@ -1,6 +1,4 @@
 /**
- * PutSFTP class declaration
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,11 +19,9 @@
 
 #include <memory>
 #include <string>
-#include <list>
 #include <map>
-#include <mutex>
-#include <thread>
 #include <chrono>
+#include <cstdint>
 #ifndef WIN32
 #include <regex.h>
 #else
@@ -40,7 +36,6 @@
 #include "core/Core.h"
 #include "core/Property.h"
 #include "core/Resource.h"
-#include "controllers/SSLContextService.h"
 #include "core/logging/LoggerConfiguration.h"
 #include "utils/Id.h"
 #include "../client/SFTPClient.h"

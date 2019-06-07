@@ -20,17 +20,14 @@
 
 #include <memory>
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <map>
 #include <set>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "utils/ByteArrayCallback.h"
 #include "core/FlowFile.h"
@@ -41,7 +38,6 @@
 #include "io/StreamFactory.h"
 #include "ResourceClaim.h"
 #include "utils/StringUtils.h"
-#include "utils/ScopeGuard.h"
 #include "utils/file/FileUtils.h"
 
 namespace org {
@@ -253,8 +249,7 @@ FetchSFTP::WriteCallback::~WriteCallback() {
 }
 
 int64_t FetchSFTP::WriteCallback::process(std::shared_ptr<io::BaseStream> stream) {
-  if (!client_.getFile(remote_file_,
-                       *stream)) {
+  if (!client_.getFile(remote_file_, *stream)) {
     throw client_.getLastError();
   }
   return stream->getSize();
