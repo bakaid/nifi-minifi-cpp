@@ -24,6 +24,7 @@
 #include <sstream>
 #include <chrono>
 #include <array>
+#include <limits>
 
 #define TIME_FORMAT "%Y-%m-%d %H:%M:%S"
 
@@ -125,7 +126,7 @@ inline int64_t parseDateTimeStr(const std::string &str) {
 }
 
 inline bool getDateTimeStr(int64_t unix_timestamp, std::string& date_time_str) {
-  if (unix_timestamp > std::numeric_limits<time_t>::max() || unix_timestamp < std::numeric_limits<time_t>::lowest()) {
+  if (unix_timestamp > (std::numeric_limits<time_t>::max)() || unix_timestamp < (std::numeric_limits<time_t>::lowest)()) {
     return false;
   }
   time_t time = static_cast<time_t>(unix_timestamp);

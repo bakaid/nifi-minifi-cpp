@@ -45,8 +45,6 @@
 #include <fcntl.h>
 #ifdef WIN32
 #define stat _stat
-#define utime _utime64
-#define utimbuf __utimbuf64
 #include <direct.h>
 #include <windows.h> // winapi
 #include <sys/stat.h> // stat
@@ -204,10 +202,17 @@ class FileUtils {
   }
 
   static bool set_last_write_time(const std::string &path, uint64_t write_time) {
+#ifdef WIN32
+    struct __utimbuf64 utim;
+    utim.actime = write_time;
+    utim.modtime = write_time;
+    return _utime64(path.c_str(), &utim) == 0U;
+#else
     struct utimbuf utim;
     utim.actime = write_time;
     utim.modtime = write_time;
     return utime(path.c_str(), &utim) == 0U;
+#endif
   }
 
 #ifndef WIN32
