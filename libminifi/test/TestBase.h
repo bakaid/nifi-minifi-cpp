@@ -42,6 +42,7 @@
 #include "core/ProcessContext.h"
 #include "core/ProcessSession.h"
 #include "core/ProcessorNode.h"
+#include "core/controller/ControllerServiceNode.h"
 #include "core/reporting/SiteToSiteProvenanceReportingTask.h"
 #include "core/state/nodes/FlowInformation.h"
 #include "properties/Configure.h"
@@ -190,7 +191,11 @@ class TestPlan {
   std::shared_ptr<core::Processor> addProcessor(const std::string &processor_name, utils::Identifier& uuid, const std::string &name, const std::initializer_list<core::Relationship>& relationships,
                                                 bool linkToPrevious = false);
 
+  std::shared_ptr<core::controller::ControllerServiceNode> addController(const std::string &controller_name, const std::string &name);
+
   bool setProperty(const std::shared_ptr<core::Processor> proc, const std::string &prop, const std::string &value, bool dynamic = false);
+
+  bool setProperty(const std::shared_ptr<core::controller::ControllerServiceNode> controller_service_node, const std::string &prop, const std::string &value, bool dynamic = false);
 
   void reset();
 
@@ -229,6 +234,7 @@ class TestPlan {
   std::shared_ptr<core::Repository> flow_repo_;
   std::shared_ptr<core::Repository> prov_repo_;
 
+  std::shared_ptr<core::controller::ControllerServiceMap> controller_services_;
   std::shared_ptr<core::controller::ControllerServiceProvider> controller_services_provider_;
 
   std::recursive_mutex mutex;
@@ -240,6 +246,7 @@ class TestPlan {
   std::shared_ptr<core::FlowFile> current_flowfile_;
 
   std::shared_ptr<minifi::state::response::FlowVersion> flow_version_;
+  std::vector<std::shared_ptr<core::controller::ControllerServiceNode>> controller_service_nodes_;
   std::map<std::string, std::shared_ptr<core::Processor>> processor_mapping_;
   std::vector<std::shared_ptr<core::Processor>> processor_queue_;
   std::vector<std::shared_ptr<core::Processor>> configured_processors_;

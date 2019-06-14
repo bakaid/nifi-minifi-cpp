@@ -128,6 +128,9 @@ core::Property ListSFTP::StateFile(
     core::PropertyBuilder::createProperty("State File")->withDescription("Specifies the file that should be used for storing state about"
                                                                          " what data has been ingested so that upon restart MiNiFi can resume from where it left off")
         ->isRequired(true)->withDefaultValue("ListSFTP")->build());
+core::Property ListSFTP::StateStorageService(
+    core::PropertyBuilder::createProperty("State Storage Service")->withDescription("A PersistableKeyValueStorageService to use for state storage")
+        ->isRequired(false)->asType<keyvalue::PersistableKeyValueStoreService>()->build());
 
 core::Relationship ListSFTP::Success("success", "All FlowFiles that are received are routed to success");
 
@@ -157,6 +160,7 @@ void ListSFTP::initialize() {
   properties.insert(MinimumFileSize);
   properties.insert(MaximumFileSize);
   properties.insert(StateFile);
+  properties.insert(StateStorageService);
   setSupportedProperties(properties);
 
   // Set the supported relationships
@@ -328,6 +332,13 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
     tracking_entities_state_json_filename_ = new_tracking_entities_state_json_filename;
   } else {
     logger_->log_error("Unknown Listing Strategy: \"%s\"", listing_strategy_.c_str());
+  }
+
+  if (context->getProperty(StateStorageService.getName(), value) && !IsNullOrEmpty(value)) {
+    std::shared_ptr<core::controller::ControllerService> service = context->getControllerService(value);
+    if (service != nullptr) {
+      state_storage_service_ = std::dynamic_pointer_cast<keyvalue::PersistableKeyValueStoreService>(service);
+    }
   }
 
   startKeepaliveThreadIfNeeded();
@@ -551,84 +562,134 @@ ListSFTP::ListedEntity::ListedEntity(uint64_t timestamp_, uint64_t size_)
 }
 
 bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
-  std::ofstream file(tracking_timestamps_state_filename_);
-  if (!file.is_open()) {
-    logger_->log_error("Failed to store state to Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
-    return false;
+  if (state_storage_service_ != nullptr) {
+    std::unordered_map<std::string, std::string> state;
+    state["hostname"] = hostname;
+    state["username"] = username;
+    state["remote_path"] = remote_path;
+    state["listing.timestamp"] = std::to_string(last_listed_latest_entry_timestamp_);
+    state["processed.timestamp"] = std::to_string(last_processed_latest_entry_timestamp_);
+    size_t i = 0;
+    for (const auto& identifier : latest_identifiers_processed_) {
+      state["id." + std::to_string(i)] = identifier;
+      ++i;
+    }
+    state_storage_service_->set(getUUIDStr(), state);
+    if (!state_storage_service_->persist(getUUIDStr())) {
+      return false;
+    }
+    return true;
+  } else {
+    std::ofstream file(tracking_timestamps_state_filename_);
+    if (!file.is_open()) {
+      logger_->log_error("Failed to store state to Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
+      return false;
+    }
+    file << "hostname=" << hostname << "\n";
+    file << "username=" << username << "\n";
+    file << "remote_path=" << remote_path << "\n";
+    file << "listing.timestamp=" << last_listed_latest_entry_timestamp_ << "\n";
+    file << "processed.timestamp=" << last_processed_latest_entry_timestamp_ << "\n";
+    size_t i = 0;
+    for (const auto& identifier : latest_identifiers_processed_) {
+      file << "id." << i << "=" << identifier << "\n";
+      ++i;
+    }
+    return true;
   }
-  file << "hostname=" << hostname << "\n";
-  file << "username=" << username << "\n";
-  file << "remote_path=" << remote_path << "\n";
-  file << "listing.timestamp=" << last_listed_latest_entry_timestamp_ << "\n";
-  file << "processed.timestamp=" << last_processed_latest_entry_timestamp_ << "\n";
-  size_t i = 0;
-  for (const auto& identifier : latest_identifiers_processed_) {
-    file << "id." << i << "=" << identifier << "\n";
-    ++i;
-  }
-  return true;
 }
 
 bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
-  std::ifstream file(tracking_timestamps_state_filename_);
-  if (!file.is_open()) {
-    logger_->log_error("Failed to open Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
-    return false;
-  }
   std::string state_hostname;
   std::string state_username;
   std::string state_remote_path;
   uint64_t state_listing_timestamp;
   uint64_t state_processed_timestamp;
   std::set<std::string> state_ids;
+  if (state_storage_service_ != nullptr) {
+    if (!state_storage_service_->load(getUUIDStr())) {
+      return false;
+    }
+    auto state = state_storage_service_->get(getUUIDStr());
+    state_hostname = state["hostname"];
+    state_username = state["username"];
+    state_remote_path = state["remote_path"];
+    try {
+      state_listing_timestamp = stoull(state["listing.timestamp"]);
+    } catch (...) {
+      return false;
+    }
+    try {
+      state_processed_timestamp = stoull(state["processed.timestamp"]);
+    } catch (...) {
+      return false;
+    }
+    for (const auto& kv : state) {
+      if (kv.first.compare(0, strlen("id."), "id.") == 0) {
+        state_ids.emplace(kv.second);
+      }
+    }
+  } else {
+    std::ifstream file(tracking_timestamps_state_filename_);
+    if (!file.is_open()) {
+      logger_->log_error("Failed to open Tracking Timestamps state file \"%s\"",
+                         tracking_timestamps_state_filename_.c_str());
+      return false;
+    }
 
-  std::string line;
-  while (std::getline(file, line)) {
-    size_t separator_pos = line.find('=');
-    if (separator_pos == std::string::npos) {
-      logger_->log_warn("None key-value line found in Tracking Timestamps state file \"%s\": \"%s\"", tracking_timestamps_state_filename_.c_str(), line.c_str());
-    }
-    std::string key = line.substr(0, separator_pos);
-    std::string value = line.substr(separator_pos + 1);
-    if (key == "hostname") {
-      state_hostname = std::move(value);
-    } else if (key == "username") {
-      state_username = std::move(value);
-    } else if (key == "remote_path") {
-      state_remote_path = std::move(value);
-    } else if (key == "listing.timestamp") {
-      try {
-        state_listing_timestamp = stoull(value);
-      } catch (...) {
-        logger_->log_error("listing.timestamp is not an uint64 in Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
-        return false;
+    std::string line;
+    while (std::getline(file, line)) {
+      size_t separator_pos = line.find('=');
+      if (separator_pos == std::string::npos) {
+        logger_->log_warn("None key-value line found in Tracking Timestamps state file \"%s\": \"%s\"",
+                          tracking_timestamps_state_filename_.c_str(), line.c_str());
       }
-    } else if (key == "processed.timestamp") {
-      try {
-        state_processed_timestamp = stoull(value);
-      } catch (...) {
-        logger_->log_error("processed.timestamp is not an uint64 in Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
-        return false;
+      std::string key = line.substr(0, separator_pos);
+      std::string value = line.substr(separator_pos + 1);
+      if (key == "hostname") {
+        state_hostname = std::move(value);
+      } else if (key == "username") {
+        state_username = std::move(value);
+      } else if (key == "remote_path") {
+        state_remote_path = std::move(value);
+      } else if (key == "listing.timestamp") {
+        try {
+          state_listing_timestamp = stoull(value);
+        } catch (...) {
+          logger_->log_error("listing.timestamp is not an uint64 in Tracking Timestamps state file \"%s\"",
+                             tracking_timestamps_state_filename_.c_str());
+          return false;
+        }
+      } else if (key == "processed.timestamp") {
+        try {
+          state_processed_timestamp = stoull(value);
+        } catch (...) {
+          logger_->log_error("processed.timestamp is not an uint64 in Tracking Timestamps state file \"%s\"",
+                             tracking_timestamps_state_filename_.c_str());
+          return false;
+        }
+      } else if (key.compare(0, strlen("id."), "id.") == 0) {
+        state_ids.emplace(std::move(value));
+      } else {
+        logger_->log_warn("Unknown key found in Tracking Timestamps state file \"%s\": \"%s\"",
+                          tracking_timestamps_state_filename_.c_str(), key.c_str());
       }
-    } else if (key.compare(0, strlen("id."), "id.") == 0) {
-      state_ids.emplace(std::move(value));
-    } else {
-      logger_->log_warn("Unknown key found in Tracking Timestamps state file \"%s\": \"%s\"", tracking_timestamps_state_filename_.c_str(), key.c_str());
     }
+    file.close();
   }
-  file.close();
 
   if (state_hostname != hostname ||
       state_username != username ||
       state_remote_path != remote_path) {
-    logger_->log_error("Tracking Timestamps state file \"%s\" was created with different settings than the current ones, ignoring. "
-                       "Hostname: \"%s\" vs. \"%s\", "
-                       "Username: \"%s\" vs. \"%s\", "
-                       "Remote Path: \"%s\" vs. \"%s\"",
-                       tracking_timestamps_state_filename_.c_str(),
-                       state_hostname, hostname,
-                       state_username, username,
-                       state_remote_path, remote_path);
+    logger_->log_error(
+        "Tracking Timestamps state file \"%s\" was created with different settings than the current ones, ignoring. "
+        "Hostname: \"%s\" vs. \"%s\", "
+        "Username: \"%s\" vs. \"%s\", "
+        "Remote Path: \"%s\" vs. \"%s\"",
+        tracking_timestamps_state_filename_.c_str(),
+        state_hostname, hostname,
+        state_username, username,
+        state_remote_path, remote_path);
     return false;
   }
 

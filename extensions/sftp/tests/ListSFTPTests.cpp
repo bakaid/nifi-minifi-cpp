@@ -54,6 +54,7 @@
 #include "processors/LogAttribute.h"
 #include "processors/UpdateAttribute.h"
 #include "tools/SFTPTestServer.h"
+#include "keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
 
 class ListSFTPTestsFixture {
  public:
@@ -70,6 +71,8 @@ class ListSFTPTestsFixture {
     LogTestController::getInstance().setTrace<processors::ListSFTP>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
     LogTestController::getInstance().setDebug<SFTPTestServer>();
+    LogTestController::getInstance().setTrace<minifi::keyvalue::UnorderedMapPersistableKeyValueStoreService>();
+    LogTestController::getInstance().setTrace<minifi::core::ConfigurableComponent>();
 
     // Create temporary directories
     testController.createTempDirectory(src_dir);
@@ -90,6 +93,9 @@ class ListSFTPTestsFixture {
 
   void createPlan(utils::Identifier* list_sftp_uuid = nullptr) {
     plan = testController.createPlan();
+    state_storage_service = plan->addController(
+        "UnorderedMapPersistableKeyValueStoreService",
+        "statekeyvaluestore");
     if (list_sftp_uuid == nullptr) {
       list_sftp = plan->addProcessor(
           "ListSFTP",
@@ -105,6 +111,9 @@ class ListSFTPTestsFixture {
                                        "LogAttribute",
                                        core::Relationship("success", "d"),
                                        true);
+
+    // Configure UnorderedMapPersistableKeyValueStoreService controller
+    plan->setProperty(state_storage_service, "Directory", "/tmp/cica");
 
     // Configure ListSFTP processor
     plan->setProperty(list_sftp, "Listing Strategy", processors::ListSFTP::LISTING_STRATEGY_TRACKING_TIMESTAMPS);
@@ -125,6 +134,7 @@ class ListSFTPTestsFixture {
     plan->setProperty(list_sftp, "Target System Timestamp Precision", "Seconds");
     plan->setProperty(list_sftp, "Remote Path", "nifi_test/");
     plan->setProperty(list_sftp, "State File", std::string(src_dir) + "/state");
+    plan->setProperty(list_sftp, "State Storage Service", "statekeyvaluestore");
 
     // Configure LogAttribute processor
     plan->setProperty(log_attribute, "FlowFiles To Log", "0");
@@ -162,6 +172,7 @@ class ListSFTPTestsFixture {
   std::unique_ptr<SFTPTestServer> sftp_server;
   TestController testController;
   std::shared_ptr<TestPlan> plan;
+  std::shared_ptr<core::controller::ControllerServiceNode> state_storage_service;
   std::shared_ptr<core::Processor> list_sftp;
   std::shared_ptr<core::Processor> log_attribute;
 };

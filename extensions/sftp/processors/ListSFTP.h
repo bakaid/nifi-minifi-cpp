@@ -38,6 +38,7 @@
 #include "core/Resource.h"
 #include "core/logging/LoggerConfiguration.h"
 #include "utils/Id.h"
+#include "keyvalue/PersistableKeyValueStoreService.h"
 #include "../client/SFTPClient.h"
 
 namespace org {
@@ -85,6 +86,7 @@ class ListSFTP : public SFTPProcessorBase {
   static core::Property MinimumFileSize;
   static core::Property MaximumFileSize;
   static core::Property StateFile;
+  static core::Property StateStorageService;
 
   // Supported Relationships
   static core::Relationship Success;
@@ -164,6 +166,8 @@ class ListSFTP : public SFTPProcessorBase {
     ListedEntity(uint64_t timestamp, uint64_t size);
   };
   std::unordered_map<std::string, ListedEntity> already_listed_entities_;
+
+  std::shared_ptr<keyvalue::PersistableKeyValueStoreService> state_storage_service_;
 
   void invalidateCache();
 

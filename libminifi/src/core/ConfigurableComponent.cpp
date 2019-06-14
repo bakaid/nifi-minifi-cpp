@@ -176,6 +176,8 @@ bool ConfigurableComponent::setProperty(Property &prop, PropertyValue &value) {
   }
 }
 
+#include <signal.h>
+
 /**
  * Sets supported properties for the ConfigurableComponent
  * @param supported properties

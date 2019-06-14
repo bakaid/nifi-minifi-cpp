@@ -30,6 +30,8 @@ TestPlan::TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::s
       flow_version_(flow_version),
       logger_(logging::LoggerFactory<TestPlan>::getLogger()) {
   stream_factory = org::apache::nifi::minifi::io::StreamFactory::getInstance(std::make_shared<minifi::Configure>());
+  controller_services_ = std::make_shared<core::controller::ControllerServiceMap>();
+  controller_services_provider_ = std::make_shared<core::controller::StandardControllerServiceProvider>(controller_services_, nullptr, configuration_);
 }
 
 std::shared_ptr<core::Processor> TestPlan::addProcessor(const std::shared_ptr<core::Processor> &processor, const std::string &name, const std::initializer_list<core::Relationship>& relationships, bool linkToPrevious) {
@@ -128,6 +130,31 @@ std::shared_ptr<core::Processor> TestPlan::addProcessor(const std::string &proce
   return addProcessor(processor_name, uuid, name, relationships, linkToPrevious);
 }
 
+std::shared_ptr<core::controller::ControllerServiceNode> TestPlan::addController(const std::string &controller_name, const std::string &name) {
+  if (finalized) {
+    return nullptr;
+  }
+  std::lock_guard<std::recursive_mutex> guard(mutex);
+
+  utils::Identifier uuid;
+
+  utils::IdGenerator::getIdGenerator()->generate(uuid);
+
+  std::shared_ptr<core::controller::ControllerServiceNode> controller_service_node =
+      controller_services_provider_->createControllerService(controller_name, controller_name, name, true /*firstTimeAdded*/);
+  if (controller_service_node == nullptr) {
+    return nullptr;
+  }
+
+  controller_service_nodes_.push_back(controller_service_node);
+
+  controller_service_node->initialize();
+  controller_service_node->setUUID(uuid);
+  controller_service_node->setName(name);
+
+  return controller_service_node;
+}
+
 bool TestPlan::setProperty(const std::shared_ptr<core::Processor> proc, const std::string &prop, const std::string &value, bool dynamic) {
   std::lock_guard<std::recursive_mutex> guard(mutex);
   int32_t i = 0;
@@ -146,6 +173,16 @@ bool TestPlan::setProperty(const std::shared_ptr<core::Processor> proc, const st
     return processor_contexts_.at(i)->setDynamicProperty(prop, value);
   } else {
     return processor_contexts_.at(i)->setProperty(prop, value);
+  }
+}
+
+bool TestPlan::setProperty(const std::shared_ptr<core::controller::ControllerServiceNode> controller_service_node, const std::string &prop, const std::string &value, bool dynamic /*= false*/) {
+  if (dynamic) {
+    controller_service_node->setDynamicProperty(prop, value);
+    return controller_service_node->getControllerServiceImplementation()->setDynamicProperty(prop, value);
+  } else {
+    controller_service_node->setProperty(prop, value);
+    return controller_service_node->getControllerServiceImplementation()->setProperty(prop, value);
   }
 }
 
@@ -256,6 +293,10 @@ void TestPlan::finalize() {
     for (auto processor : processor_queue_) {
       relationships_.push_back(buildFinalConnection(processor, true));
     }
+  }
+
+  for (auto& controller_service_node : controller_service_nodes_) {
+    controller_service_node->enable();
   }
 
   finalized = true;
