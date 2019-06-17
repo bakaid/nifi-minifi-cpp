@@ -18,6 +18,7 @@
 #define LIBMINIFI_INCLUDE_KEYVALUE_PersistableKeyValueStoreService_H_
 
 #include "KeyValueStoreService.h"
+#include "AbstractCoreComponentStateManagerProvider.h"
 #include "core/Core.h"
 #include "properties/Configure.h"
 
@@ -29,7 +30,7 @@ namespace nifi {
 namespace minifi {
 namespace controllers {
 
-class PersistableKeyValueStoreService : virtual public KeyValueStoreService {
+class PersistableKeyValueStoreService : virtual public KeyValueStoreService, public AbstractCoreComponentStateManagerProvider {
  public:
   explicit PersistableKeyValueStoreService(const std::string& name, const std::string& id);
   explicit PersistableKeyValueStoreService(const std::string& name, utils::Identifier uuid = utils::Identifier());
@@ -41,6 +42,17 @@ class PersistableKeyValueStoreService : virtual public KeyValueStoreService {
 
   virtual bool load(const std::string& id) = 0;
   virtual bool load() = 0;
+
+ protected:
+  virtual bool setImpl(std::string& id, const std::unordered_map<std::string, std::string>& kvs) override;
+
+  virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> getImpl(std::string& id) override;
+
+  virtual bool clearImpl(std::string& id) override;
+
+  virtual bool persistImpl(std::string& id) override;
+
+  virtual bool loadImpl(std::string& id) override;
 };
 
 } /* namespace controllers */

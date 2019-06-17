@@ -37,7 +37,8 @@ namespace nifi {
 namespace minifi {
 namespace controllers {
 
-class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueStoreService, public UnorderedMapKeyValueStoreService {
+class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueStoreService,
+                                                    public UnorderedMapKeyValueStoreService {
  public:
   explicit UnorderedMapPersistableKeyValueStoreService(const std::string& name, const std::string& id);
   explicit UnorderedMapPersistableKeyValueStoreService(const std::string& name, utils::Identifier uuid = utils::Identifier());
@@ -57,6 +58,8 @@ class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueSt
   virtual bool load() override;
 
  protected:
+  static constexpr const char* VERSION_KEY = "__UnorderedMapPersistableKeyValueStoreService_Version";
+
   std::string directory_;
 
  private:

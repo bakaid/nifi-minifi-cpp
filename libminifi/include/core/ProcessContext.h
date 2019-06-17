@@ -36,6 +36,7 @@
 #include "ProcessorNode.h"
 #include "core/Repository.h"
 #include "core/FlowFile.h"
+#include "core/CoreComponentState.h"
 #include "VariableRegistry.h"
 
 namespace org {
@@ -77,6 +78,13 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
         processor_node_(processor),
         logger_(logging::LoggerFactory<ProcessContext>::getLogger()) {
     repo_ = repo;
+    std::string id;
+    if (configuration->get(minifi::Configure::nifi_state_management_provider_local, id)) {
+      auto node = controller_service_provider_->getControllerServiceNode(id);
+      if (node != nullptr) {
+        state_manager_provider_ = std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(node->getControllerServiceImplementation());
+      }
+    }
   }
   // Destructor
   virtual ~ProcessContext() {
@@ -193,6 +201,13 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
     return controller_service_provider_->getControllerServiceName(identifier);
   }
 
+  std::shared_ptr<CoreComponentStateManager> getStateManager() {
+    if (state_manager_provider_ == nullptr) {
+      return nullptr;
+    }
+    return state_manager_provider_->getCoreComponentStateManager(*processor_node_);
+  }
+
  private:
 
   template<typename T>
@@ -202,6 +217,8 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
 
   // controller service provider.
   std::shared_ptr<controller::ControllerServiceProvider> controller_service_provider_;
+  // state manager provider
+  std::shared_ptr<core::CoreComponentStateManagerProvider> state_manager_provider_;
   // repository shared pointer.
   std::shared_ptr<core::Repository> repo_;
   std::shared_ptr<core::Repository> flow_repo_;

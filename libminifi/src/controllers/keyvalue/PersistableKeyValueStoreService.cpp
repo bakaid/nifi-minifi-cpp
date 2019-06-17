@@ -33,6 +33,26 @@ PersistableKeyValueStoreService::PersistableKeyValueStoreService(const std::stri
 PersistableKeyValueStoreService::~PersistableKeyValueStoreService() {
 }
 
+bool PersistableKeyValueStoreService::setImpl(std::string& id, const std::unordered_map<std::string, std::string>& kvs) {
+  return set(id, -1 /*expected_version*/, kvs, nullptr /*new_version*/);
+}
+
+std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> PersistableKeyValueStoreService::getImpl(std::string& id) {
+  return get(id);
+}
+
+bool PersistableKeyValueStoreService::clearImpl(std::string& id) {
+  return clear(id, -1 /*expected_version*/);
+}
+
+bool PersistableKeyValueStoreService::persistImpl(std::string& id) {
+  return persist(id);
+}
+
+bool PersistableKeyValueStoreService::loadImpl(std::string& id) {
+  return load(id);
+}
+
 } /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */

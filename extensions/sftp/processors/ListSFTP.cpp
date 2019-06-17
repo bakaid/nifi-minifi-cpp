@@ -574,7 +574,7 @@ bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const
       state["id." + std::to_string(i)] = identifier;
       ++i;
     }
-    state_storage_service_->set(getUUIDStr(), state);
+    state_storage_service_->set(getUUIDStr(), -1 /*expected_version*/, state, nullptr /*new_version*/);
     if (!state_storage_service_->persist(getUUIDStr())) {
       return false;
     }
@@ -611,23 +611,31 @@ bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, co
       return false;
     }
     auto state = state_storage_service_->get(getUUIDStr());
-    state_hostname = state["hostname"];
-    state_username = state["username"];
-    state_remote_path = state["remote_path"];
-    try {
-      state_listing_timestamp = stoull(state["listing.timestamp"]);
-    } catch (...) {
+    if (state.first == -1) {
       return false;
     }
+    const auto &state_map = state.second;
     try {
-      state_processed_timestamp = stoull(state["processed.timestamp"]);
-    } catch (...) {
-      return false;
-    }
-    for (const auto& kv : state) {
-      if (kv.first.compare(0, strlen("id."), "id.") == 0) {
-        state_ids.emplace(kv.second);
+      state_hostname = state_map.at("hostname");
+      state_username = state_map.at("username");
+      state_remote_path = state_map.at("remote_path");
+      try {
+        state_listing_timestamp = stoull(state_map.at("listing.timestamp"));
+      } catch (...) {
+        return false;
       }
+      try {
+        state_processed_timestamp = stoull(state_map.at("processed.timestamp"));
+      } catch (...) {
+        return false;
+      }
+      for (const auto &kv : state_map) {
+        if (kv.first.compare(0, strlen("id."), "id.") == 0) {
+          state_ids.emplace(kv.second);
+        }
+      }
+    } catch (...) {
+      return false;
     }
   } else {
     std::ifstream file(tracking_timestamps_state_filename_);

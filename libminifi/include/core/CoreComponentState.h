@@ -15,39 +15,50 @@
  * limitations under the License.
  */
 
-#include "controllers/keyvalue/KeyValueStoreService.h"
+#ifndef LIBMINIFI_INCLUDE_CORE_CoreComponentState_H_
+#define LIBMINIFI_INCLUDE_CORE_CoreComponentState_H_
+
+#include "Core.h"
+
+#include <cstdint>
+#include <memory>
+#include <unordered_map>
+#include <string>
 
 namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace controllers {
+namespace core {
 
-KeyValueStoreService::KeyValueStoreService(const std::string& name, const std::string& id)
-    : ControllerService(name, id) {
-}
+class CoreComponentStateManager {
+ public:
+  virtual ~CoreComponentStateManager() {
+  }
 
-KeyValueStoreService::KeyValueStoreService(const std::string& name, utils::Identifier uuid /*= utils::Identifier()*/)
-    : ControllerService(name, uuid) {
-}
+  virtual bool set(const std::unordered_map<std::string, std::string>& kvs) = 0;
 
-KeyValueStoreService::~KeyValueStoreService() {
-}
+  virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> get() = 0;
 
-void KeyValueStoreService::yield() {
-}
+  virtual bool clear() = 0;
 
-bool KeyValueStoreService::isRunning() {
-  return getState() == core::controller::ControllerServiceState::ENABLED;
-}
+  virtual bool persist() = 0;
 
-bool KeyValueStoreService::isWorkAvailable() {
-  return false;
-}
+  virtual bool load() = 0;
+};
 
+class CoreComponentStateManagerProvider {
+ public:
+  virtual ~CoreComponentStateManagerProvider() {
+  }
 
-} /* namespace controllers */
+  virtual std::shared_ptr<CoreComponentStateManager> getCoreComponentStateManager(const CoreComponent& component) = 0;
+};
+
+} /* namespace core */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */
 } /* namespace org */
+
+#endif /* LIBMINIFI_INCLUDE_CORE_CoreComponentState_H_ */

@@ -86,7 +86,8 @@ bool UnorderedMapPersistableKeyValueStoreService::persistUnlocked(const std::str
   if (!ofs.is_open()) {
     return false;
   }
-  for (const auto& kv : it->second) {
+  ofs << VERSION_KEY << "=" << std::to_string(it->second.first) << "\n";
+  for (const auto& kv : it->second.second) {
     ofs << kv.first << "=" << kv.second << "\n";
   }
   return true;
@@ -120,18 +121,41 @@ bool UnorderedMapPersistableKeyValueStoreService::loadUnlocked(const std::string
   if (!ifs.is_open()) {
     return false;
   }
-  auto& map = maps_[id];
-  map.clear();
+  int64_t version = -1;
+  std::unordered_map<std::string, std::string> map;
   std::string line;
   while (std::getline(ifs, line)) {
     size_t separator_pos = line.find('=');
     if (separator_pos == std::string::npos) {
       logger_->log_warn("None key-value line found in \"%s\": \"%s\"", path.c_str(), line.c_str());
+      continue;
     }
     std::string key = line.substr(0, separator_pos);
     std::string value = line.substr(separator_pos + 1);
-    map[key] = value;
+    if (key == VERSION_KEY) {
+      try {
+        version = std::stoll(value);
+      } catch (...) {
+        logger_->log_error("Invalid version number found in \"%s\": \"%s\"", path.c_str(), value.c_str());
+        return false;
+      }
+    } else {
+      map[key] = value;
+    }
   }
+  if (version == -1) {
+    logger_->log_error("Version number missing from \"%s\"", path.c_str());
+    return false;
+  }
+  auto it = maps_.find(id);
+  if (it != maps_.end()) {
+    if (version < it->second.first) {
+      logger_->log_warn("Smaller version loaded from file \"%s\" than contained in memory: %ld < %ld", path.c_str(), version, it->second.first);
+    }
+  } else {
+    it = maps_.emplace(id, std::make_pair(-1, std::unordered_map<std::string, std::string>())).first;
+  }
+  it->second = std::make_pair(version, std::move(map));
   return true;
 }
 

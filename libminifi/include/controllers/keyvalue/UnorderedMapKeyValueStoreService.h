@@ -44,19 +44,14 @@ class UnorderedMapKeyValueStoreService : virtual public KeyValueStoreService {
 
   virtual ~UnorderedMapKeyValueStoreService();
 
-  virtual void set(const std::string& id, const std::string& key, const std::string& value) override;
-  virtual void set(const std::string& id, const std::unordered_map<std::string, std::string>& kvs) override;
+  virtual bool set(const std::string& id, int64_t expected_version, const std::unordered_map<std::string, std::string>& kvs, int64_t* new_version) override;
 
-  virtual std::unordered_map<std::string, std::string> get(const std::string& id) override;
-  virtual std::string get(const std::string& id, const std::string& key) override;
+  virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> get(const std::string& id) override;
 
-  virtual bool remove(const std::string& id, const std::string& key) override;
-  virtual void remove(const std::string& id, const std::unordered_set<std::string>& keys) override;
-
-  virtual void clear(const std::string& id) override;
+  virtual bool clear(const std::string& id, int64_t expected_version) override;
 
  protected:
-  std::unordered_map<std::string, std::unordered_map<std::string, std::string>> maps_;
+  std::unordered_map<std::string, std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>>> maps_;
   std::mutex mutex_;
 
  private:
