@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
+#include "controllers/keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
 
 #include "utils/file/FileUtils.h"
 
@@ -25,7 +25,7 @@ namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
+namespace controllers {
 
 core::Property UnorderedMapPersistableKeyValueStoreService::Directory(
     core::PropertyBuilder::createProperty("Directory")->withDescription("Path to a directory to store data")
@@ -152,7 +152,7 @@ bool UnorderedMapPersistableKeyValueStoreService::load() {
   return true;
 }
 
-} /* namespace keyvalue */
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */

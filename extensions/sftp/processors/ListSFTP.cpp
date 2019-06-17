@@ -130,7 +130,7 @@ core::Property ListSFTP::StateFile(
         ->isRequired(true)->withDefaultValue("ListSFTP")->build());
 core::Property ListSFTP::StateStorageService(
     core::PropertyBuilder::createProperty("State Storage Service")->withDescription("A PersistableKeyValueStorageService to use for state storage")
-        ->isRequired(false)->asType<keyvalue::PersistableKeyValueStoreService>()->build());
+        ->isRequired(false)->asType<controllers::PersistableKeyValueStoreService>()->build());
 
 core::Relationship ListSFTP::Success("success", "All FlowFiles that are received are routed to success");
 
@@ -337,7 +337,7 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
   if (context->getProperty(StateStorageService.getName(), value) && !IsNullOrEmpty(value)) {
     std::shared_ptr<core::controller::ControllerService> service = context->getControllerService(value);
     if (service != nullptr) {
-      state_storage_service_ = std::dynamic_pointer_cast<keyvalue::PersistableKeyValueStoreService>(service);
+      state_storage_service_ = std::dynamic_pointer_cast<controllers::PersistableKeyValueStoreService>(service);
     }
   }
 

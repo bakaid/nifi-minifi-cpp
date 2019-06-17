@@ -29,7 +29,7 @@ namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
+namespace controllers {
 
 class KeyValueStoreService : public core::controller::ControllerService {
  public:
@@ -54,7 +54,7 @@ class KeyValueStoreService : public core::controller::ControllerService {
   virtual void clear(const std::string& id) = 0;
 };
 
-} /* namespace keyvalue */
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */

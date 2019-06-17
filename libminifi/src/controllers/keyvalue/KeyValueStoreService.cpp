@@ -15,13 +15,13 @@
  * limitations under the License.
  */
 
-#include "keyvalue/KeyValueStoreService.h"
+#include "controllers/keyvalue/KeyValueStoreService.h"
 
 namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
+namespace controllers {
 
 KeyValueStoreService::KeyValueStoreService(const std::string& name, const std::string& id)
     : ControllerService(name, id) {
@@ -58,7 +58,7 @@ void KeyValueStoreService::remove(const std::string& id, const std::unordered_se
 }
 
 
-} /* namespace keyvalue */
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */

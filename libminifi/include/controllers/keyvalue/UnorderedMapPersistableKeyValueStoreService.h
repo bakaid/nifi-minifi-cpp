@@ -17,8 +17,8 @@
 #ifndef LIBMINIFI_INCLUDE_KEYVALUE_UnorderedMapPersistableKeyValueStoreService_H_
 #define LIBMINIFI_INCLUDE_KEYVALUE_UnorderedMapPersistableKeyValueStoreService_H_
 
-#include "keyvalue/PersistableKeyValueStoreService.h"
-#include "keyvalue/UnorderedMapKeyValueStoreService.h"
+#include "PersistableKeyValueStoreService.h"
+#include "UnorderedMapKeyValueStoreService.h"
 #include "core/Core.h"
 #include "properties/Configure.h"
 #include "core/logging/Logger.h"
@@ -35,7 +35,7 @@ namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
+namespace controllers {
 
 class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueStoreService, public UnorderedMapKeyValueStoreService {
  public:
@@ -69,7 +69,7 @@ class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueSt
 
 REGISTER_RESOURCE(UnorderedMapPersistableKeyValueStoreService, "TODO comment: UnorderedMapPersistableKeyValueStoreService");
 
-} /* namespace keyvalue */
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */

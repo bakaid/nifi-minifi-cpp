@@ -54,7 +54,7 @@
 #include "processors/LogAttribute.h"
 #include "processors/UpdateAttribute.h"
 #include "tools/SFTPTestServer.h"
-#include "keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
+#include "controllers/keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
 
 class ListSFTPTestsFixture {
  public:
@@ -71,7 +71,7 @@ class ListSFTPTestsFixture {
     LogTestController::getInstance().setTrace<processors::ListSFTP>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
     LogTestController::getInstance().setDebug<SFTPTestServer>();
-    LogTestController::getInstance().setTrace<minifi::keyvalue::UnorderedMapPersistableKeyValueStoreService>();
+    LogTestController::getInstance().setTrace<minifi::controllers::UnorderedMapPersistableKeyValueStoreService>();
     LogTestController::getInstance().setTrace<minifi::core::ConfigurableComponent>();
 
     // Create temporary directories
@@ -113,7 +113,7 @@ class ListSFTPTestsFixture {
                                        true);
 
     // Configure UnorderedMapPersistableKeyValueStoreService controller
-    plan->setProperty(state_storage_service, "Directory", "/tmp/cica");
+    plan->setProperty(state_storage_service, "Directory", utils::file::FileUtils::concat_path(src_dir, "state"));
 
     // Configure ListSFTP processor
     plan->setProperty(list_sftp, "Listing Strategy", processors::ListSFTP::LISTING_STRATEGY_TRACKING_TIMESTAMPS);

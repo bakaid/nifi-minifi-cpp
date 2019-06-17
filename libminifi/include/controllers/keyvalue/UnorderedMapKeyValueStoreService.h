@@ -17,7 +17,7 @@
 #ifndef LIBMINIFI_INCLUDE_KEYVALUE_UnorderedMapKeyValueStoreService_H_
 #define LIBMINIFI_INCLUDE_KEYVALUE_UnorderedMapKeyValueStoreService_H_
 
-#include "keyvalue/KeyValueStoreService.h"
+#include "KeyValueStoreService.h"
 #include "core/Core.h"
 #include "properties/Configure.h"
 #include "core/logging/Logger.h"
@@ -34,9 +34,9 @@ namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
+namespace controllers {
 
-class UnorderedMapKeyValueStoreService : virtual public keyvalue::KeyValueStoreService {
+class UnorderedMapKeyValueStoreService : virtual public KeyValueStoreService {
  public:
   explicit UnorderedMapKeyValueStoreService(const std::string& name, const std::string& id);
   explicit UnorderedMapKeyValueStoreService(const std::string& name, utils::Identifier uuid = utils::Identifier());
@@ -65,7 +65,7 @@ class UnorderedMapKeyValueStoreService : virtual public keyvalue::KeyValueStoreS
 
 REGISTER_RESOURCE(UnorderedMapKeyValueStoreService, "TODO comment: UnorderedMapKeyValueStoreService");
 
-} /* namespace keyvalue */
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */

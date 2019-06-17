@@ -15,13 +15,13 @@
  * limitations under the License.
  */
 
-#include "keyvalue/UnorderedMapKeyValueStoreService.h"
+#include "controllers/keyvalue/UnorderedMapKeyValueStoreService.h"
 
 namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
+namespace controllers {
 
 UnorderedMapKeyValueStoreService::UnorderedMapKeyValueStoreService(const std::string& name, const std::string& id)
     : KeyValueStoreService(name, id)
@@ -107,7 +107,7 @@ void UnorderedMapKeyValueStoreService::clear(const std::string& id) {
   maps_.erase(id);
 }
 
-} /* namespace keyvalue */
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */

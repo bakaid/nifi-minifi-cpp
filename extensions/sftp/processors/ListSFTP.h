@@ -38,7 +38,7 @@
 #include "core/Resource.h"
 #include "core/logging/LoggerConfiguration.h"
 #include "utils/Id.h"
-#include "keyvalue/PersistableKeyValueStoreService.h"
+#include "controllers/keyvalue/PersistableKeyValueStoreService.h"
 #include "../client/SFTPClient.h"
 
 namespace org {
@@ -167,7 +167,7 @@ class ListSFTP : public SFTPProcessorBase {
   };
   std::unordered_map<std::string, ListedEntity> already_listed_entities_;
 
-  std::shared_ptr<keyvalue::PersistableKeyValueStoreService> state_storage_service_;
+  std::shared_ptr<controllers::PersistableKeyValueStoreService> state_storage_service_;
 
   void invalidateCache();
 

@@ -14,27 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef LIBMINIFI_INCLUDE_KEYVALUE_PersistableKeyValueStoreService_H_
+#define LIBMINIFI_INCLUDE_KEYVALUE_PersistableKeyValueStoreService_H_
 
-#include "keyvalue/PersistableKeyValueStoreService.h"
+#include "KeyValueStoreService.h"
+#include "core/Core.h"
+#include "properties/Configure.h"
+
+#include <string>
 
 namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
-namespace keyvalue {
-PersistableKeyValueStoreService::PersistableKeyValueStoreService(const std::string& name, const std::string& id)
-    : KeyValueStoreService(name, id) {
-}
+namespace controllers {
 
-PersistableKeyValueStoreService::PersistableKeyValueStoreService(const std::string& name, utils::Identifier uuid /*= utils::Identifier()*/)
-    : KeyValueStoreService(name, uuid) {
-}
+class PersistableKeyValueStoreService : virtual public KeyValueStoreService {
+ public:
+  explicit PersistableKeyValueStoreService(const std::string& name, const std::string& id);
+  explicit PersistableKeyValueStoreService(const std::string& name, utils::Identifier uuid = utils::Identifier());
 
-PersistableKeyValueStoreService::~PersistableKeyValueStoreService() {
-}
+  virtual ~PersistableKeyValueStoreService();
 
-} /* namespace keyvalue */
+  virtual bool persist(const std::string& id) = 0;
+  virtual bool persist() = 0;
+
+  virtual bool load(const std::string& id) = 0;
+  virtual bool load() = 0;
+};
+
+} /* namespace controllers */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */
 } /* namespace org */
+
+#endif /* LIBMINIFI_INCLUDE_KEYVALUE_PersistableKeyValueStoreService_H_ */
