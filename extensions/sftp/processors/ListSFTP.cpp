@@ -128,9 +128,6 @@ core::Property ListSFTP::StateFile(
     core::PropertyBuilder::createProperty("State File")->withDescription("Specifies the file that should be used for storing state about"
                                                                          " what data has been ingested so that upon restart MiNiFi can resume from where it left off")
         ->isRequired(true)->withDefaultValue("ListSFTP")->build());
-core::Property ListSFTP::StateStorageService(
-    core::PropertyBuilder::createProperty("State Storage Service")->withDescription("A PersistableKeyValueStorageService to use for state storage")
-        ->isRequired(false)->asType<controllers::PersistableKeyValueStoreService>()->build());
 
 core::Relationship ListSFTP::Success("success", "All FlowFiles that are received are routed to success");
 
@@ -160,7 +157,6 @@ void ListSFTP::initialize() {
   properties.insert(MinimumFileSize);
   properties.insert(MaximumFileSize);
   properties.insert(StateFile);
-  properties.insert(StateStorageService);
   setSupportedProperties(properties);
 
   // Set the supported relationships
@@ -332,13 +328,6 @@ void ListSFTP::onSchedule(const std::shared_ptr<core::ProcessContext> &context, 
     tracking_entities_state_json_filename_ = new_tracking_entities_state_json_filename;
   } else {
     logger_->log_error("Unknown Listing Strategy: \"%s\"", listing_strategy_.c_str());
-  }
-
-  if (context->getProperty(StateStorageService.getName(), value) && !IsNullOrEmpty(value)) {
-    std::shared_ptr<core::controller::ControllerService> service = context->getControllerService(value);
-    if (service != nullptr) {
-      state_storage_service_ = std::dynamic_pointer_cast<controllers::PersistableKeyValueStoreService>(service);
-    }
   }
 
   startKeepaliveThreadIfNeeded();
@@ -561,8 +550,9 @@ ListSFTP::ListedEntity::ListedEntity(uint64_t timestamp_, uint64_t size_)
     , size(size_) {
 }
 
-bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
-  if (state_storage_service_ != nullptr) {
+bool ListSFTP::persistTrackingTimestampsCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path) {
+  auto state_manager = context->getStateManager();
+  if (state_manager != nullptr) {
     std::unordered_map<std::string, std::string> state;
     state["hostname"] = hostname;
     state["username"] = username;
@@ -574,8 +564,8 @@ bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const
       state["id." + std::to_string(i)] = identifier;
       ++i;
     }
-    state_storage_service_->set(getUUIDStr(), -1 /*expected_version*/, state, nullptr /*new_version*/);
-    if (!state_storage_service_->persist(getUUIDStr())) {
+    state_manager->set(state);
+    if (!state_manager->persist()) {
       return false;
     }
     return true;
@@ -599,18 +589,19 @@ bool ListSFTP::persistTrackingTimestampsCache(const std::string& hostname, const
   }
 }
 
-bool ListSFTP::updateFromTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+bool ListSFTP::updateFromTrackingTimestampsCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path) {
   std::string state_hostname;
   std::string state_username;
   std::string state_remote_path;
   uint64_t state_listing_timestamp;
   uint64_t state_processed_timestamp;
   std::set<std::string> state_ids;
-  if (state_storage_service_ != nullptr) {
-    if (!state_storage_service_->load(getUUIDStr())) {
+  auto state_manager = context->getStateManager();
+  if (state_manager != nullptr) {
+    if (!state_manager->load()) {
       return false;
     }
-    auto state = state_storage_service_->get(getUUIDStr());
+    auto state = state_manager->get();
     if (state.first == -1) {
       return false;
     }
@@ -720,7 +711,7 @@ void ListSFTP::listByTrackingTimestamps(
 
   /* Load state from cache file if needed */
   if (!already_loaded_from_cache_ && !tracking_timestamps_state_filename_.empty()) {
-    if (updateFromTrackingTimestampsCache(hostname, username, remote_path)) {
+    if (updateFromTrackingTimestampsCache(context, hostname, username, remote_path)) {
       logger_->log_debug("Successfully loaded Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
     } else {
       logger_->log_debug("Failed to load Tracking Timestamps state file \"%s\"", tracking_timestamps_state_filename_.c_str());
@@ -862,7 +853,7 @@ void ListSFTP::listByTrackingTimestamps(
     if (latest_listed_entry_timestamp_this_cycle != last_listed_latest_entry_timestamp_ || processed_new_files) {
       last_listed_latest_entry_timestamp_ = latest_listed_entry_timestamp_this_cycle;
       if (!tracking_timestamps_state_filename_.empty()) {
-        persistTrackingTimestampsCache(hostname, username, remote_path);
+        persistTrackingTimestampsCache(context, hostname, username, remote_path);
       }
     }
   } else {
@@ -872,7 +863,7 @@ void ListSFTP::listByTrackingTimestamps(
   }
 }
 
-bool ListSFTP::persistTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+bool ListSFTP::persistTrackingEntitiesCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path) {
   std::ofstream file(tracking_entities_state_filename_);
   if (!file.is_open()) {
     logger_->log_error("Failed to store Tracking Entities state to state file \"%s\"", tracking_entities_state_filename_.c_str());
@@ -906,7 +897,7 @@ bool ListSFTP::persistTrackingEntitiesCache(const std::string& hostname, const s
   return true;
 }
 
-bool ListSFTP::updateFromTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path) {
+bool ListSFTP::updateFromTrackingEntitiesCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path) {
   std::ifstream file(tracking_entities_state_filename_);
   if (!file.is_open()) {
     logger_->log_error("Failed to open Tracking Entities state file \"%s\"", tracking_entities_state_filename_.c_str());
@@ -1020,7 +1011,7 @@ void ListSFTP::listByTrackingEntities(
     std::vector<Child>&& files) {
   /* Load state from cache file if needed */
   if (!already_loaded_from_cache_ && !tracking_entities_state_filename_.empty()) {
-    if (updateFromTrackingEntitiesCache(hostname, username, remote_path)) {
+    if (updateFromTrackingEntitiesCache(context, hostname, username, remote_path)) {
       logger_->log_debug("Successfully loaded Tracking Entities state file \"%s\"", tracking_entities_state_filename_.c_str());
       initial_listing_complete_ = true;
     } else {
@@ -1114,7 +1105,7 @@ void ListSFTP::listByTrackingEntities(
   initial_listing_complete_ = true;
 
   if (!tracking_entities_state_filename_.empty()) {
-    persistTrackingEntitiesCache(hostname, username, remote_path);
+    persistTrackingEntitiesCache(context, hostname, username, remote_path);
   }
 }
 

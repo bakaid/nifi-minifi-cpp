@@ -86,7 +86,6 @@ class ListSFTP : public SFTPProcessorBase {
   static core::Property MinimumFileSize;
   static core::Property MaximumFileSize;
   static core::Property StateFile;
-  static core::Property StateStorageService;
 
   // Supported Relationships
   static core::Relationship Success;
@@ -167,8 +166,6 @@ class ListSFTP : public SFTPProcessorBase {
   };
   std::unordered_map<std::string, ListedEntity> already_listed_entities_;
 
-  std::shared_ptr<controllers::PersistableKeyValueStoreService> state_storage_service_;
-
   void invalidateCache();
 
   bool filter(const std::string& parent_path, const std::tuple<std::string /* filename */, std::string /* longentry */, LIBSSH2_SFTP_ATTRIBUTES /* attrs */>& sftp_child);
@@ -182,11 +179,11 @@ class ListSFTP : public SFTPProcessorBase {
       const std::string& username,
       const Child& child);
 
-  bool persistTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
-  bool updateFromTrackingTimestampsCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
+  bool persistTrackingTimestampsCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path);
+  bool updateFromTrackingTimestampsCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path);
 
-  bool persistTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
-  bool updateFromTrackingEntitiesCache(const std::string& hostname, const std::string& username, const std::string& remote_path);
+  bool persistTrackingEntitiesCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path);
+  bool updateFromTrackingEntitiesCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path);
 
   void listByTrackingTimestamps(
       const std::shared_ptr<core::ProcessContext>& context,

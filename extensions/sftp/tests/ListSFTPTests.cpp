@@ -92,7 +92,9 @@ class ListSFTPTestsFixture {
   }
 
   void createPlan(utils::Identifier* list_sftp_uuid = nullptr) {
-    plan = testController.createPlan();
+    auto config = std::make_shared<minifi::Configure>();
+    config->set(minifi::Configure::nifi_state_management_provider_local, "statekeyvaluestore");
+    plan = testController.createPlan(config);
     state_storage_service = plan->addController(
         "UnorderedMapPersistableKeyValueStoreService",
         "statekeyvaluestore");
