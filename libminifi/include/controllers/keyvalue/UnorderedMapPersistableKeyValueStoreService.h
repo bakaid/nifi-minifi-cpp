@@ -17,7 +17,7 @@
 #ifndef LIBMINIFI_INCLUDE_KEYVALUE_UnorderedMapPersistableKeyValueStoreService_H_
 #define LIBMINIFI_INCLUDE_KEYVALUE_UnorderedMapPersistableKeyValueStoreService_H_
 
-#include "PersistableKeyValueStoreService.h"
+#include "AbstractAutoPersistingKeyValueStoreService.h"
 #include "UnorderedMapKeyValueStoreService.h"
 #include "core/Core.h"
 #include "properties/Configure.h"
@@ -37,7 +37,7 @@ namespace nifi {
 namespace minifi {
 namespace controllers {
 
-class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueStoreService,
+class UnorderedMapPersistableKeyValueStoreService : public AbstractAutoPersistingKeyValueStoreService,
                                                     public UnorderedMapKeyValueStoreService {
  public:
   explicit UnorderedMapPersistableKeyValueStoreService(const std::string& name, const std::string& id);

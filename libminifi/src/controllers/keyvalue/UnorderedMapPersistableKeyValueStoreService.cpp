@@ -36,21 +36,21 @@ core::Property UnorderedMapPersistableKeyValueStoreService::Directory(
 
 UnorderedMapPersistableKeyValueStoreService::UnorderedMapPersistableKeyValueStoreService(const std::string& name, const std::string& id)
     : KeyValueStoreService(name, id)
-    , PersistableKeyValueStoreService(name, id)
+    , AbstractAutoPersistingKeyValueStoreService(name, id)
     , UnorderedMapKeyValueStoreService(name, id)
     , logger_(logging::LoggerFactory<UnorderedMapPersistableKeyValueStoreService>::getLogger()) {
 }
 
 UnorderedMapPersistableKeyValueStoreService::UnorderedMapPersistableKeyValueStoreService(const std::string& name, utils::Identifier uuid /*= utils::Identifier()*/)
     : KeyValueStoreService(name, uuid)
-    , PersistableKeyValueStoreService(name, uuid)
+    , AbstractAutoPersistingKeyValueStoreService(name, uuid)
     , UnorderedMapKeyValueStoreService(name, uuid)
     , logger_(logging::LoggerFactory<UnorderedMapPersistableKeyValueStoreService>::getLogger()) {
 }
 
 UnorderedMapPersistableKeyValueStoreService::UnorderedMapPersistableKeyValueStoreService(const std::string& name, const std::shared_ptr<Configure> &configuration)
     : KeyValueStoreService(name)
-    , PersistableKeyValueStoreService(name)
+    , AbstractAutoPersistingKeyValueStoreService(name)
     , UnorderedMapKeyValueStoreService(name)
     , logger_(logging::LoggerFactory<UnorderedMapPersistableKeyValueStoreService>::getLogger())  {
   setConfiguration(configuration);
@@ -116,10 +116,10 @@ std::string UnorderedMapPersistableKeyValueStoreService::unescape(const std::str
 }
 
 void UnorderedMapPersistableKeyValueStoreService::initialize() {
-  ControllerService::initialize();
+  AbstractAutoPersistingKeyValueStoreService::initialize();
   std::set<core::Property> supportedProperties;
   supportedProperties.insert(Directory);
-  setSupportedProperties(supportedProperties);
+  updateSupportedProperties(supportedProperties);
 }
 
 void UnorderedMapPersistableKeyValueStoreService::onEnable() {
@@ -127,6 +127,8 @@ void UnorderedMapPersistableKeyValueStoreService::onEnable() {
     logger_->log_debug("Cannot enable UnorderedMapPersistableKeyValueStoreService");
     return;
   }
+
+  AbstractAutoPersistingKeyValueStoreService::onEnable();
 
   if (!getProperty(Directory.getName(), directory_)) {
     logger_->log_error("Invalid or missing property: Directory");
