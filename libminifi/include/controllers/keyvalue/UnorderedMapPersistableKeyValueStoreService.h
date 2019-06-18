@@ -58,9 +58,14 @@ class UnorderedMapPersistableKeyValueStoreService : public PersistableKeyValueSt
   virtual bool load() override;
 
  protected:
-  static constexpr const char* VERSION_KEY = "__UnorderedMapPersistableKeyValueStoreService_Version";
+  static constexpr const char* FORMAT_VERSION_KEY = "__UnorderedMapPersistableKeyValueStoreService_FormatVersion";
+  static constexpr int FORMAT_VERSION = 1;
+  static constexpr const char* CONTENT_VERSION_KEY = "__UnorderedMapPersistableKeyValueStoreService_ContentVersion";
 
   std::string directory_;
+
+  std::string escape(const std::string& str);
+  std::string unescape(const std::string& str);
 
  private:
   std::shared_ptr<logging::Logger> logger_;

@@ -18,6 +18,7 @@
 #include "controllers/keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
 
 #include "utils/file/FileUtils.h"
+#include "utils/StringUtils.h"
 
 #include <fstream>
 
@@ -26,6 +27,8 @@ namespace apache {
 namespace nifi {
 namespace minifi {
 namespace controllers {
+
+constexpr int UnorderedMapPersistableKeyValueStoreService::FORMAT_VERSION;
 
 core::Property UnorderedMapPersistableKeyValueStoreService::Directory(
     core::PropertyBuilder::createProperty("Directory")->withDescription("Path to a directory to store data")
@@ -57,8 +60,63 @@ UnorderedMapPersistableKeyValueStoreService::UnorderedMapPersistableKeyValueStor
 UnorderedMapPersistableKeyValueStoreService::~UnorderedMapPersistableKeyValueStoreService() {
 }
 
+std::string UnorderedMapPersistableKeyValueStoreService::escape(const std::string& str) {
+  std::stringstream escaped;
+  for (const auto c : str) {
+    switch (c) {
+      case '\\':
+        escaped << "\\\\";
+        break;
+      case '\n':
+        escaped << "\\n";
+        break;
+      case '=':
+        escaped << "\\=";
+        break;
+      default:
+        escaped << c;
+        break;
+    }
+  }
+  return escaped.str();
+}
+
+std::string UnorderedMapPersistableKeyValueStoreService::unescape(const std::string& str) {
+  std::stringstream unescaped;
+  bool in_escape_sequence = false;
+  for (const auto c : str) {
+    if (in_escape_sequence) {
+      switch (c) {
+        case '\\':
+          unescaped << '\\';
+          break;
+        case 'n':
+          unescaped << '\n';
+          break;
+        case '=':
+          unescaped << '=';
+          break;
+        default:
+          logger_->log_error("Invalid escape sequence in \"%s\": \"\\%c\"", str.c_str(), c);
+          break;
+      }
+      in_escape_sequence = false;
+    } else {
+      if (c == '\\') {
+        in_escape_sequence = true;
+      } else {
+        unescaped << c;
+      }
+    }
+  }
+  if (in_escape_sequence) {
+    logger_->log_error("Unterminated escape sequence in \"%s\"", str.c_str());
+  }
+  return unescaped.str();
+}
+
 void UnorderedMapPersistableKeyValueStoreService::initialize() {
-//  ControllerService::initialize();
+  ControllerService::initialize();
   std::set<core::Property> supportedProperties;
   supportedProperties.insert(Directory);
   setSupportedProperties(supportedProperties);
@@ -86,9 +144,10 @@ bool UnorderedMapPersistableKeyValueStoreService::persistUnlocked(const std::str
   if (!ofs.is_open()) {
     return false;
   }
-  ofs << VERSION_KEY << "=" << std::to_string(it->second.first) << "\n";
+  ofs << escape(FORMAT_VERSION_KEY) << "=" << escape(std::to_string(FORMAT_VERSION)) << "\n";
+  ofs << escape(CONTENT_VERSION_KEY) << "=" << escape(std::to_string(it->second.first)) << "\n";
   for (const auto& kv : it->second.second) {
-    ofs << kv.first << "=" << kv.second << "\n";
+    ofs << escape(kv.first) << "=" << escape(kv.second) << "\n";
   }
   return true;
 }
@@ -125,22 +184,44 @@ bool UnorderedMapPersistableKeyValueStoreService::loadUnlocked(const std::string
   std::unordered_map<std::string, std::string> map;
   std::string line;
   while (std::getline(ifs, line)) {
-    size_t separator_pos = line.find('=');
+    size_t separator_pos = 0U;
+    while ((separator_pos = line.find('=', separator_pos)) != std::string::npos) {
+      if (separator_pos == 0U) {
+        logger_->log_warn("Line with empty key found in \"%s\": \"%s\"", path.c_str(), line.c_str());
+        continue;
+      }
+      if (line[separator_pos - 1] != '\\' || (separator_pos > 1U && line[separator_pos - 2] == '\\')) {
+        break;
+      }
+      separator_pos += 1;
+    }
     if (separator_pos == std::string::npos) {
       logger_->log_warn("None key-value line found in \"%s\": \"%s\"", path.c_str(), line.c_str());
       continue;
     }
-    std::string key = line.substr(0, separator_pos);
-    std::string value = line.substr(separator_pos + 1);
-    if (key == VERSION_KEY) {
+    std::string key = unescape(line.substr(0, separator_pos));
+    std::string value = unescape(line.substr(separator_pos + 1));
+    if (key == CONTENT_VERSION_KEY) {
       try {
         version = std::stoll(value);
       } catch (...) {
         logger_->log_error("Invalid version number found in \"%s\": \"%s\"", path.c_str(), value.c_str());
         return false;
       }
+    } else if (key == FORMAT_VERSION_KEY) {
+      int format_version = 0;
+      try {
+        format_version = std::stoi(value);
+      } catch (...) {
+        logger_->log_error("Invalid format version number found in \"%s\": \"%s\"", path.c_str(), value.c_str());
+        return false;
+      }
+      if (format_version > FORMAT_VERSION) {
+        logger_->log_error("\"%s\" has been serialized with a larger format version than currently known: %d > %d", path.c_str(), format_version, FORMAT_VERSION);
+        return false;
+      }
     } else {
-      map[key] = value;
+        map[key] = value;
     }
   }
   if (version == -1) {

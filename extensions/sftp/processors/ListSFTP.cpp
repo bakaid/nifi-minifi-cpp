@@ -554,6 +554,7 @@ bool ListSFTP::persistTrackingTimestampsCache(const std::shared_ptr<core::Proces
   auto state_manager = context->getStateManager();
   if (state_manager != nullptr) {
     std::unordered_map<std::string, std::string> state;
+    state["="] = "cica\\mi=\nca";
     state["hostname"] = hostname;
     state["username"] = username;
     state["remote_path"] = remote_path;
@@ -864,138 +865,207 @@ void ListSFTP::listByTrackingTimestamps(
 }
 
 bool ListSFTP::persistTrackingEntitiesCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path) {
-  std::ofstream file(tracking_entities_state_filename_);
-  if (!file.is_open()) {
-    logger_->log_error("Failed to store Tracking Entities state to state file \"%s\"", tracking_entities_state_filename_.c_str());
-    return false;
+  auto state_manager = context->getStateManager();
+  if (state_manager != nullptr) {
+    std::unordered_map<std::string, std::string> state;
+    state["hostname"] = hostname;
+    state["username"] = username;
+    state["remote_path"] = remote_path;
+    size_t i = 0;
+    for (const auto &already_listed_entity : already_listed_entities_) {
+      state["entity." + std::to_string(i) + ".name"] = already_listed_entity.first;
+      state["entity." + std::to_string(i) + ".timestamp"] = std::to_string(already_listed_entity.second.timestamp);
+      state["entity." + std::to_string(i) + ".size"] = std::to_string(already_listed_entity.second.size);
+      ++i;
+    }
+    state_manager->set(state);
+    if (!state_manager->persist()) {
+      return false;
+    }
+  } else {
+    std::ofstream file(tracking_entities_state_filename_);
+    if (!file.is_open()) {
+      logger_->log_error("Failed to store Tracking Entities state to state file \"%s\"",
+                         tracking_entities_state_filename_.c_str());
+      return false;
+    }
+    file << "hostname=" << hostname << "\n";
+    file << "username=" << username << "\n";
+    file << "remote_path=" << remote_path << "\n";
+    file << "json_state_file=" << tracking_entities_state_json_filename_ << "\n";
+    file.close();
+
+    std::ofstream json_file(tracking_entities_state_json_filename_);
+    if (!json_file.is_open()) {
+      logger_->log_error("Failed to store Tracking Entities state to state json file \"%s\"",
+                         tracking_entities_state_json_filename_.c_str());
+      return false;
+    }
+
+    rapidjson::Document entities(rapidjson::kObjectType);
+    rapidjson::Document::AllocatorType &alloc = entities.GetAllocator();
+    for (const auto &already_listed_entity : already_listed_entities_) {
+      rapidjson::Value entity(rapidjson::kObjectType);
+      entity.AddMember("timestamp", already_listed_entity.second.timestamp, alloc);
+      entity.AddMember("size", already_listed_entity.second.size, alloc);
+      entities.AddMember(rapidjson::Value(already_listed_entity.first.c_str(), alloc), std::move(entity), alloc);
+    }
+
+    rapidjson::OStreamWrapper osw(json_file);
+    rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
   }
-  file << "hostname=" << hostname << "\n";
-  file << "username=" << username << "\n";
-  file << "remote_path=" << remote_path << "\n";
-  file << "json_state_file=" << tracking_entities_state_json_filename_ << "\n";
-  file.close();
-
-  std::ofstream json_file(tracking_entities_state_json_filename_);
-  if (!json_file.is_open()) {
-    logger_->log_error("Failed to store Tracking Entities state to state json file \"%s\"", tracking_entities_state_json_filename_.c_str());
-    return false;
-  }
-
-  rapidjson::Document entities(rapidjson::kObjectType);
-  rapidjson::Document::AllocatorType& alloc = entities.GetAllocator();
-  for (const auto& already_listed_entity : already_listed_entities_) {
-    rapidjson::Value entity(rapidjson::kObjectType);
-    entity.AddMember("timestamp", already_listed_entity.second.timestamp, alloc);
-    entity.AddMember("size", already_listed_entity.second.size, alloc);
-    entities.AddMember(rapidjson::Value(already_listed_entity.first.c_str(), alloc), std::move(entity), alloc);
-  }
-
-  rapidjson::OStreamWrapper osw(json_file);
-  rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
-  entities.Accept(writer);
-
   return true;
 }
 
 bool ListSFTP::updateFromTrackingEntitiesCache(const std::shared_ptr<core::ProcessContext>& context, const std::string& hostname, const std::string& username, const std::string& remote_path) {
-  std::ifstream file(tracking_entities_state_filename_);
-  if (!file.is_open()) {
-    logger_->log_error("Failed to open Tracking Entities state file \"%s\"", tracking_entities_state_filename_.c_str());
-    return false;
-  }
   std::string state_hostname;
   std::string state_username;
   std::string state_remote_path;
-  std::string state_json_state_file;
-
-  std::string line;
-  while (std::getline(file, line)) {
-    size_t separator_pos = line.find('=');
-    if (separator_pos == std::string::npos) {
-      logger_->log_warn("None key-value line found in Tracking Entities state file \"%s\": \"%s\"", tracking_entities_state_filename_.c_str(), line.c_str());
-      continue;
+  std::unordered_map<std::string, ListedEntity> new_already_listed_entities;
+  auto state_manager = context->getStateManager();
+  if (state_manager != nullptr) {
+    if (!state_manager->load()) {
+      return false;
     }
-    std::string key = line.substr(0, separator_pos);
-    std::string value = line.substr(separator_pos + 1);
-    if (key == "hostname") {
-      state_hostname = std::move(value);
-    } else if (key == "username") {
-      state_username = std::move(value);
-    } else if (key == "remote_path") {
-      state_remote_path = std::move(value);
-    } else if (key == "json_state_file") {
-      state_json_state_file = std::move(value);
-    } else {
-      logger_->log_warn("Unknown key found in Tracking Entities state file \"%s\": \"%s\"", tracking_entities_state_filename_.c_str(), key.c_str());
+    auto state = state_manager->get();
+    if (state.first == -1) {
+      return false;
+    }
+    const auto &state_map = state.second;
+    try {
+      state_hostname = state_map.at("hostname");
+      state_username = state_map.at("username");
+      state_remote_path = state_map.at("remote_path");
+
+      std::unordered_map<std::string, ListedEntity> new_already_listed_entities;
+      size_t i = 0;
+      while (true) {
+        std::string name;
+        try {
+          name = state_map.at("entity." + std::to_string(i) + ".name");
+        } catch (...) {
+          break;
+        }
+        try {
+          uint64_t timestamp = std::stoull(state_map.at("entity." + std::to_string(i) + ".timestamp"));
+          uint64_t size = std::stoull(state_map.at("entity." + std::to_string(i) + ".size"));
+          new_already_listed_entities.emplace(std::piecewise_construct,
+                                              std::forward_as_tuple(name),
+                                              std::forward_as_tuple(timestamp, size));
+        } catch (...) {
+          continue;
+        }
+        ++i;
+      }
+    } catch (...) {
+      return false;
+    }
+  } else {
+    std::ifstream file(tracking_entities_state_filename_);
+    if (!file.is_open()) {
+      logger_->log_error("Failed to open Tracking Entities state file \"%s\"",
+                         tracking_entities_state_filename_.c_str());
+      return false;
+    }
+    std::string state_json_state_file;
+
+    std::string line;
+    while (std::getline(file, line)) {
+      size_t separator_pos = line.find('=');
+      if (separator_pos == std::string::npos) {
+        logger_->log_warn("None key-value line found in Tracking Entities state file \"%s\": \"%s\"",
+                          tracking_entities_state_filename_.c_str(), line.c_str());
+        continue;
+      }
+      std::string key = line.substr(0, separator_pos);
+      std::string value = line.substr(separator_pos + 1);
+      if (key == "hostname") {
+        state_hostname = std::move(value);
+      } else if (key == "username") {
+        state_username = std::move(value);
+      } else if (key == "remote_path") {
+        state_remote_path = std::move(value);
+      } else if (key == "json_state_file") {
+        state_json_state_file = std::move(value);
+      } else {
+        logger_->log_warn("Unknown key found in Tracking Entities state file \"%s\": \"%s\"",
+                          tracking_entities_state_filename_.c_str(), key.c_str());
+      }
+    }
+    file.close();
+
+    if (state_json_state_file.empty()) {
+      logger_->log_error("Could not found json state file path in Tracking Entities state file \"%s\"",
+                         tracking_entities_state_filename_.c_str());
+      return false;
+    }
+
+    std::ifstream json_file(state_json_state_file);
+    if (!json_file.is_open()) {
+      logger_->log_error("Failed to open entities Tracking Entities state json file \"%s\"",
+                         state_json_state_file.c_str());
+      return false;
+    }
+
+    try {
+      rapidjson::IStreamWrapper isw(json_file);
+      rapidjson::Document d;
+      rapidjson::ParseResult res = d.ParseStream(isw);
+      if (!res) {
+        logger_->log_error("Failed to parse Tracking Entities state json file \"%s\"", state_json_state_file.c_str());
+        return false;
+      }
+      if (!d.IsObject()) {
+        logger_->log_error("Tracking Entities state json file \"%s\" root is not an object",
+                           state_json_state_file.c_str());
+        return false;
+      }
+
+      for (const auto &already_listed_entity : d.GetObject()) {
+        auto it = already_listed_entity.value.FindMember("timestamp");
+        if (it == already_listed_entity.value.MemberEnd() || !it->value.IsUint64()) {
+          logger_->log_error(
+              "Tracking Entities state json file \"%s\" timestamp missing or malformatted for entity \"%s\"",
+              state_json_state_file.c_str(),
+              already_listed_entity.name.GetString());
+          continue;
+        }
+        uint64_t timestamp = it->value.GetUint64();
+        it = already_listed_entity.value.FindMember("size");
+        if (it == already_listed_entity.value.MemberEnd() || !it->value.IsUint64()) {
+          logger_->log_error("Tracking Entities state json file \"%s\" size missing or malformatted for entity \"%s\"",
+                             state_json_state_file.c_str(),
+                             already_listed_entity.name.GetString());
+          continue;
+        }
+        uint64_t size = it->value.GetUint64();
+        new_already_listed_entities.emplace(std::piecewise_construct,
+                                            std::forward_as_tuple(already_listed_entity.name.GetString()),
+                                            std::forward_as_tuple(timestamp, size));
+      }
+    } catch (std::exception &e) {
+      logger_->log_error("Exception while parsing Tracking Entities state json file \"%s\": %s",
+                         state_json_state_file.c_str(), e.what());
+      return false;
     }
   }
-  file.close();
 
   if (state_hostname != hostname ||
       state_username != username ||
       state_remote_path != remote_path) {
-    logger_->log_error("Tracking Entities state file \"%s\" was created with different settings than the current ones, ignoring. "
-                       "Hostname: \"%s\" vs. \"%s\", "
-                       "Username: \"%s\" vs. \"%s\", "
-                       "Remote Path: \"%s\" vs. \"%s\"",
-                       tracking_entities_state_filename_.c_str(),
-                       state_hostname, hostname,
-                       state_username, username,
-                       state_remote_path, remote_path);
+    logger_->log_error(
+        "Tracking Entities state file \"%s\" was created with different settings than the current ones, ignoring. "
+        "Hostname: \"%s\" vs. \"%s\", "
+        "Username: \"%s\" vs. \"%s\", "
+        "Remote Path: \"%s\" vs. \"%s\"",
+        tracking_entities_state_filename_.c_str(),
+        state_hostname, hostname,
+        state_username, username,
+        state_remote_path, remote_path);
     return false;
   }
 
-  if (state_json_state_file.empty()) {
-    logger_->log_error("Could not found json state file path in Tracking Entities state file \"%s\"", tracking_entities_state_filename_.c_str());
-    return false;
-  }
-
-  std::ifstream json_file(state_json_state_file);
-  if (!json_file.is_open()) {
-    logger_->log_error("Failed to open entities Tracking Entities state json file \"%s\"", state_json_state_file.c_str());
-    return false;
-  }
-
-  try {
-    rapidjson::IStreamWrapper isw(json_file);
-    rapidjson::Document d;
-    rapidjson::ParseResult res = d.ParseStream(isw);
-    if (!res) {
-      logger_->log_error("Failed to parse Tracking Entities state json file \"%s\"", state_json_state_file.c_str());
-      return false;
-    }
-    if (!d.IsObject()) {
-      logger_->log_error("Tracking Entities state json file \"%s\" root is not an object", state_json_state_file.c_str());
-      return false;
-    }
-
-    std::unordered_map<std::string, ListedEntity> new_already_listed_entities;
-    for (const auto &already_listed_entity : d.GetObject()) {
-      auto it = already_listed_entity.value.FindMember("timestamp");
-      if (it == already_listed_entity.value.MemberEnd() || !it->value.IsUint64()) {
-        logger_->log_error("Tracking Entities state json file \"%s\" timestamp missing or malformatted for entity \"%s\"",
-            state_json_state_file.c_str(),
-            already_listed_entity.name.GetString());
-        continue;
-      }
-      uint64_t timestamp = it->value.GetUint64();
-      it = already_listed_entity.value.FindMember("size");
-      if (it == already_listed_entity.value.MemberEnd() || !it->value.IsUint64()) {
-        logger_->log_error("Tracking Entities state json file \"%s\" size missing or malformatted for entity \"%s\"",
-                           state_json_state_file.c_str(),
-                           already_listed_entity.name.GetString());
-        continue;
-      }
-      uint64_t size = it->value.GetUint64();
-      new_already_listed_entities.emplace(std::piecewise_construct,
-                                          std::forward_as_tuple(already_listed_entity.name.GetString()),
-                                          std::forward_as_tuple(timestamp, size));
-    }
-    already_listed_entities_ = std::move(new_already_listed_entities);
-  } catch (std::exception& e) {
-    logger_->log_error("Exception while parsing Tracking Entities state json file \"%s\": %s", state_json_state_file.c_str(), e.what());
-    return false;
-  }
+  already_listed_entities_ = std::move(new_already_listed_entities);
 
   return true;
 }
