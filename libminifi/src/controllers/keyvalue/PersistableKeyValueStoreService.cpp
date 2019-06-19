@@ -33,24 +33,20 @@ PersistableKeyValueStoreService::PersistableKeyValueStoreService(const std::stri
 PersistableKeyValueStoreService::~PersistableKeyValueStoreService() {
 }
 
-bool PersistableKeyValueStoreService::setImpl(std::string& id, const std::unordered_map<std::string, std::string>& kvs) {
-  return set(id, -1 /*expected_version*/, kvs, nullptr /*new_version*/);
+bool PersistableKeyValueStoreService::setImpl(const std::string& key, const std::string& value) {
+  return set(key, value);
 }
 
-std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> PersistableKeyValueStoreService::getImpl(std::string& id) {
-  return get(id);
+bool PersistableKeyValueStoreService::getImpl(const std::string& key, std::string& value) {
+  return get(key, value);
 }
 
-bool PersistableKeyValueStoreService::clearImpl(std::string& id) {
-  return clear(id, -1 /*expected_version*/);
+bool PersistableKeyValueStoreService::removeImpl(const std::string& key) {
+  return remove(key);
 }
 
-bool PersistableKeyValueStoreService::persistImpl(std::string& id) {
-  return persist(id);
-}
-
-bool PersistableKeyValueStoreService::loadImpl(std::string& id) {
-  return load(id);
+bool PersistableKeyValueStoreService::persistImpl() {
+  return persist();
 }
 
 } /* namespace controllers */

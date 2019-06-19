@@ -39,31 +39,29 @@ namespace controllers {
    private:
     std::shared_ptr<AbstractCoreComponentStateManagerProvider> provider_;
     std::string id_;
+    bool state_valid_;
+    std::unordered_map<std::string, std::string> state_;
 
    public:
     AbstractCoreComponentStateManager(std::shared_ptr<AbstractCoreComponentStateManagerProvider> provider, const std::string& id);
 
     virtual bool set(const std::unordered_map<std::string, std::string>& kvs) override;
 
-    virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> get() override;
+    virtual bool get(std::unordered_map<std::string, std::string>& kvs) override;
 
     virtual bool clear() override;
 
     virtual bool persist() override;
-
-    virtual bool load() override;
  };
 
  protected:
-  virtual bool setImpl(std::string& id, const std::unordered_map<std::string, std::string>& kvs) = 0;
+  virtual bool setImpl(const std::string& key, const std::string& value) = 0;
+  virtual bool getImpl(const std::string& key, std::string& value) = 0;
+  virtual bool removeImpl(const std::string& key) = 0;
+  virtual bool persistImpl() = 0;
 
-  virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> getImpl(std::string& id) = 0;
-
-  virtual bool clearImpl(std::string& id) = 0;
-
-  virtual bool persistImpl(std::string& id) = 0;
-
-  virtual bool loadImpl(std::string& id) = 0;
+  virtual std::string serialize(const std::unordered_map<std::string, std::string>& kvs);
+  virtual bool deserialize(const std::string& serialized, std::unordered_map<std::string, std::string>& kvs);
 };
 
 } /* namespace controllers */

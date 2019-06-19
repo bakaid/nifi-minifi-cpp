@@ -43,60 +43,49 @@ UnorderedMapKeyValueStoreService::UnorderedMapKeyValueStoreService(const std::st
 UnorderedMapKeyValueStoreService::~UnorderedMapKeyValueStoreService() {
 }
 
-bool UnorderedMapKeyValueStoreService::set(const std::string& id, int64_t expected_version, const std::unordered_map<std::string, std::string>& kvs, int64_t* new_version) {
-  if (new_version != nullptr) {
-    *new_version = -1;
-  }
-
+bool UnorderedMapKeyValueStoreService::set(const std::string& key, const std::string& value) {
   std::lock_guard<std::mutex> lock(mutex_);
-  std::unordered_map<std::string, std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>>>::iterator it;
-  bool inserted = false;
-  std::tie(it, inserted) = maps_.emplace(
-      std::piecewise_construct,
-      std::forward_as_tuple(id),
-      std::forward_as_tuple(-1, std::unordered_map<std::string, std::string>()));
-  if (!inserted && expected_version != -1) {
-    if (it->second.first != expected_version) {
-      if (new_version != nullptr) {
-        *new_version = it->second.first;
-      }
-      return false;
-    }
-  }
-  it->second.second = kvs;
-  it->second.first++;
-  if (new_version != nullptr) {
-    *new_version = it->second.first;
-  }
+  map_[key] = value;
   return true;
 }
 
-std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> UnorderedMapKeyValueStoreService::get(const std::string& id) {
+bool UnorderedMapKeyValueStoreService::get(const std::string& key, std::string& value) {
   std::lock_guard<std::mutex> lock(mutex_);
-  auto it = maps_.find(id);
-  if (it == maps_.end()) {
-    return {-1, std::unordered_map<std::string, std::string>()};
+  auto it = map_.find(key);
+  if (it == map_.end()) {
+    return false;
   } else {
-    return it->second;
+    value = it->second;
+    return true;
   }
 }
 
-bool UnorderedMapKeyValueStoreService::clear(const std::string& id, int64_t expected_version) {
+bool UnorderedMapKeyValueStoreService::remove(const std::string& key) {
   std::lock_guard<std::mutex> lock(mutex_);
-  auto it = maps_.find(id);
-  if (it == maps_.end()) {
-    if (expected_version != -1) {
-      return false;
-    } else {
-      return true;
-    }
-  } else {
-    if (it->second.first != expected_version) {
-      return false;
-    }
-    maps_.erase(it);
-    return true;
+  return map_.erase(key) == 1U;
+}
+
+bool UnorderedMapKeyValueStoreService::update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  bool exists = false;
+  std::string value;
+  auto it = map_.find(key);
+  if (it != map_.end()) {
+    exists = true;
+    value = it->second;
   }
+  try {
+    if (!update_func(exists, value)) {
+      return false;
+    }
+  } catch (...) {
+    return false;
+  }
+  if (!exists) {
+    it = map_.emplace(key, "").first;
+  }
+  it->second = std::move(value);
+  return true;
 }
 
 } /* namespace controllers */

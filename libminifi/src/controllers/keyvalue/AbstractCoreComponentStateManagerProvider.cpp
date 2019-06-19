@@ -17,6 +17,11 @@
 
 #include "controllers/keyvalue/AbstractCoreComponentStateManagerProvider.h"
 
+#include "rapidjson/rapidjson.h"
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
 #include <memory>
 
 namespace org {
@@ -29,27 +34,52 @@ AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::Ab
     std::shared_ptr<AbstractCoreComponentStateManagerProvider> provider,
     const std::string& id)
     : provider_(std::move(provider))
-    , id_(id) {
+    , id_(id)
+    , state_valid_(false) {
+  std::string serialized;
+  if (provider_->getImpl(id_, serialized)) {
+    if (provider_->deserialize(serialized, state_)) {
+      state_valid_ = true;
+    }
+  }
 }
 
 bool AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::set(const std::unordered_map<std::string, std::string>& kvs) {
-  return provider_->setImpl(id_, kvs);
+  if (provider_->setImpl(id_, provider_->serialize(kvs))) {
+    state_valid_ = true;
+    state_ = kvs;
+    return true;
+  } else {
+    return false;
+  }
 }
 
-std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::get() {
-  return provider_->getImpl(id_);
+bool AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::get(std::unordered_map<std::string, std::string>& kvs) {
+  if (!state_valid_) {
+    return false;
+  }
+  kvs = state_;
+  return true;
 }
 
 bool AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::clear() {
-  return provider_->clearImpl(id_);
+  if (!state_valid_) {
+    return false;
+  }
+  if (provider_->removeImpl(id_)) {
+    state_valid_ = false;
+    state_.clear();
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::persist() {
-  return provider_->persistImpl(id_);
-}
-
-bool AbstractCoreComponentStateManagerProvider::AbstractCoreComponentStateManager::load() {
-  return provider_->loadImpl(id_);
+  if (!state_valid_) {
+    return false;
+  }
+  return provider_->persistImpl();
 }
 
 AbstractCoreComponentStateManagerProvider::~AbstractCoreComponentStateManagerProvider() {
@@ -57,6 +87,39 @@ AbstractCoreComponentStateManagerProvider::~AbstractCoreComponentStateManagerPro
 
 std::shared_ptr<core::CoreComponentStateManager> AbstractCoreComponentStateManagerProvider::getCoreComponentStateManager(const core::CoreComponent& component) {
   return std::make_shared<AbstractCoreComponentStateManager>(shared_from_this(), component.getUUIDStr());
+}
+
+std::string AbstractCoreComponentStateManagerProvider::serialize(const std::unordered_map<std::string, std::string>& kvs) {
+  rapidjson::Document doc(rapidjson::kObjectType);
+  rapidjson::Document::AllocatorType &alloc = doc.GetAllocator();
+  for (const auto& kv : kvs) {
+    doc.AddMember(rapidjson::StringRef(kv.first.c_str(), kv.first.size()), rapidjson::StringRef(kv.second.c_str(), kv.second.size()), alloc);
+  }
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  return buffer.GetString();
+}
+
+bool AbstractCoreComponentStateManagerProvider::deserialize(const std::string& serialized, std::unordered_map<std::string, std::string>& kvs) {
+  rapidjson::StringStream stream(serialized.c_str());
+  rapidjson::Document doc;
+  rapidjson::ParseResult res = doc.ParseStream(stream);
+  if (!res) {
+    return false;
+  }
+  if (!doc.IsObject()) {
+    return false;
+  }
+
+  kvs.clear();
+  for (const auto& kv : doc.GetObject()) {
+    kvs[kv.name.GetString()] = kv.value.GetString();
+  }
+
+  return true;
 }
 
 } /* namespace controllers */

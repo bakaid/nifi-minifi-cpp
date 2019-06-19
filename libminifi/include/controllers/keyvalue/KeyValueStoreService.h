@@ -25,6 +25,7 @@
 #include <unordered_set>
 #include <string>
 #include <cstdint>
+#include <functional>
 
 namespace org {
 namespace apache {
@@ -43,11 +44,13 @@ class KeyValueStoreService : public core::controller::ControllerService {
   virtual bool isRunning() override;
   virtual bool isWorkAvailable() override;
 
-  virtual bool set(const std::string& id, int64_t expected_version, const std::unordered_map<std::string, std::string>& kvs, int64_t* new_version) = 0;
+  virtual bool set(const std::string& key, const std::string& value) = 0;
 
-  virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> get(const std::string& id) = 0;
+  virtual bool get(const std::string& key, std::string& value) = 0;
 
-  virtual bool clear(const std::string& id, int64_t expected_version) = 0;
+  virtual bool remove(const std::string& key) = 0;
+
+  virtual bool update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) = 0;
 };
 
 } /* namespace controllers */

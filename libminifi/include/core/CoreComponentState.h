@@ -38,13 +38,11 @@ class CoreComponentStateManager {
 
   virtual bool set(const std::unordered_map<std::string, std::string>& kvs) = 0;
 
-  virtual std::pair<int64_t /*version*/, std::unordered_map<std::string, std::string>> get() = 0;
+  virtual bool get(std::unordered_map<std::string, std::string>& kvs) = 0;
 
   virtual bool clear() = 0;
 
   virtual bool persist() = 0;
-
-  virtual bool load() = 0;
 };
 
 class CoreComponentStateManagerProvider {

@@ -46,33 +46,26 @@ class UnorderedMapPersistableKeyValueStoreService : public AbstractAutoPersistin
 
   virtual ~UnorderedMapPersistableKeyValueStoreService();
 
-  static core::Property Directory;
+  static core::Property File;
 
   virtual void onEnable() override;
   virtual void initialize() override;
 
-  virtual bool persist(const std::string& id) override;
   virtual bool persist() override;
-
-  virtual bool load(const std::string& id) override;
-  virtual bool load() override;
 
  protected:
   static constexpr const char* FORMAT_VERSION_KEY = "__UnorderedMapPersistableKeyValueStoreService_FormatVersion";
   static constexpr int FORMAT_VERSION = 1;
-  static constexpr const char* CONTENT_VERSION_KEY = "__UnorderedMapPersistableKeyValueStoreService_ContentVersion";
 
-  std::string directory_;
+  std::string file_;
+
+  bool load();
 
   std::string escape(const std::string& str);
   std::string unescape(const std::string& str);
 
  private:
   std::shared_ptr<logging::Logger> logger_;
-
-  bool persistUnlocked(const std::string& id);
-
-  bool loadUnlocked(const std::string& id);
 };
 
 REGISTER_RESOURCE(UnorderedMapPersistableKeyValueStoreService, "TODO comment: UnorderedMapPersistableKeyValueStoreService");
