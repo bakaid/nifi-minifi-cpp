@@ -128,20 +128,48 @@ void UnorderedMapPersistableKeyValueStoreService::onEnable() {
     return;
   }
 
-  AbstractAutoPersistingKeyValueStoreService::onEnable();
-
   if (!getProperty(File.getName(), file_)) {
     logger_->log_error("Invalid or missing property: Directory");
     return;
   }
 
+  /* We must not start the persistence thread until we attempted to load the state */
   load();
+
+  AbstractAutoPersistingKeyValueStoreService::onEnable();
 
   logger_->log_trace("Enabled UnorderedMapPersistableKeyValueStoreService");
 }
 
+bool UnorderedMapPersistableKeyValueStoreService::set(const std::string& key, const std::string& value) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  bool res = UnorderedMapKeyValueStoreService::set(key, value);
+  if (always_persist_ && res) {
+    return persist();
+  }
+  return res;
+}
+
+bool UnorderedMapPersistableKeyValueStoreService::remove(const std::string& key) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  bool res = UnorderedMapKeyValueStoreService::remove(key);
+  if (always_persist_ && res) {
+    return persist();
+  }
+  return res;
+}
+
+bool UnorderedMapPersistableKeyValueStoreService::update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  bool res = UnorderedMapKeyValueStoreService::update(key, update_func);
+  if (always_persist_ && res) {
+    return persist();
+  }
+  return res;
+}
+
 bool UnorderedMapPersistableKeyValueStoreService::persist() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::ofstream ofs(file_);
   if (!ofs.is_open()) {
     return false;
@@ -154,7 +182,7 @@ bool UnorderedMapPersistableKeyValueStoreService::persist() {
 }
 
 bool UnorderedMapPersistableKeyValueStoreService::load() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::ifstream ifs(file_);
   if (!ifs.is_open()) {
     return false;

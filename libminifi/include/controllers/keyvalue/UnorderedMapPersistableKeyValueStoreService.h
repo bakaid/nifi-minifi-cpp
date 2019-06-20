@@ -51,6 +51,12 @@ class UnorderedMapPersistableKeyValueStoreService : public AbstractAutoPersistin
   virtual void onEnable() override;
   virtual void initialize() override;
 
+  virtual bool set(const std::string& key, const std::string& value) override;
+
+  virtual bool remove(const std::string& key) override;
+
+  virtual bool update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) override;
+
   virtual bool persist() override;
 
  protected:

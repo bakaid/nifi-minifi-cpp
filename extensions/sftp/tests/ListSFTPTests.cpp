@@ -71,9 +71,9 @@ class ListSFTPTestsFixture {
     LogTestController::getInstance().setTrace<processors::ListSFTP>();
     LogTestController::getInstance().setDebug<processors::LogAttribute>();
     LogTestController::getInstance().setDebug<SFTPTestServer>();
+    LogTestController::getInstance().setTrace<minifi::controllers::AbstractAutoPersistingKeyValueStoreService>();
+    LogTestController::getInstance().setTrace<minifi::controllers::UnorderedMapKeyValueStoreService>();
     LogTestController::getInstance().setTrace<minifi::controllers::UnorderedMapPersistableKeyValueStoreService>();
-    LogTestController::getInstance().setTrace<minifi::core::ConfigurableComponent>();
-    LogTestController::getInstance().setTrace<core::controller::ControllerServiceProvider>();
 
     // Create temporary directories
     testController.createTempDirectory(src_dir);

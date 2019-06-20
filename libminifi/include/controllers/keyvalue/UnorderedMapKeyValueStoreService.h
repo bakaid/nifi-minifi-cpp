@@ -54,7 +54,7 @@ class UnorderedMapKeyValueStoreService : virtual public KeyValueStoreService {
 
  protected:
   std::unordered_map<std::string, std::string> map_;
-  std::mutex mutex_;
+  std::recursive_mutex mutex_;
 
  private:
   std::shared_ptr<logging::Logger> logger_;

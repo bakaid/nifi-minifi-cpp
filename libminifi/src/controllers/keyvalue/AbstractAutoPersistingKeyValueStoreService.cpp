@@ -85,6 +85,7 @@ void AbstractAutoPersistingKeyValueStoreService::onEnable() {
 
   if (!always_persist_ && auto_persistence_interval_ != 0U) {
     if (!persisting_thread_.joinable()) {
+      logger_->log_trace("Starting auto persistence thread");
       running_ = true;
       persisting_thread_ = std::thread(&AbstractAutoPersistingKeyValueStoreService::persistingThreadFunc, this);
     }
