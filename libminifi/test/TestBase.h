@@ -139,7 +139,6 @@ class LogTestController {
     TestBootstrapLogger(std::shared_ptr<spdlog::logger> logger)
         : Logger(logger) {
     }
-    ;
   };
   LogTestController() {
     std::shared_ptr<logging::LoggerProperties> logger_properties = std::make_shared<logging::LoggerProperties>();
@@ -157,7 +156,6 @@ class LogTestController {
   LogTestController& operator=(LogTestController const&);
   ~LogTestController() {
   }
-  ;
 
   void setLevel(const std::string name, spdlog::level::level_enum level) {
     logger_->log_info("Setting log level for %s to %s", name, spdlog::level::to_str(level));
@@ -236,6 +234,8 @@ class TestPlan {
 
   std::shared_ptr<core::controller::ControllerServiceMap> controller_services_;
   std::shared_ptr<core::controller::ControllerServiceProvider> controller_services_provider_;
+
+  std::vector<char> state_dir_;
 
   std::recursive_mutex mutex;
 

@@ -32,7 +32,7 @@ constexpr int UnorderedMapPersistableKeyValueStoreService::FORMAT_VERSION;
 
 core::Property UnorderedMapPersistableKeyValueStoreService::File(
     core::PropertyBuilder::createProperty("File")->withDescription("Path to a file to store state")
-    ->isRequired(true)->build());
+        ->isRequired(true)->build());
 
 UnorderedMapPersistableKeyValueStoreService::UnorderedMapPersistableKeyValueStoreService(const std::string& name, const std::string& id)
     : KeyValueStoreService(name, id)
@@ -129,7 +129,7 @@ void UnorderedMapPersistableKeyValueStoreService::onEnable() {
   }
 
   if (!getProperty(File.getName(), file_)) {
-    logger_->log_error("Invalid or missing property: Directory");
+    logger_->log_error("Invalid or missing property: File");
     return;
   }
 

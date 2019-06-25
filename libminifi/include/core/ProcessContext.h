@@ -37,6 +37,7 @@
 #include "core/Repository.h"
 #include "core/FlowFile.h"
 #include "core/CoreComponentState.h"
+#include "utils/file/FileUtils.h"
 #include "VariableRegistry.h"
 
 namespace org {
@@ -62,6 +63,10 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
         processor_node_(processor),
         logger_(logging::LoggerFactory<ProcessContext>::getLogger()) {
     repo_ = repo;
+    state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
+    if (state_manager_provider_ == nullptr) {
+      logger_->log_error("Failed to create default CoreComponentStateManagerProvider");
+    }
   }
 
   // Constructor
@@ -80,9 +85,15 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
     repo_ = repo;
     std::string id;
     if (configuration->get(minifi::Configure::nifi_state_management_provider_local, id)) {
+      logger_->log_error("Failed to find the CoreComponentStateManagerProvider %s defined by %s", id, minifi::Configure::nifi_state_management_provider_local);
       auto node = controller_service_provider_->getControllerServiceNode(id);
       if (node != nullptr) {
         state_manager_provider_ = std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(node->getControllerServiceImplementation());
+      }
+    } else {
+      state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
+      if (state_manager_provider_ == nullptr) {
+        logger_->log_error("Failed to create default CoreComponentStateManagerProvider");
       }
     }
   }
@@ -201,11 +212,59 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
     return controller_service_provider_->getControllerServiceName(identifier);
   }
 
+  static constexpr char const* DefaultStateManagerProviderName = "defaultstatemanagerprovider";
+
   std::shared_ptr<CoreComponentStateManager> getStateManager() {
     if (state_manager_provider_ == nullptr) {
       return nullptr;
     }
     return state_manager_provider_->getCoreComponentStateManager(*processor_node_);
+  }
+
+  static std::shared_ptr<core::CoreComponentStateManagerProvider> createOrGetDefaultStateManagerProvider(
+      std::shared_ptr<controller::ControllerServiceProvider> controller_service_provider,
+      const char* base_path = "") {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+
+    /* See if we have already created a default provider */
+    std::shared_ptr<core::controller::ControllerServiceNode> node = controller_service_provider->getControllerServiceNode(DefaultStateManagerProviderName); // TODO
+    if (node != nullptr) {
+      return std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(node->getControllerServiceImplementation());
+    }
+
+    /* Try to create a RocksDB-backed provider */
+    node = controller_service_provider->createControllerService("RocksDbPersistableKeyValueStoreService",
+                                                                "org.apache.nifi.minifi.controllers.RocksDbPersistableKeyValueStoreService",
+                                                                DefaultStateManagerProviderName,
+                                                                true /*firstTimeAdded*/);
+    if (node != nullptr) {
+      node->initialize();
+      auto provider = node->getControllerServiceImplementation();
+      if (provider != nullptr) {
+        provider->setProperty("Directory", utils::file::FileUtils::concat_path(base_path, "corecomponentstate"));
+        node->enable();
+        return std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(provider);
+      }
+    }
+
+    /* Fall back to a locked unordered map-backed provider */
+    node = controller_service_provider->createControllerService("UnorderedMapPersistableKeyValueStoreService",
+                                                                "org.apache.nifi.minifi.controllers.UnorderedMapPersistableKeyValueStoreService",
+                                                                DefaultStateManagerProviderName,
+                                                                true /*firstTimeAdded*/);
+    if (node != nullptr) {
+      node->initialize();
+      auto provider = node->getControllerServiceImplementation();
+      if (provider != nullptr) {
+        provider->setProperty("File", utils::file::FileUtils::concat_path(base_path, "corecomponentstate.txt"));
+        node->enable();
+        return std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(provider);
+      }
+    }
+
+    /* Give up */
+    return nullptr;
   }
 
  private:
@@ -233,7 +292,6 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
 
   // Logger
   std::shared_ptr<logging::Logger> logger_;
-
 };
 
 } /* namespace core */

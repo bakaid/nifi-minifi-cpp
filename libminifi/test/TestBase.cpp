@@ -32,6 +32,13 @@ TestPlan::TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::s
   stream_factory = org::apache::nifi::minifi::io::StreamFactory::getInstance(std::make_shared<minifi::Configure>());
   controller_services_ = std::make_shared<core::controller::ControllerServiceMap>();
   controller_services_provider_ = std::make_shared<core::controller::StandardControllerServiceProvider>(controller_services_, nullptr, configuration_);
+  /* Inject the default state provider ahead of ProcessContext to make sure we have a unique state directory */
+  std::string state_dir_name_template = "/tmp/teststate.XXXXXX";
+  state_dir_ = std::vector<char>(state_dir_name_template.c_str(), state_dir_name_template.c_str() + state_dir_name_template.size() + 1);
+  if (mkdtemp(state_dir_.data()) == nullptr) {
+    throw std::runtime_error("Failed to create temporary directory for state");
+  }
+  core::ProcessContext::createOrGetDefaultStateManagerProvider(controller_services_provider_, state_dir_.data());
 }
 
 std::shared_ptr<core::Processor> TestPlan::addProcessor(const std::shared_ptr<core::Processor> &processor, const std::string &name, const std::initializer_list<core::Relationship>& relationships, bool linkToPrevious) {

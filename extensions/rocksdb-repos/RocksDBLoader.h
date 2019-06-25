@@ -51,10 +51,11 @@ class RocksDBFactory : public core::ObjectFactory {
     class_names.push_back("DatabaseContentRepository");
     class_names.push_back("FlowFileRepository");
     class_names.push_back("ProvenanceRepository");
+    class_names.push_back("RocksDbPersistableKeyValueStoreService");
     class_names.push_back("databasecontentrepository");
     class_names.push_back("flowfilerepository");
     class_names.push_back("provenancerepository");
-    class_names.push_back("RocksDbPersistableKeyValueStoreService");
+    class_names.push_back("rocksdbpersistablekeyvaluestoreservice");
     return class_names;
   }
 
