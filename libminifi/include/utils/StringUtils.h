@@ -312,7 +312,7 @@ class StringUtils {
    * @return the hexencoded string
    */
   inline static std::string to_hex(const uint8_t* data, size_t length, bool uppercase = false) {
-    if (length > std::numeric_limits<size_t>::max() / 2) {
+    if (length > (std::numeric_limits<size_t>::max)() / 2) {
       throw std::length_error("Data is too large to be hexencoded");
     }
     std::vector<char> buf(length * 2);
