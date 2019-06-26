@@ -111,6 +111,7 @@ class ProcessSession : public ReferenceContainer {
   // import from the data source.
   void import(std::string source, const std::shared_ptr<core::FlowFile> &flow, bool keepSource = true, uint64_t offset = 0);
   void import(std::string source, std::vector<std::shared_ptr<FlowFileRecord>> &flows, bool keepSource, uint64_t offset, char inputDelimiter);
+  void import(const std::string& source, std::vector<std::shared_ptr<FlowFileRecord>> &flows, uint64_t offset, char inputDelimiter);
 
   /**
    * Exports the data stream to a file
