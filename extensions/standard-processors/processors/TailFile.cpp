@@ -72,7 +72,8 @@ core::Property TailFile::StateFile("State File", "Specifies the file that should
                                    " what data has been ingested so that upon restart NiFi can resume from where it left off",
                                    "TailFileState");
 core::Property TailFile::Delimiter("Input Delimiter", "Specifies the character that should be used for delimiting the data being tailed"
-                                   "from the incoming file.",
+                                   "from the incoming file."
+                                   "If none is specified, data will be ingested as it becomes available.",
                                    "");
 
 core::Property TailFile::TailMode(
@@ -342,6 +343,7 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   /**
    * iterate over file states. may modify them
    */
+   std::cerr << "tail_states_.size(): " << tail_states_.size() << std::endl;
   for (auto &state : tail_states_) {
     auto fileLocation = state.second.path_;
 
@@ -386,7 +388,7 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
         }
         logger_->log_debug("Looking for delimiter 0x%X", delim);
         std::vector<std::shared_ptr<FlowFileRecord>> flowFiles;
-        session->import(fullPath, flowFiles, true, state.second.currentTailFilePosition_, delim);
+        session->import(fullPath, flowFiles, state.second.currentTailFilePosition_, delim);
         logger_->log_info("%u flowfiles were received from TailFile input", flowFiles.size());
 
         for (auto ffr : flowFiles) {

@@ -90,26 +90,19 @@ class LogAttribute : public core::Processor {
   class ReadCallback : public InputStreamCallback {
    public:
     ReadCallback(uint64_t size)
-        : read_size_(0) {
-      buffer_size_ = size;
-      buffer_ = new uint8_t[buffer_size_];
-    }
-    ~ReadCallback() {
-      if (buffer_)
-        delete[] buffer_;
+        : buffer_(size)  {
     }
     int64_t process(std::shared_ptr<io::BaseStream> stream) {
-      int64_t ret = 0;
-      ret = stream->read(buffer_, buffer_size_);
-      if (!stream)
-        read_size_ = stream->getSize();
-      else
-        read_size_ = buffer_size_;
-      return ret;
+      if (buffer_.size() == 0U) {
+        return 0U;
+      }
+      int ret = stream->read(buffer_.data(), buffer_.size());
+      if (ret != buffer_.size()) {
+        throw std::exception();
+      }
+      return buffer_.size();
     }
-    uint8_t *buffer_;
-    uint64_t buffer_size_;
-    uint64_t read_size_;
+    std::vector<uint8_t> buffer_;
   };
 
  public:
