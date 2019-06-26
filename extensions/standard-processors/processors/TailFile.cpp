@@ -343,7 +343,6 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   /**
    * iterate over file states. may modify them
    */
-   std::cerr << "tail_states_.size(): " << tail_states_.size() << std::endl;
   for (auto &state : tail_states_) {
     auto fileLocation = state.second.path_;
 
