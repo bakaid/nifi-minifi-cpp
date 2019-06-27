@@ -48,7 +48,11 @@ class KeyValueStoreService : public core::controller::ControllerService {
 
   virtual bool get(const std::string& key, std::string& value) = 0;
 
+  virtual bool get(std::unordered_map<std::string, std::string>& kvs) = 0;
+
   virtual bool remove(const std::string& key) = 0;
+
+  virtual bool clear() = 0;
 
   virtual bool update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) = 0;
 };

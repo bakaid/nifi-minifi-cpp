@@ -18,6 +18,7 @@
 #include "RocksDbPersistableKeyValueStoreService.h"
 
 #include "utils/StringUtils.h"
+#include "utils/ScopeGuard.h"
 
 #include <fstream>
 
@@ -77,6 +78,9 @@ void RocksDbPersistableKeyValueStoreService::onEnable() {
   }
   rocksdb::Options options;
   options.create_if_missing = true;
+  if (!always_persist_) {
+    options.manual_wal_flush = true;
+  }
   rocksdb::Status status = rocksdb::DB::Open(options, directory_, &db_);
   if (status.ok()) {
     db_valid_ = true;
@@ -84,6 +88,10 @@ void RocksDbPersistableKeyValueStoreService::onEnable() {
   } else {
     logger_->log_error("Failed to open RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
     return;
+  }
+
+  if (always_persist_) {
+    default_write_options.sync = true;
   }
 
   logger_->log_trace("Enabled RocksDbPersistableKeyValueStoreService");
@@ -100,7 +108,7 @@ bool RocksDbPersistableKeyValueStoreService::set(const std::string& key, const s
   if (!db_valid_) {
     return false;
   }
-  rocksdb::Status status = db_->Put(rocksdb::WriteOptions(), key, value);
+  rocksdb::Status status = db_->Put(default_write_options, key, value);
   if (!status.ok()) {
     logger_->log_error("Failed to Put to RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
     return false;
@@ -120,13 +128,44 @@ bool RocksDbPersistableKeyValueStoreService::get(const std::string& key, std::st
   return true;
 }
 
+bool RocksDbPersistableKeyValueStoreService::get(std::unordered_map<std::string, std::string>& kvs) {
+  if (!db_valid_) {
+    return false;
+  }
+  kvs.clear();
+  rocksdb::Iterator* it = db_->NewIterator(rocksdb::ReadOptions());
+  utils::ScopeGuard guard([&]() {
+    delete it;
+  });
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    kvs.emplace(it->key().ToString(), it->value().ToString());
+  }
+  if (!it->status().ok()) {
+    logger_->log_error("Encountered error when iterating through RocksDB database at %s, error: %s", directory_.c_str(), it->status().getState());
+    return false;
+  }
+  return true;
+}
+
 bool RocksDbPersistableKeyValueStoreService::remove(const std::string& key) {
   if (!db_valid_) {
     return false;
   }
-  rocksdb::Status status = db_->Delete(rocksdb::WriteOptions(), key);
+  rocksdb::Status status = db_->Delete(default_write_options, key);
   if (!status.ok()) {
     logger_->log_error("Failed to Delete from RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
+    return false;
+  }
+  return true;
+}
+
+bool RocksDbPersistableKeyValueStoreService::clear() {
+  if (!db_valid_) {
+    return false;
+  }
+  rocksdb::Status status = db_->DropColumnFamily(db_->DefaultColumnFamily());
+  if (!status.ok()) {
+    logger_->log_error("Failed to drop default column family from RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
     return false;
   }
   return true;
@@ -136,13 +175,17 @@ bool RocksDbPersistableKeyValueStoreService::update(const std::string& key, cons
   if (!db_valid_) {
     return false;
   }
-  return true;
+  throw std::logic_error("Unsupported method");
 }
 
 bool RocksDbPersistableKeyValueStoreService::persist() {
   if (!db_valid_) {
     return false;
   }
+  if (always_persist_) {
+    return true;
+  }
+  db_->FlushWAL(true /*sync*/);
   return true;
 }
 

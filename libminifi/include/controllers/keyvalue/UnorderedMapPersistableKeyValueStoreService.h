@@ -55,6 +55,8 @@ class UnorderedMapPersistableKeyValueStoreService : public AbstractAutoPersistin
 
   virtual bool remove(const std::string& key) override;
 
+  virtual bool clear() override;
+
   virtual bool update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) override;
 
   virtual bool persist() override;

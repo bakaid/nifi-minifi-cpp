@@ -118,7 +118,7 @@ class ListSFTPTestsFixture {
 
     // Configure UnorderedMapPersistableKeyValueStoreService controller
 //    plan->setProperty(state_storage_service, "Directory", utils::file::FileUtils::concat_path(src_dir, "state"));
-    plan->setProperty(state_storage_service, "File", utils::file::FileUtils::concat_path(src_dir, "state"));
+    plan->setProperty(state_storage_service, "File", utils::file::FileUtils::concat_path(src_dir, "state.txt"));
 
     // Configure ListSFTP processor
     plan->setProperty(list_sftp, "Listing Strategy", processors::ListSFTP::LISTING_STRATEGY_TRACKING_TIMESTAMPS);

@@ -56,7 +56,11 @@ class RocksDbPersistableKeyValueStoreService : public AbstractAutoPersistingKeyV
 
   virtual bool get(const std::string& key, std::string& value) override;
 
+  virtual bool get(std::unordered_map<std::string, std::string>& kvs) override;
+
   virtual bool remove(const std::string& key) override;
+
+  virtual bool clear() override;
 
   virtual bool update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) override;
 
@@ -66,6 +70,7 @@ class RocksDbPersistableKeyValueStoreService : public AbstractAutoPersistingKeyV
   std::string directory_;
 
   rocksdb::DB* db_;
+  rocksdb::WriteOptions default_write_options;
   bool db_valid_;
 
  private:

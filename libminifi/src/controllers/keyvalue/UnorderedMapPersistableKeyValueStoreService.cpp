@@ -159,6 +159,15 @@ bool UnorderedMapPersistableKeyValueStoreService::remove(const std::string& key)
   return res;
 }
 
+bool UnorderedMapPersistableKeyValueStoreService::clear() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  bool res = UnorderedMapKeyValueStoreService::clear();
+  if (always_persist_ && res) {
+    return persist();
+  }
+  return res;
+}
+
 bool UnorderedMapPersistableKeyValueStoreService::update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   bool res = UnorderedMapKeyValueStoreService::update(key, update_func);
@@ -172,6 +181,7 @@ bool UnorderedMapPersistableKeyValueStoreService::persist() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::ofstream ofs(file_);
   if (!ofs.is_open()) {
+    logger_->log_error("Failed to open file \"%s\" to store state", file_.c_str());
     return false;
   }
   ofs << escape(FORMAT_VERSION_KEY) << "=" << escape(std::to_string(FORMAT_VERSION)) << "\n";
@@ -185,6 +195,7 @@ bool UnorderedMapPersistableKeyValueStoreService::load() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::ifstream ifs(file_);
   if (!ifs.is_open()) {
+    logger_->log_debug("Failed to open file \"%s\" to load state", file_.c_str());
     return false;
   }
   std::unordered_map<std::string, std::string> map;
@@ -224,6 +235,7 @@ bool UnorderedMapPersistableKeyValueStoreService::load() {
     }
   }
   map_ = std::move(map);
+  logger_->log_debug("Loaded state from \"%s\"", file_.c_str());
   return true;
 }
 

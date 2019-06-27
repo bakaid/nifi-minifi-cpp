@@ -217,9 +217,9 @@ class TestPlan {
     return content_repo_;
   }
 
- protected:
-
   void finalize();
+
+ protected:
 
   std::shared_ptr<minifi::Connection> buildFinalConnection(std::shared_ptr<core::Processor> processor, bool setDest = false);
 
@@ -311,7 +311,7 @@ class TestController {
             std::string file(dir);
             file += "/";
             file += dir_entry->d_name;
-            unlink(file.c_str());
+//            unlink(file.c_str());
           }
         }
         closedir(created_dir);
@@ -324,12 +324,14 @@ class TestController {
   /**
    * format will be changed by mkdtemp, so don't rely on a shared variable.
    */
-  char *createTempDirectory(char *format) {
+  char *createTempDirectory(char *format, bool cleanup = true) {
     char *dir = mkdtemp(format);
     if (NULL == dir) {
       perror("mkdtemp failed: ");
     }
-    directories.push_back(dir);
+    if (cleanup) {
+      directories.push_back(dir);
+    }
     // TODO: return const char or don't return char* at all and use the format passed in as mkdtemp
     // but I'm inclined to keep as-is for the time being.
     return dir;

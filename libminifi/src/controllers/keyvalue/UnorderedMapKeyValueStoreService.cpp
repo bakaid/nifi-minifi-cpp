@@ -60,9 +60,21 @@ bool UnorderedMapKeyValueStoreService::get(const std::string& key, std::string& 
   }
 }
 
+bool UnorderedMapKeyValueStoreService::get(std::unordered_map<std::string, std::string>& kvs) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  kvs = map_;
+  return true;
+}
+
 bool UnorderedMapKeyValueStoreService::remove(const std::string& key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return map_.erase(key) == 1U;
+}
+
+bool UnorderedMapKeyValueStoreService::clear() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  map_.clear();
+  return true;
 }
 
 bool UnorderedMapKeyValueStoreService::update(const std::string& key, const std::function<bool(bool /*exists*/, std::string& /*value*/)>& update_func) {
