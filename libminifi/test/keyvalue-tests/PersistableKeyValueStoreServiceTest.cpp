@@ -85,10 +85,17 @@ class PersistableKeyValueStoreServiceTestsFixture {
   }
 
   void loadYaml() {
+    controller.reset();
+    persistable_key_value_store_service_node.reset();
+    stream_factory.reset();
+    content_repo.reset();
+    test_flow_repo.reset();
+    test_repo.reset();
+    configuration.reset();
+
     configuration = std::make_shared<minifi::Configure>();
     test_repo = std::make_shared<TestRepository>();
     test_flow_repo = std::make_shared<TestFlowRepository>();
-    std::make_shared<TestFlowRepository>();
 
     configuration->set(minifi::Configure::nifi_flow_configuration_file, config_yaml);
 
@@ -100,10 +107,12 @@ class PersistableKeyValueStoreServiceTestsFixture {
 
     std::unique_ptr<core::ProcessGroup> pg = yaml_config.getRoot(config_yaml);
     persistable_key_value_store_service_node = pg->findControllerService("testcontroller");
+    REQUIRE(persistable_key_value_store_service_node != nullptr);
     persistable_key_value_store_service_node->enable();
 
     controller = std::dynamic_pointer_cast<minifi::controllers::PersistableKeyValueStoreService>(
         persistable_key_value_store_service_node->getControllerServiceImplementation());
+    REQUIRE(controller != nullptr);
   }
 
  protected:
