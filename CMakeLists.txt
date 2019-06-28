@@ -411,7 +411,6 @@ endif(WIN32 OR NOT USE_SYSTEM_ZLIB)
 
 createExtension(STANDARD-PROCESSORS "STANDARD PROCESSORS" "Provides standard processors" "extensions/standard-processors" "extensions/standard-processors/tests/")
 
-
 #### EXTENSIONS
 if ((DISABLE_CURL STREQUAL "OFF" OR NOT DISABLE_CURL) AND NOT DISABLE_CIVET)
 	createExtension(HTTP-CURL "HTTP CURL" "This enables RESTProtocol, InvokeHTTP, and the HTTPClient for Site to Site" "extensions/http-curl" "extensions/http-curl/tests/")
@@ -707,6 +706,9 @@ include(CPack)
 if (NOT SKIP_TESTS)
 	include(BuildTests)
 endif()
+
+## Add KeyValueStorageService tests
+registerTest("${TEST_DIR}/keyvalue-tests")
 
 include(BuildDocs)
 

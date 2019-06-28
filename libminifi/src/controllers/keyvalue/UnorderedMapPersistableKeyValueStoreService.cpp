@@ -81,38 +81,59 @@ std::string UnorderedMapPersistableKeyValueStoreService::escape(const std::strin
   return escaped.str();
 }
 
-std::string UnorderedMapPersistableKeyValueStoreService::unescape(const std::string& str) {
-  std::stringstream unescaped;
+bool UnorderedMapPersistableKeyValueStoreService::parseLine(const std::string& line, std::string& key, std::string& value) {
+  std::stringstream key_ss;
+  std::stringstream value_ss;
   bool in_escape_sequence = false;
-  for (const auto c : str) {
+  bool key_complete = false;
+  for (const auto c : line) {
+    auto& current = key_complete ? value_ss : key_ss;
     if (in_escape_sequence) {
       switch (c) {
         case '\\':
-          unescaped << '\\';
+          current << '\\';
           break;
         case 'n':
-          unescaped << '\n';
+          current << '\n';
           break;
         case '=':
-          unescaped << '=';
+          current << '=';
           break;
         default:
-          logger_->log_error("Invalid escape sequence in \"%s\": \"\\%c\"", str.c_str(), c);
-          break;
+          logger_->log_error("Invalid escape sequence in \"%s\": \"\\%c\"", line.c_str(), c);
+          return false;
       }
       in_escape_sequence = false;
     } else {
       if (c == '\\') {
         in_escape_sequence = true;
+      } else if (c == '=') {
+        if (key_complete) {
+          logger_->log_error("Unterminated \'=\' in line \"%s\"", line.c_str());
+          return false;
+        } else {
+          key_complete = true;
+        }
       } else {
-        unescaped << c;
+        current << c;
       }
     }
   }
   if (in_escape_sequence) {
-    logger_->log_error("Unterminated escape sequence in \"%s\"", str.c_str());
+    logger_->log_error("Unterminated escape sequence in \"%s\"", line.c_str());
+    return false;
   }
-  return unescaped.str();
+  if (!key_complete) {
+    logger_->log_error("Key not found in \"%s\"", line.c_str());
+    return false;
+  }
+  key = key_ss.str();
+  if (key.empty()) {
+    logger_->log_error("Line with empty key found in \"%s\": \"%s\"", file_.c_str(), line.c_str());
+    return false;
+  }
+  value = value_ss.str();
+  return true;
 }
 
 void UnorderedMapPersistableKeyValueStoreService::initialize() {
@@ -201,23 +222,10 @@ bool UnorderedMapPersistableKeyValueStoreService::load() {
   std::unordered_map<std::string, std::string> map;
   std::string line;
   while (std::getline(ifs, line)) {
-    size_t separator_pos = 0U;
-    while ((separator_pos = line.find('=', separator_pos)) != std::string::npos) {
-      if (separator_pos == 0U) {
-        logger_->log_warn("Line with empty key found in \"%s\": \"%s\"", file_.c_str(), line.c_str());
-        continue;
-      }
-      if (line[separator_pos - 1] != '\\' || (separator_pos > 1U && line[separator_pos - 2] == '\\')) {
-        break;
-      }
-      separator_pos += 1;
-    }
-    if (separator_pos == std::string::npos) {
-      logger_->log_warn("None key-value line found in \"%s\": \"%s\"", file_.c_str(), line.c_str());
+    std::string key, value;
+    if (!parseLine(line, key, value)) {
       continue;
     }
-    std::string key = unescape(line.substr(0, separator_pos));
-    std::string value = unescape(line.substr(separator_pos + 1));
     if (key == FORMAT_VERSION_KEY) {
       int format_version = 0;
       try {

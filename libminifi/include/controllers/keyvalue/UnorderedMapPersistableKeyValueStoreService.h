@@ -70,7 +70,7 @@ class UnorderedMapPersistableKeyValueStoreService : public AbstractAutoPersistin
   bool load();
 
   std::string escape(const std::string& str);
-  std::string unescape(const std::string& str);
+  bool parseLine(const std::string& line, std::string& key, std::string& value);
 
  private:
   std::shared_ptr<logging::Logger> logger_;
