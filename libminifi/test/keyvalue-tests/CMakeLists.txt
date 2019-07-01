@@ -44,7 +44,7 @@ ENDFOREACH()
 
 message("-- Finished building ${KEYVALUE_INT_TEST_COUNT} keyvalue controller test file(s)...")
 
-add_test(NAME UnorderedMapPersistableKeyValueStoreServiceTest COMMAND PersistableKeyValueStoreServiceTest "--config-yaml ${TEST_RESOURCES}/UnorderedMapPersistableKeyValueStoreServiceTest.yml")
+add_test(NAME UnorderedMapPersistableKeyValueStoreServiceTest COMMAND PersistableKeyValueStoreServiceTest --config-yaml "${TEST_RESOURCES}/UnorderedMapPersistableKeyValueStoreServiceTest.yml")
 if (DISABLE_ROCKSDB STREQUAL "OFF" OR NOT DISABLE_ROCKSDB)
-    add_test(NAME RocksdDbPersistableKeyValueStoreServiceTest COMMAND PersistableKeyValueStoreServiceTest "--config-yaml ${TEST_RESOURCES}/RocksdDbPersistableKeyValueStoreServiceTest.yml")
+    add_test(NAME RocksdDbPersistableKeyValueStoreServiceTest COMMAND PersistableKeyValueStoreServiceTest --config-yaml "${TEST_RESOURCES}/RocksdDbPersistableKeyValueStoreServiceTest.yml")
 endif()

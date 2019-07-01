@@ -110,7 +110,7 @@ bool RocksDbPersistableKeyValueStoreService::set(const std::string& key, const s
   }
   rocksdb::Status status = db_->Put(default_write_options, key, value);
   if (!status.ok()) {
-    logger_->log_error("Failed to Put to RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
+    logger_->log_error("Failed to Put key %s to RocksDB database at %s, error: %s", key.c_str(), directory_.c_str(), status.getState());
     return false;
   }
   return true;
@@ -122,7 +122,7 @@ bool RocksDbPersistableKeyValueStoreService::get(const std::string& key, std::st
   }
   rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), key, &value);
   if (!status.ok()) {
-    logger_->log_error("Failed to Get from RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
+    logger_->log_error("Failed to Get key %s from RocksDB database at %s, error: %s", key.c_str(), directory_.c_str(), status.getState());
     return false;
   }
   return true;
@@ -163,9 +163,16 @@ bool RocksDbPersistableKeyValueStoreService::clear() {
   if (!db_valid_) {
     return false;
   }
-  rocksdb::Status status = db_->DropColumnFamily(db_->DefaultColumnFamily());
-  if (!status.ok()) {
-    logger_->log_error("Failed to drop default column family from RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
+  auto it = db_->NewIterator(rocksdb::ReadOptions());
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    rocksdb::Status status = db_->Delete(default_write_options, it->key());
+    if (!status.ok()) {
+      logger_->log_error("Failed to Delete from RocksDB database at %s, error: %s", directory_.c_str(), status.getState());
+      return false;
+    }
+  }
+  if (!it->status().ok()) {
+    logger_->log_error("Encountered error when iterating through RocksDB database at %s, error: %s", directory_.c_str(), it->status().getState());
     return false;
   }
   return true;

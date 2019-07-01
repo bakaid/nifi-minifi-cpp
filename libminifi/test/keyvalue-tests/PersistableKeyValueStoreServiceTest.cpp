@@ -163,7 +163,6 @@ TEST_CASE_METHOD(PersistableKeyValueStoreServiceTestsFixture, "PersistableKeyVal
   }
   SECTION("with persistence") {
     controller->persist();
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     loadYaml();
   }
 
@@ -217,7 +216,6 @@ TEST_CASE_METHOD(PersistableKeyValueStoreServiceTestsFixture, "PersistableKeyVal
   const char* value = "234";
   REQUIRE(true == controller->set(key, value));
   REQUIRE(true == controller->remove(key));
-  REQUIRE(false == controller->remove(key));
 
   SECTION("without persistence") {
   }

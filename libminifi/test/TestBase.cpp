@@ -19,7 +19,7 @@
 #include "./TestBase.h"
 
 TestPlan::TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::shared_ptr<core::Repository> flow_repo, std::shared_ptr<core::Repository> prov_repo,
-                   const std::shared_ptr<minifi::state::response::FlowVersion> &flow_version, const std::shared_ptr<minifi::Configure> &configuration)
+                   const std::shared_ptr<minifi::state::response::FlowVersion> &flow_version, const std::shared_ptr<minifi::Configure> &configuration, const char* state_dir)
     : configuration_(configuration),
       content_repo_(content_repo),
       flow_repo_(flow_repo),
@@ -33,12 +33,22 @@ TestPlan::TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::s
   controller_services_ = std::make_shared<core::controller::ControllerServiceMap>();
   controller_services_provider_ = std::make_shared<core::controller::StandardControllerServiceProvider>(controller_services_, nullptr, configuration_);
   /* Inject the default state provider ahead of ProcessContext to make sure we have a unique state directory */
-  std::string state_dir_name_template = "/tmp/teststate.XXXXXX";
-  state_dir_ = std::vector<char>(state_dir_name_template.c_str(), state_dir_name_template.c_str() + state_dir_name_template.size() + 1);
-  if (mkdtemp(state_dir_.data()) == nullptr) {
-    throw std::runtime_error("Failed to create temporary directory for state");
+  if (state_dir == nullptr) {
+    std::string state_dir_name_template = "/tmp/teststate.XXXXXX";
+    std::vector<char> state_dir_buf(state_dir_name_template.c_str(),
+                                   state_dir_name_template.c_str() + state_dir_name_template.size() + 1);
+    if (mkdtemp(state_dir_buf.data()) == nullptr) {
+      throw std::runtime_error("Failed to create temporary directory for state");
+    }
+    state_dir_ = state_dir_buf.data();
+  } else {
+    state_dir_ = state_dir;
   }
-  core::ProcessContext::createOrGetDefaultStateManagerProvider(controller_services_provider_, state_dir_.data());
+  core::ProcessContext::createOrGetDefaultStateManagerProvider(controller_services_provider_, state_dir_.c_str());
+}
+
+TestPlan::~TestPlan() {
+  controller_services_provider_->clearControllerServices();
 }
 
 std::shared_ptr<core::Processor> TestPlan::addProcessor(const std::shared_ptr<core::Processor> &processor, const std::string &name, const std::initializer_list<core::Relationship>& relationships, bool linkToPrevious) {

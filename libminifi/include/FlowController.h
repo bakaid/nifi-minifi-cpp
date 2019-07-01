@@ -238,6 +238,11 @@ class FlowController : public core::controller::ControllerServiceProvider, publi
   virtual std::future<uint64_t> disableControllerService(std::shared_ptr<core::controller::ControllerServiceNode> &serviceNode);
 
   /**
+   * Removes all controller services.
+   */
+  virtual void clearControllerServices();
+
+  /**
    * Gets all controller services.
    */
   virtual std::vector<std::shared_ptr<core::controller::ControllerServiceNode>> getAllControllerServices();

@@ -93,13 +93,13 @@ class ListSFTPTestsFixture {
   }
 
   void createPlan(utils::Identifier* list_sftp_uuid = nullptr) {
-    auto config = std::make_shared<minifi::Configure>();
-    config->set(minifi::Configure::nifi_state_management_provider_local, "statekeyvaluestore");
-    plan = testController.createPlan(config);
-    state_storage_service = plan->addController(
-//        "RocksDbPersistableKeyValueStoreService",
-        "UnorderedMapPersistableKeyValueStoreService",
-        "statekeyvaluestore");
+    const std::string state_dir = plan == nullptr ? "" : plan->getStateDir();
+
+    log_attribute.reset();
+    list_sftp.reset();
+    plan.reset();
+
+    plan = testController.createPlan(nullptr /*config*/, state_dir.empty() ? nullptr : state_dir.c_str());
     if (list_sftp_uuid == nullptr) {
       list_sftp = plan->addProcessor(
           "ListSFTP",
@@ -115,10 +115,6 @@ class ListSFTPTestsFixture {
                                        "LogAttribute",
                                        core::Relationship("success", "d"),
                                        true);
-
-    // Configure UnorderedMapPersistableKeyValueStoreService controller
-//    plan->setProperty(state_storage_service, "Directory", utils::file::FileUtils::concat_path(src_dir, "state"));
-    plan->setProperty(state_storage_service, "File", utils::file::FileUtils::concat_path(src_dir, "state.txt"));
 
     // Configure ListSFTP processor
     plan->setProperty(list_sftp, "Listing Strategy", processors::ListSFTP::LISTING_STRATEGY_TRACKING_TIMESTAMPS);
@@ -175,7 +171,6 @@ class ListSFTPTestsFixture {
   std::unique_ptr<SFTPTestServer> sftp_server;
   TestController testController;
   std::shared_ptr<TestPlan> plan;
-  std::shared_ptr<core::controller::ControllerServiceNode> state_storage_service;
   std::shared_ptr<core::Processor> list_sftp;
   std::shared_ptr<core::Processor> log_attribute;
 };

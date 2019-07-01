@@ -168,7 +168,9 @@ class TestPlan {
  public:
 
   explicit TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::shared_ptr<core::Repository> flow_repo, std::shared_ptr<core::Repository> prov_repo,
-                    const std::shared_ptr<minifi::state::response::FlowVersion> &flow_version, const std::shared_ptr<minifi::Configure> &configuration);
+                    const std::shared_ptr<minifi::state::response::FlowVersion> &flow_version, const std::shared_ptr<minifi::Configure> &configuration, const char* state_dir);
+
+  virtual ~TestPlan();
 
   std::shared_ptr<core::Processor> addProcessor(const std::shared_ptr<core::Processor> &processor, const std::string &name,
                                                 core::Relationship relationship = core::Relationship("success", "description"), bool linkToPrevious = false) {
@@ -217,6 +219,10 @@ class TestPlan {
     return content_repo_;
   }
 
+  std::string getStateDir() {
+    return state_dir_;
+  }
+
   void finalize();
 
  protected:
@@ -235,7 +241,7 @@ class TestPlan {
   std::shared_ptr<core::controller::ControllerServiceMap> controller_services_;
   std::shared_ptr<core::controller::ControllerServiceProvider> controller_services_provider_;
 
-  std::vector<char> state_dir_;
+  std::string state_dir_;
 
   std::recursive_mutex mutex;
 
@@ -274,7 +280,7 @@ class TestController {
     flow_version_ = std::make_shared<minifi::state::response::FlowVersion>("test", "test", "test");
   }
 
-  std::shared_ptr<TestPlan> createPlan(std::shared_ptr<minifi::Configure> configuration = nullptr) {
+  std::shared_ptr<TestPlan> createPlan(std::shared_ptr<minifi::Configure> configuration = nullptr, const char* state_dir = nullptr) {
     if (configuration == nullptr) {
       configuration = std::make_shared<minifi::Configure>();
     }
@@ -284,7 +290,7 @@ class TestController {
 
     std::shared_ptr<core::Repository> flow_repo = std::make_shared<TestRepository>();
     std::shared_ptr<core::Repository> repo = std::make_shared<TestRepository>();
-    return std::make_shared<TestPlan>(content_repo, flow_repo, repo, flow_version_, configuration);
+    return std::make_shared<TestPlan>(content_repo, flow_repo, repo, flow_version_, configuration, state_dir);
   }
 
   void runSession(std::shared_ptr<TestPlan> &plan, bool runToCompletion = true, std::function<void(const std::shared_ptr<core::ProcessContext>&, const std::shared_ptr<core::ProcessSession>&)> verify =
