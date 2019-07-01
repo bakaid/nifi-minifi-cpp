@@ -142,12 +142,12 @@ TEST_CASE_METHOD(PersistableKeyValueStoreServiceTestsFixture, "PersistableKeyVal
   const char* value = "234";
   REQUIRE(true == controller->set(key, value));
 
- SECTION("without persistence") {
- }
-//   SECTION("with persistence") {
-//     controller->persist();
-//     loadYaml();
-//   }
+  SECTION("without persistence") {
+  }
+  SECTION("with persistence") {
+    controller->persist();
+    loadYaml();
+  }
 
   std::string res;
   REQUIRE(true == controller->get(key, res));
