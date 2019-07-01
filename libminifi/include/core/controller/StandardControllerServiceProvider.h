@@ -71,10 +71,6 @@ class StandardControllerServiceProvider : public ControllerServiceProvider, publ
 
   }
 
-  virtual ~StandardControllerServiceProvider() {
-    controller_map_->clear();
-  }
-
   void setRootGroup(std::shared_ptr<ProcessGroup> rg) {
     root_group_ = rg;
   }
@@ -149,6 +145,10 @@ class StandardControllerServiceProvider : public ControllerServiceProvider, publ
       });
       return no_run;
     }
+  }
+
+  void clearControllerServices() {
+    controller_map_->clear();
   }
 
   void verifyCanStopReferencingComponents(std::shared_ptr<core::controller::ControllerServiceNode> &serviceNode) {
