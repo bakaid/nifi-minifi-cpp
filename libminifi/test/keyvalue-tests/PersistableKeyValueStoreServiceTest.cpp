@@ -87,6 +87,10 @@ class PersistableKeyValueStoreServiceTestsFixture {
   void loadYaml() {
     controller.reset();
     persistable_key_value_store_service_node.reset();
+
+    process_group.reset();
+    yaml_config.reset();
+
     stream_factory.reset();
     content_repo.reset();
     test_flow_repo.reset();
@@ -103,10 +107,10 @@ class PersistableKeyValueStoreServiceTestsFixture {
     content_repo->initialize(configuration);
     stream_factory = minifi::io::StreamFactory::getInstance(configuration);
 
-    core::YamlConfiguration yaml_config(test_repo, test_repo, content_repo, stream_factory, configuration, config_yaml);
+    yaml_config = std::unique_ptr<core::YamlConfiguration>(new core::YamlConfiguration(test_repo, test_repo, content_repo, stream_factory, configuration, config_yaml));
 
-    std::unique_ptr<core::ProcessGroup> pg = yaml_config.getRoot(config_yaml);
-    persistable_key_value_store_service_node = pg->findControllerService("testcontroller");
+    process_group = yaml_config->getRoot(config_yaml);
+    persistable_key_value_store_service_node = process_group->findControllerService("testcontroller");
     REQUIRE(persistable_key_value_store_service_node != nullptr);
     persistable_key_value_store_service_node->enable();
 
@@ -123,6 +127,9 @@ class PersistableKeyValueStoreServiceTestsFixture {
   std::shared_ptr<core::ContentRepository> content_repo;
   std::shared_ptr<minifi::io::StreamFactory> stream_factory;
 
+  std::unique_ptr<core::YamlConfiguration> yaml_config;
+  std::unique_ptr<core::ProcessGroup> process_group;
+
   std::shared_ptr<core::controller::ControllerServiceNode> persistable_key_value_store_service_node;
   std::shared_ptr<minifi::controllers::PersistableKeyValueStoreService> controller;
 
@@ -135,8 +142,8 @@ TEST_CASE_METHOD(PersistableKeyValueStoreServiceTestsFixture, "PersistableKeyVal
   const char* value = "234";
   REQUIRE(true == controller->set(key, value));
 
-  SECTION("without persistence") {
-  }
+//  SECTION("without persistence") {
+//  }
   SECTION("with persistence") {
     controller->persist();
     loadYaml();
