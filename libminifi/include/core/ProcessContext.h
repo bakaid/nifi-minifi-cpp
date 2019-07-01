@@ -63,9 +63,11 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
         processor_node_(processor),
         logger_(logging::LoggerFactory<ProcessContext>::getLogger()) {
     repo_ = repo;
-    state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
-    if (state_manager_provider_ == nullptr) {
-      logger_->log_error("Failed to create default CoreComponentStateManagerProvider");
+    if (controller_service_provider_ != nullptr) {
+      state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
+      if (state_manager_provider_ == nullptr) {
+        logger_->log_error("Failed to create default CoreComponentStateManagerProvider");
+      }
     }
   }
 
