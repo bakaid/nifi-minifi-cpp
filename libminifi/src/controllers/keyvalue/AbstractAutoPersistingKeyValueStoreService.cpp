@@ -33,7 +33,8 @@ core::Property AbstractAutoPersistingKeyValueStoreService::AutoPersistenceInterv
         ->isRequired(false)->withDefaultValue<core::TimePeriodValue>("1 min")->build());
 
 AbstractAutoPersistingKeyValueStoreService::AbstractAutoPersistingKeyValueStoreService(const std::string& name, const std::string& id)
-    : PersistableKeyValueStoreService(name, id)
+    : KeyValueStoreService(name, id)
+    , PersistableKeyValueStoreService(name, id)
     , always_persist_(false)
     , auto_persistence_interval_(0U)
     , running_(false)
@@ -41,7 +42,8 @@ AbstractAutoPersistingKeyValueStoreService::AbstractAutoPersistingKeyValueStoreS
 }
 
 AbstractAutoPersistingKeyValueStoreService::AbstractAutoPersistingKeyValueStoreService(const std::string& name, utils::Identifier uuid /*= utils::Identifier()*/)
-    : PersistableKeyValueStoreService(name, uuid)
+    : KeyValueStoreService(name, uuid)
+    , PersistableKeyValueStoreService(name, uuid)
     , always_persist_(false)
     , auto_persistence_interval_(0U)
     , running_(false)

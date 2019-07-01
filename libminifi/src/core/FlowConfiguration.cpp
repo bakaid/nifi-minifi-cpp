@@ -36,6 +36,7 @@ static_initializers &get_static_functions() {
 }
 
 FlowConfiguration::~FlowConfiguration() {
+    std::cerr << "controller_services_ usage: " << controller_services_.use_count() << ", service_provider_ usage: " << service_provider_.use_count() << std::endl;
 }
 
 std::shared_ptr<core::Processor> FlowConfiguration::createProcessor(std::string name, utils::Identifier & uuid) {
