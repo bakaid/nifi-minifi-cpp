@@ -71,6 +71,10 @@ class StandardControllerServiceProvider : public ControllerServiceProvider, publ
 
   }
 
+  virtual ~StandardControllerServiceProvider() {
+    controller_map_->clear();
+  }
+
   void setRootGroup(std::shared_ptr<ProcessGroup> rg) {
     root_group_ = rg;
   }
