@@ -88,9 +88,6 @@ class Configure : public Properties {
   // state management options
   static const char *nifi_state_management_provider_local;
 
-  // default state manager configuration
-
-
  private:
   std::string agent_identifier_;
   std::mutex mutex_;

@@ -87,10 +87,12 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
     repo_ = repo;
     std::string id;
     if (configuration->get(minifi::Configure::nifi_state_management_provider_local, id)) {
-      logger_->log_error("Failed to find the CoreComponentStateManagerProvider %s defined by %s", id, minifi::Configure::nifi_state_management_provider_local);
       auto node = controller_service_provider_->getControllerServiceNode(id);
-      if (node != nullptr) {
-        state_manager_provider_ = std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(node->getControllerServiceImplementation());
+      if (node == nullptr) {
+        logger_->log_error("Failed to find the CoreComponentStateManagerProvider %s defined by %s", id, minifi::Configure::nifi_state_management_provider_local);
+      } else {
+        state_manager_provider_ = std::dynamic_pointer_cast<core::CoreComponentStateManagerProvider>(
+            node->getControllerServiceImplementation());
       }
     } else {
       state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
