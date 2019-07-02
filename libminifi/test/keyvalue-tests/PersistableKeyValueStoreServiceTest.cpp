@@ -35,7 +35,7 @@
 #include "controllers/keyvalue/AbstractAutoPersistingKeyValueStoreService.h"
 #include "controllers/keyvalue/UnorderedMapPersistableKeyValueStoreService.h"
 
-static std::string config_yaml;
+static std::string config_yaml; // NOLINT
 
 static inline void configYamlHandler(Catch::ConfigData&, const std::string& path) {
   config_yaml = path;
