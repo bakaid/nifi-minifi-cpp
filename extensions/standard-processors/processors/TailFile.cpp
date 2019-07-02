@@ -229,35 +229,54 @@ void TailFile::parseStateFileLine(char *buf) {
     logger_->log_debug("Received position %d", position);
     tail_states_.begin()->second.currentTailFilePosition_ = position;
   }
-  if (key.find(CURRENT_STR) == 0) {
-    const auto file = key.substr(strlen(CURRENT_STR));
-    std::string fileLocation, fileName;
-    if (utils::file::PathUtils::getFileNameAndPath(value, fileLocation, fileName)) {
-      tail_states_[file].path_ = fileLocation;
-      tail_states_[file].current_file_name_ = fileName;
+}
+
+
+bool TailFile::recoverState(const std::shared_ptr<core::ProcessContext>& context) {
+  bool state_load_success = false;
+  auto state_manager = context->getStateManager();
+  if (state_manager == nullptr) {
+    logger_->log_error("Failed to get StateManager");
+  } else {
+    std::unordered_map<std::string, std::string> state_map;
+    if (state_manager->get(state_map)) {
+      std::map<std::string, TailState> new_tail_states;
+      size_t i = 0;
+      while (true) {
+        std::string name;
+        try {
+          name = state_map.at("file." + std::to_string(i) + ".name");
+        } catch (...) {
+          break;
+        }
+        try {
+          const std::string& current = state_map.at("file." + std::to_string(i) + ".current");
+          uint64_t position = std::stoull(state_map.at("file." + std::to_string(i) + ".position"));
+          new_tail_states.emplace(name, TailState{name, current, position, 0});
+        } catch (...) {
+          continue;
+        }
+        ++i;
+      }
+      state_load_success = true;
+      tail_states_ = std::move(new_tail_states);
     } else {
-      throw minifi::Exception(ExceptionType::PROCESSOR_EXCEPTION, "State file contains an invalid file name");
+      logger_->log_error("Failed to get state from StateManager");
     }
   }
 
-  if (key.find(POSITION_STR) == 0) {
-    const auto file = key.substr(strlen(POSITION_STR));
-    tail_states_[file].currentTailFilePosition_ = std::stoi(value);
-  }
-
-  return;
-}
-
-bool TailFile::recoverState() {
-  std::ifstream file(state_file_.c_str(), std::ifstream::in);
-  if (!file.good()) {
-    logger_->log_error("load state file failed %s", state_file_);
-    return false;
-  }
-  tail_states_.clear();
-  char buf[BUFFER_SIZE];
-  for (file.getline(buf, BUFFER_SIZE); file.good(); file.getline(buf, BUFFER_SIZE)) {
-    parseStateFileLine(buf);
+  /* We could not get the state form the StateManager, try to migrate the old state file if it exists */
+  if (!state_load_success) {
+    std::ifstream file(state_file_.c_str(), std::ifstream::in);
+    if (!file.good()) {
+      logger_->log_error("load state file failed %s", state_file_);
+      return false;
+    }
+    tail_states_.clear();
+    char buf[BUFFER_SIZE];
+    for (file.getline(buf, BUFFER_SIZE); file.good(); file.getline(buf, BUFFER_SIZE)) {
+      parseStateFileLine(buf);
+    }
   }
 
   /**
@@ -277,27 +296,54 @@ bool TailFile::recoverState() {
   }
 
   logger_->log_debug("load state file succeeded for %s", state_file_);
+
+  /* Save the state to the state manager */
+  storeState(context);
+
   return true;
 }
 
-void TailFile::storeState() {
-  std::ofstream file(state_file_.c_str());
-  if (!file.is_open()) {
-    logger_->log_error("store state file failed %s", state_file_);
-    return;
+bool TailFile::storeState(const std::shared_ptr<core::ProcessContext>& context) {
+  if (true) {
+    auto state_manager = context->getStateManager();
+    if (state_manager == nullptr) {
+      logger_->log_error("Failed to get StateManager");
+      return false;
+    }
+    std::unordered_map<std::string, std::string> state;
+    size_t i = 0;
+    for (const auto& tail_state : tail_states_) {
+      state["file." + std::to_string(i) + ".name"] = tail_state.first;
+      state["file." + std::to_string(i) + ".current"] = utils::file::FileUtils::concat_path(tail_state.second.path_, tail_state.second.current_file_name_);
+      state["file." + std::to_string(i) + ".position"] = std::to_string(tail_state.second.currentTailFilePosition_);
+      ++i;
+    }
+    state_manager->set(state);
+    if (!state_manager->persist()) {
+      return false;
+    }
+    return true;
+  } else {
+    std::ofstream file(state_file_.c_str());
+    if (!file.is_open()) {
+      logger_->log_error("store state file failed %s", state_file_);
+      return false;
+    }
+    for (const auto &state : tail_states_) {
+      file << "FILENAME=" << state.first << "\n";
+      file << CURRENT_STR << state.first << "=" << state.second.path_ << utils::file::FileUtils::get_separator() << state.second.current_file_name_ << "\n";
+      file << POSITION_STR << state.first << "=" << state.second.currentTailFilePosition_ << "\n";
+    }
+    file.close();
+
+    return true;
   }
-  for (const auto &state : tail_states_) {
-    file << "FILENAME=" << state.first << "\n";
-    file << CURRENT_STR << state.first << "=" << state.second.path_ << utils::file::FileUtils::get_separator() << state.second.current_file_name_ << "\n";
-    file << POSITION_STR << state.first << "=" << state.second.currentTailFilePosition_ << "\n";
-  }
-  file.close();
 }
 
 static bool sortTailMatchedFileItem(TailMatchedFileItem i, TailMatchedFileItem j) {
   return (i.modifiedTime < j.modifiedTime);
 }
-void TailFile::checkRollOver(TailState &file, const std::string &base_file_name) {
+void TailFile::checkRollOver(const std::shared_ptr<core::ProcessContext>& context, TailState &file, const std::string &base_file_name) {
   struct stat statbuf;
   std::vector<TailMatchedFileItem> matchedFiles;
   std::string fullPath = file.path_ + utils::file::FileUtils::get_separator() + file.current_file_name_;
@@ -351,7 +397,7 @@ void TailFile::checkRollOver(TailState &file, const std::string &base_file_name)
 
     file.current_file_name_ = item.fileName;
 
-    storeState();
+    storeState(context);
   } else {
     return;
   }
@@ -366,7 +412,7 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   if (!this->state_recovered_) {
     state_recovered_ = true;
     // recover the state if we have not done so
-    this->recoverState();
+    this->recoverState(context);
   }
 
   /**
@@ -375,7 +421,7 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
   for (auto &state : tail_states_) {
     auto fileLocation = state.second.path_;
 
-    checkRollOver(state.second, state.first);
+    checkRollOver(context, state.second, state.first);
     std::string fullPath = fileLocation + utils::file::FileUtils::get_separator() + state.second.current_file_name_;
     struct stat statbuf;
 
@@ -427,7 +473,7 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
           ffr->updateKeyedAttribute(FILENAME, logName);
           session->transfer(ffr, Success);
           state.second.currentTailFilePosition_ += ffr->getSize() + 1;
-          storeState();
+          storeState(context);
         }
 
       } else {
@@ -442,7 +488,7 @@ void TailFile::onTrigger(const std::shared_ptr<core::ProcessContext> &context, c
               + extension;
           flowFile->updateKeyedAttribute(FILENAME, logName);
           state.second.currentTailFilePosition_ += flowFile->getSize();
-          storeState();
+          storeState(context);
         }
       }
       state.second.currentTailFileModificationTime_ = ((uint64_t) (statbuf.st_mtime) * 1000);
