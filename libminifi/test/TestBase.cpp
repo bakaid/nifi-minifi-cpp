@@ -44,7 +44,7 @@ TestPlan::TestPlan(std::shared_ptr<core::ContentRepository> content_repo, std::s
   } else {
     state_dir_ = state_dir;
   }
-  core::ProcessContext::createOrGetDefaultStateManagerProvider(controller_services_provider_, state_dir_.c_str());
+  state_manager_provider_ = core::ProcessContext::createOrGetDefaultStateManagerProvider(controller_services_provider_, state_dir_.c_str());
 }
 
 TestPlan::~TestPlan() {

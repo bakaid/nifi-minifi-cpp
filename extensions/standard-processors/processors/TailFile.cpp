@@ -252,7 +252,14 @@ bool TailFile::recoverState(const std::shared_ptr<core::ProcessContext>& context
         try {
           const std::string& current = state_map.at("file." + std::to_string(i) + ".current");
           uint64_t position = std::stoull(state_map.at("file." + std::to_string(i) + ".position"));
-          new_tail_states.emplace(name, TailState{name, current, position, 0});
+
+          std::string fileLocation, fileName;
+          if (utils::file::PathUtils::getFileNameAndPath(current, fileLocation, fileName)) {
+            logger_->log_debug("Received path %s, file %s", fileLocation, fileName);
+            new_tail_states.emplace(fileName, TailState { fileLocation, fileName, position, 0 });
+          } else {
+            new_tail_states.emplace(current, TailState { fileLocation, current, position, 0 });
+          }
         } catch (...) {
           continue;
         }
@@ -260,6 +267,9 @@ bool TailFile::recoverState(const std::shared_ptr<core::ProcessContext>& context
       }
       state_load_success = true;
       tail_states_ = std::move(new_tail_states);
+      for (const auto& s : tail_states_) {
+        logger_->log_debug("TailState %s: %s, %s, %llu, %llu", s.first, s.second.path_, s.second.current_file_name_, s.second.currentTailFilePosition_, s.second.currentTailFileModificationTime_);
+      }
     } else {
       logger_->log_error("Failed to get state from StateManager");
     }
@@ -295,7 +305,7 @@ bool TailFile::recoverState(const std::shared_ptr<core::ProcessContext>& context
     }
   }
 
-  logger_->log_debug("load state file succeeded for %s", state_file_);
+  logger_->log_debug("load state succeeded");
 
   /* Save the state to the state manager */
   storeState(context);
@@ -304,40 +314,24 @@ bool TailFile::recoverState(const std::shared_ptr<core::ProcessContext>& context
 }
 
 bool TailFile::storeState(const std::shared_ptr<core::ProcessContext>& context) {
-  if (true) {
-    auto state_manager = context->getStateManager();
-    if (state_manager == nullptr) {
-      logger_->log_error("Failed to get StateManager");
-      return false;
-    }
-    std::unordered_map<std::string, std::string> state;
-    size_t i = 0;
-    for (const auto& tail_state : tail_states_) {
-      state["file." + std::to_string(i) + ".name"] = tail_state.first;
-      state["file." + std::to_string(i) + ".current"] = utils::file::FileUtils::concat_path(tail_state.second.path_, tail_state.second.current_file_name_);
-      state["file." + std::to_string(i) + ".position"] = std::to_string(tail_state.second.currentTailFilePosition_);
-      ++i;
-    }
-    state_manager->set(state);
-    if (!state_manager->persist()) {
-      return false;
-    }
-    return true;
-  } else {
-    std::ofstream file(state_file_.c_str());
-    if (!file.is_open()) {
-      logger_->log_error("store state file failed %s", state_file_);
-      return false;
-    }
-    for (const auto &state : tail_states_) {
-      file << "FILENAME=" << state.first << "\n";
-      file << CURRENT_STR << state.first << "=" << state.second.path_ << utils::file::FileUtils::get_separator() << state.second.current_file_name_ << "\n";
-      file << POSITION_STR << state.first << "=" << state.second.currentTailFilePosition_ << "\n";
-    }
-    file.close();
-
-    return true;
+  auto state_manager = context->getStateManager();
+  if (state_manager == nullptr) {
+    logger_->log_error("Failed to get StateManager");
+    return false;
   }
+  std::unordered_map<std::string, std::string> state;
+  size_t i = 0;
+  for (const auto& tail_state : tail_states_) {
+    state["file." + std::to_string(i) + ".name"] = tail_state.first;
+    state["file." + std::to_string(i) + ".current"] = utils::file::FileUtils::concat_path(tail_state.second.path_, tail_state.second.current_file_name_);
+    state["file." + std::to_string(i) + ".position"] = std::to_string(tail_state.second.currentTailFilePosition_);
+    ++i;
+  }
+  state_manager->set(state);
+  if (!state_manager->persist()) {
+    return false;
+  }
+  return true;
 }
 
 static bool sortTailMatchedFileItem(TailMatchedFileItem i, TailMatchedFileItem j) {

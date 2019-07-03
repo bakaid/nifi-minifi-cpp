@@ -223,6 +223,10 @@ class TestPlan {
     return state_dir_;
   }
 
+  std::shared_ptr<core::CoreComponentStateManagerProvider> getStateManagerProvider() {
+    return state_manager_provider_;
+  }
+
   void finalize();
 
  protected:
@@ -240,6 +244,8 @@ class TestPlan {
 
   std::shared_ptr<core::controller::ControllerServiceMap> controller_services_;
   std::shared_ptr<core::controller::ControllerServiceProvider> controller_services_provider_;
+
+  std::shared_ptr<core::CoreComponentStateManagerProvider> state_manager_provider_;
 
   std::string state_dir_;
 
