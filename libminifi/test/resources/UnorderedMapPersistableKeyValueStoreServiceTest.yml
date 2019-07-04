@@ -16,25 +16,21 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+Flow Controller:
+    name: MiNiFi Flow
 
+Processors: []
 
-include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
+Connections: []
 
-file(GLOB SOURCES  "processors/*.cpp" "controllers/*.cpp" )
+Controller Services:
+    - name: testcontroller
+      id: 2438e3c8-015a-1000-79ca-83af40ec1994
+      class: UnorderedMapPersistableKeyValueStoreService
+      Properties:
+        Auto Persistence Interval:
+            - value: 0 sec
+        File:
+            - value: state.txt
 
-add_library(minifi-standard-processors STATIC ${SOURCES})
-set_property(TARGET minifi-standard-processors PROPERTY POSITION_INDEPENDENT_CODE ON)
-if(THREADS_HAVE_PTHREAD_ARG)
-  target_compile_options(PUBLIC minifi-standard-processors "-pthread")
-endif()
-if(CMAKE_THREAD_LIBS_INIT)
-  target_link_libraries(minifi-standard-processors "${CMAKE_THREAD_LIBS_INIT}")
-endif()
-
-target_link_libraries(minifi-standard-processors ${LIBMINIFI})
-
-SET (STANDARD-PROCESSORS minifi-standard-processors PARENT_SCOPE)
-register_extension(minifi-standard-processors)
-
-
-register_extension_linter(minifi-standard-processors-linter)
+Remote Processing Groups: []

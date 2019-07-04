@@ -112,6 +112,11 @@ class ControllerServiceProvider : public CoreComponent, public ConfigurableCompo
   virtual std::future<uint64_t> disableControllerService(std::shared_ptr<core::controller::ControllerServiceNode> &serviceNode) = 0;
 
   /**
+   * Removes all controller services.
+   */
+  virtual void clearControllerServices() = 0;
+
+  /**
    * Gets a list of all controller services.
    */
   virtual std::vector<std::shared_ptr<core::controller::ControllerServiceNode>> getAllControllerServices() {

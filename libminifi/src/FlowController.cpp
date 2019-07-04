@@ -789,6 +789,13 @@ std::future<uint64_t> FlowController::disableControllerService(std::shared_ptr<c
 }
 
 /**
+ * Removes all controller services.
+ */
+void FlowController::clearControllerServices() {
+  controller_service_provider_->clearControllerServices();
+}
+
+/**
  * Gets all controller services.
  */
 std::vector<std::shared_ptr<core::controller::ControllerServiceNode>> FlowController::getAllControllerServices() {
