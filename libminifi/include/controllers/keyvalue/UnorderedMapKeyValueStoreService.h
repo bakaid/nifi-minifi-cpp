@@ -64,7 +64,7 @@ class UnorderedMapKeyValueStoreService : virtual public KeyValueStoreService {
   std::shared_ptr<logging::Logger> logger_;
 };
 
-REGISTER_RESOURCE(UnorderedMapKeyValueStoreService, "TODO comment: UnorderedMapKeyValueStoreService");
+REGISTER_RESOURCE(UnorderedMapKeyValueStoreService, "A key-value service implemented by a locked std::unordered_map<std::string, std::string>");
 
 } /* namespace controllers */
 } /* namespace minifi */
