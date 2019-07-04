@@ -64,7 +64,7 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
         logger_(logging::LoggerFactory<ProcessContext>::getLogger()) {
     repo_ = repo;
     if (controller_service_provider_ != nullptr) {
-      state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
+      state_manager_provider_ = getOrCreateDefaultStateManagerProvider(controller_service_provider_);
       if (state_manager_provider_ == nullptr) {
         logger_->log_error("Failed to create default CoreComponentStateManagerProvider");
       }
@@ -95,7 +95,7 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
             node->getControllerServiceImplementation());
       }
     } else {
-      state_manager_provider_ = createOrGetDefaultStateManagerProvider(controller_service_provider_);
+      state_manager_provider_ = getOrCreateDefaultStateManagerProvider(controller_service_provider_);
       if (state_manager_provider_ == nullptr) {
         logger_->log_error("Failed to create default CoreComponentStateManagerProvider");
       }
@@ -225,9 +225,9 @@ class ProcessContext : public controller::ControllerServiceLookup, public core::
     return state_manager_provider_->getCoreComponentStateManager(*processor_node_);
   }
 
-  static std::shared_ptr<core::CoreComponentStateManagerProvider> createOrGetDefaultStateManagerProvider(
+  static std::shared_ptr<core::CoreComponentStateManagerProvider> getOrCreateDefaultStateManagerProvider(
       std::shared_ptr<controller::ControllerServiceProvider> controller_service_provider,
-      const char* base_path = "") {
+      const char *base_path = "") {
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
 

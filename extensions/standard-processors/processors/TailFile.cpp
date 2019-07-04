@@ -215,7 +215,7 @@ void TailFile::parseStateFileLine(char *buf) {
   if (key == "FILENAME") {
     std::string fileLocation, fileName;
     if (utils::file::PathUtils::getFileNameAndPath(value, fileLocation, fileName)) {
-      logger_->log_debug("Received path %s, file %s", fileLocation, fileName);
+      logger_->log_debug("State migration received path %s, file %s", fileLocation, fileName);
       tail_states_.insert(std::make_pair(fileName, TailState { fileLocation, fileName, 0, 0 }));
     } else {
       tail_states_.insert(std::make_pair(value, TailState { fileLocation, value, 0, 0 }));
