@@ -88,6 +88,9 @@ class Configure : public Properties {
   static const char *nifi_c2_flow_url;
   static const char *nifi_c2_flow_base_url;
 
+  // state management options
+  static const char *nifi_state_management_provider_local;
+
  private:
   std::string agent_identifier_;
   std::mutex mutex_;
