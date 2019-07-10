@@ -560,6 +560,11 @@ if (ENABLE_BUSTACHE)
     createExtension(BUSTACHE-EXTENSIONS "BUSTACHE EXTENSIONS" "This enables bustache functionality including ApplyTemplate." "extensions/bustache" "${TEST_DIR}/bustache-tests" "TRUE" "thirdparty/bustache")
 endif()
 
+## OPC Extentions
+if (ENABLE_OPC)
+	createExtension(OPC-EXTENSIONS "OPC EXTENSIONS" "This enables OPC-UA support" "extensions/opc" )
+endif()
+
 ## SFTP extensions
 option(ENABLE_SFTP "Enables SFTP support." OFF)
 if ((ENABLE_ALL OR ENABLE_SFTP) AND NOT DISABLE_CURL)
