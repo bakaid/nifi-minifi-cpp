@@ -468,13 +468,6 @@ build_cmake_command(){
 
   add_os_flags
 
-  curl -V | grep OpenSSL &> /dev/null
-  if [ $? == 0 ]; then
-    echo "Using libcurl-openssl..."
-  else
-    CMAKE_BUILD_COMMAND="${CMAKE_BUILD_COMMAND} -DUSE_CURL_NSS=true .."
-  fi
-
   CMAKE_BUILD_COMMAND="${CMAKE_BUILD_COMMAND} .."
 
   continue_with_plan="Y"
