@@ -50,6 +50,9 @@
 #include <string> // string
 #include <algorithm> // replace
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 #include "core/logging/LoggerConfiguration.h"
 #include "utils/StringUtils.h"
@@ -74,6 +77,24 @@ class FileUtils {
  public:
 
   FileUtils() = delete;
+
+  /*
+   * Get the platform-specific path separator.
+   * @param force_posix returns the posix path separator ('/'), even when not on posix. Useful when dealing with remote posix paths.
+   * @return the path separator character
+   */
+  static char get_separator(bool force_posix = false)
+  {
+#ifdef WIN32
+    if (force_posix) {
+      return '/';
+    } else {
+      return '\\';
+    }
+#else
+    return '/';
+#endif
+  }
 
   /**
    * Deletes a directory, deleting recursively if delete_files_recursively is true
@@ -299,6 +320,164 @@ class FileUtils {
       FindClose(hFind);
     }
 #endif
+  }
+
+  static std::string concat_path(const std::string& root, const std::string& child, bool force_posix = false) {
+    if (root.empty()) {
+      return child;
+    }
+    std::stringstream new_path;
+    if (root.back() == get_separator(force_posix)) {
+      new_path << root << child;
+    } else {
+      new_path << root << get_separator(force_posix) << child;
+    }
+    return new_path.str();
+  }
+
+  static std::tuple<std::string /*parent_path*/, std::string /*child_path*/> split_path(const std::string& path, bool force_posix = false) {
+    if (path.empty()) {
+      /* Empty path has no parent and no child*/
+      return std::make_tuple("", "");
+    }
+    bool absolute = false;
+    size_t root_pos = 0U;
+#ifdef WIN32
+    if (!force_posix) {
+      if (path[0] == '\\') {
+        absolute = true;
+        if (path.size() < 2U) {
+          return std::make_tuple("", "");
+        }
+        if (path[1] == '\\') {
+          if (path.size() >= 4U &&
+             (path[2] == '?' || path[2] == '.') &&
+              path[3] == '\\') {
+            /* Probably an UNC path */
+            root_pos = 4U;
+          } else {
+            /* Probably a \\server\-type path */
+            root_pos = 2U;
+          }
+          root_pos = path.find_first_of("\\", root_pos);
+          if (root_pos == std::string::npos) {
+            return std::make_tuple("", "");
+          }
+        }
+      } else if (path.size() >= 3U &&
+                 toupper(path[0]) >= 'A' &&
+                 toupper(path[0]) <= 'Z' &&
+                 path[1] == ':' &&
+                 path[2] == '\\') {
+        absolute = true;
+        root_pos = 2U;
+      }
+    } else {
+#else
+    if (true) {
+#endif
+      if (path[0] == '/') {
+        absolute = true;
+        root_pos = 0U;
+      }
+    }
+    /* Maybe we are just a single relative child */
+    if (!absolute && path.find(get_separator(force_posix)) == std::string::npos) {
+      return std::make_tuple("", path);
+    }
+    /* Ignore trailing separators */
+    size_t last_pos = path.size() - 1;
+    while (last_pos > root_pos && path[last_pos] == get_separator(force_posix)) {
+      last_pos--;
+    }
+    if (absolute && last_pos == root_pos) {
+      /* This means we are only a root */
+      return std::make_tuple("", "");
+    }
+    /* Find parent-child separator */
+    size_t last_separator = path.find_last_of(get_separator(force_posix), last_pos);
+    if (last_separator == std::string::npos || last_separator < root_pos) {
+      return std::make_tuple("", "");
+    }
+    std::string parent = path.substr(0, last_separator + 1);
+    std::string child = path.substr(last_separator + 1);
+
+    return std::make_tuple(std::move(parent), std::move(child));
+  }
+
+  static std::string get_parent_path(const std::string& path, bool force_posix = false) {
+    std::string parent_path;
+    std::tie(parent_path, std::ignore) = split_path(path, force_posix);
+    return parent_path;
+  }
+
+  static std::string get_child_path(const std::string& path, bool force_posix = false) {
+    std::string child_path;
+    std::tie(std::ignore, child_path) = split_path(path, force_posix);
+    return child_path;
+  }
+
+  /*
+   * Returns the absolute path of the current executable
+   */
+  static std::string get_executable_path() {
+#if defined(__linux__)
+    std::vector<char> buf(1024U);
+    while (true) {
+      ssize_t ret = readlink("/proc/self/exe", buf.data(), buf.size());
+      if (ret == -1) {
+        return "";
+      }
+      if (ret == buf.size()) {
+        /* It may have been truncated */
+        buf.resize(buf.size() * 2);
+        continue;
+      }
+      return std::string(buf.data(), ret);
+    }
+#elif defined(__APPLE__)
+    std::vector<char> buf(PATH_MAX);
+    uint32_t buf_size = buf.size();
+    while (_NSGetExecutablePath(buf.data(), &buf_size) != 0) {
+      buf.resize(buf_size);
+    }
+    std::vector<char> resolved_name(PATH_MAX);
+    if (realpath(buf.data(), resolved_name.data()) == nullptr) {
+      return "";
+    }
+    return std::string(resolved_name.data());
+#elif defined(WIN32)
+    HMODULE hModule = GetModuleHandleA(nullptr);
+    if (hModule == nullptr) {
+      return "";
+    }
+    std::vector<char> buf(1024U);
+    while (true) {
+      size_t ret = GetModuleFileNameA(hModule, buf.data(), buf.size());
+      if (ret == 0U) {
+        return "";
+      }
+      if (ret == buf.size() && GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+        /* It has been truncated */
+        buf.resize(buf.size() * 2);
+        continue;
+      }
+      return std::string(buf.data());
+    }
+#else
+    return "";
+#endif
+  }
+
+  /*
+   * Returns the absolute path to the directory containing the current executable
+   */
+  static std::string get_executable_dir() {
+    auto executable_path = get_executable_path();
+    if (executable_path.empty()) {
+      return "";
+    }
+    return get_parent_path(executable_path);
   }
 
 };

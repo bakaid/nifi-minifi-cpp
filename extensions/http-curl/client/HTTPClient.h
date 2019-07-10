@@ -85,6 +85,8 @@ class HTTPClient : public BaseHTTPClient, public core::Connectable {
 
   ~HTTPClient();
 
+  static int debug_callback(CURL *handle, curl_infotype type, char *data, size_t size, void *userptr);
+
   virtual void setVerbose() override;
 
   void forceClose();
@@ -131,6 +133,10 @@ class HTTPClient : public BaseHTTPClient, public core::Connectable {
 
   void setDisableHostVerification() override;
 
+  bool setSpecificSSLVersion(SSLVersion specific_version) override;
+
+  bool setMinimumSSLVersion(SSLVersion minimum_version) override;
+
   void setKeepAliveProbe(long probe){
     keep_alive_probe_ = probe;
   }
@@ -145,14 +151,13 @@ class HTTPClient : public BaseHTTPClient, public core::Connectable {
   }
 
   const std::vector<std::string> &getHeaders() override {
-    return header_response_.header_tokens_;
-
+    return header_response_.getHeaderLines();
   }
 
   void setInterface(const std::string &);
 
   virtual const std::map<std::string, std::string> &getParsedHeaders() override {
-    return header_response_.header_mapping_;
+    return header_response_.getHeaderMap();
   }
 
   /**
@@ -164,7 +169,7 @@ class HTTPClient : public BaseHTTPClient, public core::Connectable {
    */
   const std::string getHeaderValue(const std::string &key) {
     std::string ret;
-    for (const auto &kv : header_response_.header_mapping_) {
+    for (const auto &kv : header_response_.getHeaderMap()) {
       if (utils::StringUtils::equalsIgnoreCase(key, kv.first)) {
         ret = kv.second;
         break;
@@ -216,18 +221,6 @@ class HTTPClient : public BaseHTTPClient, public core::Connectable {
  protected:
 
   inline bool matches(const std::string &value, const std::string &sregex) override;
-
-  static CURLcode configure_ssl_context(CURL *curl, void *ctx, void *param) {
-#ifdef OPENSSL_SUPPORT
-    minifi::controllers::SSLContextService *ssl_context_service = static_cast<minifi::controllers::SSLContextService*>(param);
-    if (!ssl_context_service->configure_ssl_context(static_cast<SSL_CTX*>(ctx))) {
-      return CURLE_FAILED_INIT;
-    }
-    return CURLE_OK;
-#else
-    return CURLE_FAILED_INIT;
-#endif
-  }
 
   void configure_secure_connection(CURL *http_session);
 

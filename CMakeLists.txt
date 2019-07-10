@@ -403,7 +403,6 @@ include(ExternalProject)
 
 set(CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING OFF CACHE BOOL "Disable dynamic SSL library loading")
 set(CIVETWEB_ENABLE_CXX ON CACHE BOOL "Enable civet C++ library")
-set(CIVETWEB_ENABLE_SSL OFF CACHE BOOL "DISABLE SSL")
 
 SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
 if ( NOT APPLE)
@@ -476,7 +475,7 @@ endif()
 
 option(DISABLE_CIVET "Disables CivetWeb components." OFF)
 if (NOT DISABLE_CIVET)
-	createExtension(CIVETWEB CIVETWEB "This enables ListenHTTP" "extensions/civetweb" "${TEST_DIR}/civetweb-tests")
+	createExtension(CIVETWEB CIVETWEB "This enables ListenHTTP" "extensions/civetweb" "extensions/civetweb/tests")
 endif()
 
 ## Add the rocks DB extension
