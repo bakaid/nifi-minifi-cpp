@@ -357,6 +357,10 @@ include(ExternalProject)
 
 set(CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING OFF CACHE BOOL "Disable dynamic SSL library loading")
 set(CIVETWEB_ENABLE_CXX ON CACHE BOOL "Enable civet C++ library")
+if (NOT OPENSSL_FOUND)
+	message("SSL support disabled, ListenHTTP will not have HTTPS support")
+	set(CIVETWEB_ENABLE_SSL OFF CACHE BOOL "DISABLE SSL")
+endif()
 
 SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
 if ( NOT APPLE)
