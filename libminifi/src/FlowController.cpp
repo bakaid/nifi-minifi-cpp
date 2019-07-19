@@ -314,19 +314,16 @@ void FlowController::load(const std::shared_ptr<core::ProcessGroup> &root, bool 
     controller_service_provider_ = flow_configuration_->getControllerServiceProvider();
 
     if (nullptr == timer_scheduler_ || reload) {
-      timer_scheduler_ = std::make_shared<TimerDrivenSchedulingAgent>(
-          std::static_pointer_cast<core::controller::ControllerServiceProvider>(std::dynamic_pointer_cast<FlowController>(shared_from_this())), provenance_repo_, flow_file_repo_, content_repo_,
+      timer_scheduler_ = std::make_shared<TimerDrivenSchedulingAgent>(controller_service_provider_, provenance_repo_, flow_file_repo_, content_repo_,
           configuration_);
     }
     if (nullptr == event_scheduler_ || reload) {
-      event_scheduler_ = std::make_shared<EventDrivenSchedulingAgent>(
-          std::static_pointer_cast<core::controller::ControllerServiceProvider>(std::dynamic_pointer_cast<FlowController>(shared_from_this())), provenance_repo_, flow_file_repo_, content_repo_,
+      event_scheduler_ = std::make_shared<EventDrivenSchedulingAgent>(controller_service_provider_, provenance_repo_, flow_file_repo_, content_repo_,
           configuration_);
     }
 
     if (nullptr == cron_scheduler_ || reload) {
-      cron_scheduler_ = std::make_shared<CronDrivenSchedulingAgent>(
-          std::static_pointer_cast<core::controller::ControllerServiceProvider>(std::dynamic_pointer_cast<FlowController>(shared_from_this())), provenance_repo_, flow_file_repo_, content_repo_,
+      cron_scheduler_ = std::make_shared<CronDrivenSchedulingAgent>(controller_service_provider_, provenance_repo_, flow_file_repo_, content_repo_,
           configuration_);
     }
 
