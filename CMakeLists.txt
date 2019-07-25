@@ -357,7 +357,7 @@ include(ExternalProject)
 
 set(CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING OFF CACHE BOOL "Disable dynamic SSL library loading")
 set(CIVETWEB_ENABLE_CXX ON CACHE BOOL "Enable civet C++ library")
-set(CIVETWEB_ENABLE_SSL OFF CACHE BOOL "DISABLE SSL")
+set(CIVETWEB_ENABLE_SSL ON CACHE BOOL "DISABLE SSL")
 
 SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
 if ( NOT APPLE)
@@ -562,6 +562,12 @@ if ((ENABLE_ALL OR ENABLE_SFTP) AND NOT DISABLE_CURL)
         message("minifi-sftp will depend on zlib-external")
         add_dependencies(minifi-sftp zlib-external)
     endif()
+endif()
+
+## Openwsman Extesions
+option(ENABLE_OPENWSMAN "Disables the Openwsman extensions." ON)
+if (ENABLE_OPENWSMAN)
+	createExtension(OPENWSMAN-EXTENSIONS "OPENCV EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman")
 endif()
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN
