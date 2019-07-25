@@ -76,7 +76,26 @@ public:
             free(xml_buf);
         }
         
-        if (strcmp(endpoint, "/wsman/SubscriptionManager/WEC") != 0) {
+        if (strcmp(endpoint, "/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DED") == 0) {
+             WsXmlDocH ack = wsman_create_response_envelope(doc, "http://schemas.dmtf.org/wbem/wsman/1/wsman/Ack");
+             WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
+             ws_xml_add_child(ack_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:06D6A1CD-A99D-441C-8A8C-5571844C4D10");
+            
+            // Send ACK
+            xml_buf = nullptr;
+            xml_buf_size = 0;
+            ws_xml_dump_memory_enc(ack, &xml_buf, &xml_buf_size, "UTF-8");
+            ws_xml_dump_doc(stderr, ack);
+            
+            mg_printf(conn, "HTTP/1.1 200 OK\r\n");
+            mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
+            mg_printf(conn, "Authorization: http://schemas.dmtf.org/wbem/wsman/1/wsman/secprofile/https/mutual\r\n");
+            mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
+            mg_printf(conn, "\r\n");
+            mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
+            
+            return true;
+        } else if (strcmp(endpoint, "/wsman/SubscriptionManager/WEC") != 0) {
             return true;
         }
 
@@ -94,7 +113,7 @@ public:
         WsXmlNodeH subscription = ws_xml_add_child(enumeration_items, nullptr, "Subscription", nullptr);
         ws_xml_set_ns(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "m");
 
-        ws_xml_add_child(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:BB8CD0E7-46F4-40E4-B74C-A0C7B509F669");
+        ws_xml_add_child(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:BB8CD0E7-46F4-40E4-B74C-A0C7B509F690");
 
         // Subscription
         WsXmlDocH subscription_item = ws_xml_create_envelope();
@@ -124,13 +143,16 @@ public:
         ws_xml_add_node_attr(node, nullptr, WSM_NAME, "CDATA");
         ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
         
+        node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
+        ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
+
         WsXmlNodeH body = ws_xml_get_soap_body(subscription_item);
         WsXmlNodeH subscribe_node = ws_xml_add_child(body, XML_NS_EVENTING, WSEVENT_SUBSCRIBE, nullptr);
         
         // EndTo
         WsXmlNodeH endto_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_ENDTO, nullptr);
         {
-            ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://23.96.27.78:5986/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DEC");
+            ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://23.96.27.78:5986/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DED");
             node = ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
             ws_xml_add_child(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "430055A3-8146-49AA-A5C1-D87DC542AB0C");
         }
@@ -143,7 +165,7 @@ public:
         
         WsXmlNodeH notify_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
         {
-            ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://23.96.27.78:5986/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DEC");
+            ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://23.96.27.78:5986/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DED");
             node = ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
             ws_xml_add_child(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "430055A3-8146-49AA-A5C1-D87DC542AB0C");
             // Policy
@@ -160,8 +182,16 @@ public:
             WsXmlNodeH thumbprint = ws_xml_add_child(client_certificate, authentication_ns, "Thumbprint", "EFA9F12309CEA6EAD08699B3B72E49F7F5B7185C");
             ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
         }
-//         node = ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_AUTH, nullptr);
-//         ws_xml_add_node_attr(node, nullptr, WSM_PROFILE, WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
+        
+        ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
+
+        // Filter
+        WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, nullptr);
+        WsXmlNodeH query_list = ws_xml_add_child(filter_node, nullptr, "QueryList", nullptr);
+        WsXmlNodeH query = ws_xml_add_child(query_list, nullptr, "Query", nullptr);
+        ws_xml_add_node_attr(query, nullptr, "Id", "0");
+        WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
+        ws_xml_add_node_attr(select, nullptr, "Path", "Application");
         }
         //
         WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_item);
