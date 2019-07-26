@@ -19,7 +19,7 @@
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 
-file(GLOB SOURCES  "*.cpp")
+file(GLOB SOURCES "processors/*.cpp")
 
 set(BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman")
 
@@ -40,40 +40,43 @@ set(OPENWSMAN_CMAKE_ARGS
         -DDISABLE_PLUGINS=YES
         -DUSE_PAM=NO
         -DBUILD_TESTS=NO
-#         -DBUILD_SHARED_LIBS=NO
+        -DDISABLE_SERVER=YES
+        -DBUILD_SHARED_LIBS=NO
     )
 
 set(BYPRODUCTS
-        "lib64/libwsman.so"
-        "lib64/libwsman_server.so"
-        "lib64/libwsman_client.so"
-        "lib64/libwsman_curl_client_transport.so")
+        "lib64/libwsman.a"
+#         "lib64/libwsman_server.a"
+#         "lib64/libwsman_client.a"
+#         "lib64/libwsman_curl_client_transport.a"
+        )
+
+FOREACH(BYPRODUCT ${BYPRODUCTS})
+    LIST(APPEND OPENWSMAN_LIBRARIES_LIST "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-install/${BYPRODUCT}")
+ENDFOREACH(b)
     
 ExternalProject_Add(
             openwsman-external
             URL "https://github.com/Openwsman/openwsman/archive/v2.6.9.tar.gz"
             SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-src"
             CMAKE_ARGS ${OPENWSMAN_CMAKE_ARGS}
-            BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-install/${BYPRODUCTS}"
+            BUILD_BYPRODUCTS "${OPENWSMAN_LIBRARIES_LIST}"
     )
 
 set(OPENWSMAN_FOUND "YES" CACHE STRING "" FORCE)
 set(OPENWSMAN_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-src/include" CACHE STRING "" FORCE)
-FOREACH(BYPRODUCT ${BYPRODUCTS})
-    LIST(APPEND OPENWSMAN_LIBRARIES_LIST "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-install/${BYPRODUCT}")
-ENDFOREACH(b)
 set(OPENWSMAN_LIBRARIES "${OPENWSMAN_LIBRARIES_LIST}" CACHE STRING "" FORCE)
 message("OPENWSMAN_LIBRARIES: ${OPENWSMAN_LIBRARIES}")
 
 add_library(minifi-openwsman STATIC ${SOURCES})
 
 add_dependencies(minifi-openwsman openwsman-external)
-target_link_libraries(minifi-openwsman ${OPENWSMAN_LIBRARIES})
+target_link_libraries(minifi-openwsman ${OPENWSMAN_LIBRARIES} civetweb-cpp c-library xml2)
 include_directories(${OPENWSMAN_INCLUDE_DIR}
                     ${CIVET_THIRDPARTY_ROOT}/include)
 
 add_executable(openwsman-server "poc/OpenwsmanServer.cpp")
-target_link_libraries(openwsman-server ${OPENWSMAN_LIBRARIES} civetweb-cpp c-library)
+target_link_libraries(openwsman-server ${OPENWSMAN_LIBRARIES} civetweb-cpp c-library xml2)
 
 SET (OPENWSMAN-EXTENSION minifi-openwsman PARENT_SCOPE)
 register_extension(minifi-openwsman)

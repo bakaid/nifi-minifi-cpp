@@ -18,7 +18,7 @@ extern "C" {
 
 #include <CivetServer.h>
 
-int continue_working = 0;
+// int continue_working = 0;
 
 #define XML_NS_CUSTOM_SUBSCRIPTION "http://schemas.microsoft.com/wbem/wsman/1/subscription"
 
