@@ -113,7 +113,7 @@ public:
         WsXmlNodeH subscription = ws_xml_add_child(enumeration_items, nullptr, "Subscription", nullptr);
         ws_xml_set_ns(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "m");
 
-        ws_xml_add_child(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:BB8CD0E7-46F4-40E4-B74C-A0C7B509F690");
+        ws_xml_add_child(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:BB8CD0E7-46F4-40E4-B74C-A0C7B509F692");
 
         // Subscription
         WsXmlDocH subscription_item = ws_xml_create_envelope();
@@ -142,7 +142,11 @@ public:
         node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, nullptr);
         ws_xml_add_node_attr(node, nullptr, WSM_NAME, "CDATA");
         ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
-        
+
+        node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, nullptr);
+        ws_xml_add_node_attr(node, nullptr, WSM_NAME, "IgnoreChannelError");
+        ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
+
         node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
         ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
 
@@ -192,7 +196,11 @@ public:
         ws_xml_add_node_attr(query, nullptr, "Id", "0");
         WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
         ws_xml_add_node_attr(select, nullptr, "Path", "Application");
+        
+        // Send Bookmarks
+        ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_SENDBOOKMARKS, nullptr);
         }
+
         //
         WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_item);
         ws_xml_copy_node(subscription_node, subscription);
