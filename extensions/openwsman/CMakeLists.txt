@@ -74,6 +74,20 @@ add_dependencies(minifi-openwsman openwsman-external)
 target_link_libraries(minifi-openwsman ${OPENWSMAN_LIBRARIES} civetweb-cpp c-library xml2)
 include_directories(${OPENWSMAN_INCLUDE_DIR}
                     ${CIVET_THIRDPARTY_ROOT}/include)
+                    
+if (WIN32)
+    set_target_properties(minifi-openwsman PROPERTIES
+        LINK_FLAGS "/WHOLEARCHIVE"
+    )
+elseif (APPLE)
+    set_target_properties(minifi-openwsman PROPERTIES
+        LINK_FLAGS "-Wl,-all_load"
+    )
+else ()
+    set_target_properties(minifi-openwsman PROPERTIES
+        LINK_FLAGS "-Wl,--whole-archive"
+    )
+endif ()
 
 add_executable(openwsman-server "poc/OpenwsmanServer.cpp")
 target_link_libraries(openwsman-server ${OPENWSMAN_LIBRARIES} civetweb-cpp c-library xml2)
