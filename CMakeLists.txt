@@ -567,7 +567,7 @@ endif()
 ## Openwsman Extesions
 option(ENABLE_OPENWSMAN "Disables the Openwsman extensions." ON)
 if (ENABLE_OPENWSMAN)
-	createExtension(OPENWSMAN-EXTENSIONS "OPENCV EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman")
+	createExtension(OPENWSMAN-EXTENSIONS "OPENCV EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman" "extensions/openwsman/tests")
 endif()
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN

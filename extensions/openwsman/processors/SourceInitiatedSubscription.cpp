@@ -32,9 +32,9 @@
 #include <utility>
 #include <vector>
 
+#include <openssl/x509.h>
 extern "C" {
 #include "wsman-api.h"
-#include "wsman-xml.h"
 #include "wsman-xml-api.h"
 #include "wsman-xml-serialize.h"
 #include "wsman-xml-serializer.h"
@@ -54,6 +54,9 @@ extern "C" {
 #include "utils/ScopeGuard.h"
 
 #define XML_NS_CUSTOM_SUBSCRIPTION "http://schemas.microsoft.com/wbem/wsman/1/subscription"
+#define XML_NS_CUSTOM_AUTHENTICATION "http://schemas.microsoft.com/wbem/wsman/1/authentication"
+#define XML_NS_CUSTOM_POLICY "http://schemas.xmlsoap.org/ws/2002/12/policy"
+#define WSMAN_CUSTOM_ACTION_ACK "http://schemas.dmtf.org/wbem/wsman/1/wsman/Ack"
 
 namespace org {
 namespace apache {
@@ -65,7 +68,7 @@ core::Property SourceInitiatedSubscription::ListenHostname(
         ->isRequired(true)->build());
 core::Property SourceInitiatedSubscription::ListenPort(
     core::PropertyBuilder::createProperty("Listen Port")->withDescription("The port to listen on.")
-        ->isRequired(true)->withDefaultValue<uint64_t>(5986U, core::StandardValidators::LISTEN_PORT_VALIDATOR())->build());
+        ->isRequired(true)->withDefaultValue<int64_t>(5986, core::StandardValidators::LISTEN_PORT_VALIDATOR())->build());
 core::Property SourceInitiatedSubscription::SubscriptionManagerPath(
     core::PropertyBuilder::createProperty("Subscription Manager Path")->withDescription("The URI path that will be used for the WEC Subscription Manager endpoint.")
         ->isRequired(true)->withDefaultValue("/wsman/SubscriptionManager/WEC")->build());
@@ -106,6 +109,7 @@ core::Relationship SourceInitiatedSubscription::Success("success", "All Events a
 SourceInitiatedSubscription::SourceInitiatedSubscription(std::string name, utils::Identifier uuid)
     : Processor(name, uuid)
     , logger_(logging::LoggerFactory<SourceInitiatedSubscription>::getLogger())
+    , id_generator_(utils::IdGenerator::getIdGenerator())
     , session_factory_(nullptr)
     , listen_port_(0U) {
 }
@@ -120,93 +124,105 @@ SourceInitiatedSubscription::Handler::Handler(SourceInitiatedSubscription& proce
 bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struct mg_connection* conn) {
   const struct mg_request_info* req_info = mg_get_request_info(conn);
   if (req_info == nullptr) {
+    processor_.logger_->log_error("Failed to get request info");
     return false;
   }
-  
+
   const char* endpoint = req_info->local_uri;
   if (endpoint == nullptr) {
+    processor_.logger_->log_error("Failed to get called endpoint (local_uri)");
     return false;
   }
-  std::cerr << "Endpoint: " << endpoint << std::endl;
-  
+  processor_.logger_->log_debug("Endpoint \"%s\" has been called", endpoint);
+
   for (int i = 0; i < req_info->num_headers; i++) {
-    std::cerr << "Header: " << req_info->http_headers[i].name << ": " << req_info->http_headers[i].value << std::endl;
+    processor_.logger_->log_debug("Received header \"%s: %s\"", req_info->http_headers[i].name, req_info->http_headers[i].value);
   }
 
   const char* content_type = mg_get_header(conn, "Content-Type");
   if (content_type == nullptr) {
+    processor_.logger_->log_error("Content-Type header missing");
     return false;
   }
-
-  std::cerr << "Content-Type: \"" << content_type << "\"" << std::endl;
   
-  const char* charset = strstr(content_type, "charset=");
-  if (charset == nullptr) {
-    return false;
+  std::string charset;
+  const char* charset_begin = strstr(content_type, "charset=");
+  if (charset_begin == nullptr) {
+    processor_.logger_->log_warn("charset missing from Content-Type header, assuming UTF-8");
+    charset = "UTF-8";
   } else {
-    charset += strlen("charset=");
-    // TODO: might be other things after a ';'
+    charset_begin += strlen("charset=");
+    const char* charset_end = strchr(charset_begin, ';');
+    if (charset_end == nullptr) {
+        charset = std::string(charset_begin);
+    } else {
+        charset = std::string(charset_begin, charset_end - charset_begin);
+    }
   }
-  
-  std::cerr << "charset: \"" << charset << "\"" << std::endl;
+  processor_.logger_->log_debug("charset is \"%s\"", charset.c_str());
 
   std::vector<uint8_t> raw_data;
-  std::array<uint8_t, 16384U> buf;
-  int read_bytes;
-  while ((read_bytes = mg_read(conn, buf.data(), buf.size())) > 0) {
-    raw_data.insert(raw_data.end(), buf.begin(), buf.begin() + read_bytes); // TODO
-//       std::cerr << "Body: " << std::string(reinterpret_cast<char*>(buf.data()), read_bytes);
-//       fwrite(buf.data(), 1U, read_bytes, stdout);
-  }
-  
-  WsXmlDocH doc = ws_xml_read_memory(reinterpret_cast<char*>(raw_data.data()), raw_data.size(), charset, 0);
-  WsXmlNodeH node = ws_xml_get_doc_root(doc);
-  char* xml_buf = nullptr;
-  int xml_buf_size = 0;
-  ws_xml_dump_memory_node_tree_enc(node, &xml_buf, &xml_buf_size, "UTF-8");
-  if (xml_buf != nullptr) {
-    std::cerr << std::string(xml_buf, xml_buf_size);
-    free(xml_buf);
-  }
-  
-  if (strcmp(endpoint, "/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DED") == 0) {
-      WsXmlDocH ack = wsman_create_response_envelope(doc, "http://schemas.dmtf.org/wbem/wsman/1/wsman/Ack");
-      WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
-      ws_xml_add_child(ack_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:06D6A1CD-A99D-441C-8A8C-5571844C4D10");
-    
-    // Send ACK
-    xml_buf = nullptr;
-    xml_buf_size = 0;
-    ws_xml_dump_memory_enc(ack, &xml_buf, &xml_buf_size, "UTF-8");
-    ws_xml_dump_doc(stderr, ack);
-    
-    mg_printf(conn, "HTTP/1.1 200 OK\r\n");
-    mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
-    mg_printf(conn, "Authorization: http://schemas.dmtf.org/wbem/wsman/1/wsman/secprofile/https/mutual\r\n");
-    mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
-    mg_printf(conn, "\r\n");
-    mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
-    
-    return true;
-  } else if (strcmp(endpoint, "/wsman/SubscriptionManager/WEC") != 0) {
-    return true;
+  {
+    std::array<uint8_t, 16384U> buf;
+    int read_bytes;
+    while ((read_bytes = mg_read(conn, buf.data(), buf.size())) > 0) {
+      size_t orig_size = raw_data.size();
+      raw_data.resize(orig_size + read_bytes);
+      memcpy(raw_data.data() + orig_size, buf.data(), read_bytes);
+    }
   }
 
-  WsXmlDocH response = wsman_create_response_envelope(doc, nullptr);
-  
+  if (raw_data.empty()) {
+    processor_.logger_->log_error("POST body is empty");
+    return false;
+  }
+
+  WsXmlDocH doc = ws_xml_read_memory(reinterpret_cast<char*>(raw_data.data()), raw_data.size(), charset.c_str(), 0);
+
+  if (doc == nullptr) {
+    processor_.logger_->log_error("Failed to parse POST body as XML");
+    return false;
+  }
+
+  {
+    WsXmlNodeH node = ws_xml_get_doc_root(doc);
+    char* xml_buf = nullptr;
+    int xml_buf_size = 0;
+    ws_xml_dump_memory_node_tree_enc(node, &xml_buf, &xml_buf_size, "UTF-8");
+    if (xml_buf != nullptr) {
+        logging::LOG_DEBUG(processor_.logger_) << "Received request: \"" << std::string(xml_buf, xml_buf_size) << "\"";
+        free(xml_buf);
+    }
+  }
+
+  if (endpoint == processor_.subscription_manager_path_) {
+    return this->handleSubscriptionManager(conn, endpoint, doc);
+  } else if (strncmp(endpoint, processor_.subscriptions_base_path_.c_str(), processor_.subscriptions_base_path_.length()) == 0) {
+    return this->handleSubscriptions(conn, endpoint, doc);
+  } else {
+    ws_xml_destroy_doc(doc);
+    return false;
+  }
+}
+
+bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_connection* conn, const std::string& /*endpoint*/, WsXmlDocH request) {
+  WsXmlDocH response = wsman_create_response_envelope(request, nullptr);
+
   WsXmlNodeH response_header = ws_xml_get_soap_header(response);
-  ws_xml_add_child(response_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:06D6A1CD-A99D-441C-8A8C-5571844C4D09");
-  
+  utils::Identifier msg_id = processor_.id_generator_->generate();
+  ws_xml_add_child_format(response_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
+
   WsXmlNodeH response_body = ws_xml_get_soap_body(response);
   WsXmlNodeH enumeration_response = ws_xml_add_child(response_body, XML_NS_ENUMERATION, WSENUM_ENUMERATE_RESP, nullptr);
   ws_xml_add_child(enumeration_response, XML_NS_ENUMERATION, WSENUM_ENUMERATION_CONTEXT, nullptr);
   WsXmlNodeH enumeration_items = ws_xml_add_child(enumeration_response, XML_NS_WS_MAN, WSENUM_ITEMS, nullptr);
   ws_xml_add_child(enumeration_response, XML_NS_WS_MAN, WSENUM_END_OF_SEQUENCE, nullptr);
-  
+
   WsXmlNodeH subscription = ws_xml_add_child(enumeration_items, nullptr, "Subscription", nullptr);
   ws_xml_set_ns(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "m");
 
-  ws_xml_add_child(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:BB8CD0E7-46F4-40E4-B74C-A0C7B509F692");
+  utils::Identifier subscription_version = processor_.id_generator_->generate(); // TODO
+  ws_xml_add_child_format(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:%s", subscription_version.to_string().c_str());
 
   // Subscription
   WsXmlDocH subscription_item = ws_xml_create_envelope();
@@ -216,8 +232,9 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
 
   node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_ACTION, EVT_ACTION_SUBSCRIBE);
   ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
-  
-  ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:346A0039-0C21-465E-8ABD-CF89EE730FA7");
+
+  utils::Identifier msg_id = processor_.id_generator_->generate();
+  ws_xml_add_child_format(header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
 
   node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_TO, WSA_TO_ANONYMOUS);
   ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
@@ -228,7 +245,7 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
   node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_REPLY_TO, nullptr);
   node = ws_xml_add_child(node, XML_NS_ADDRESSING, WSA_ADDRESS, WSA_TO_ANONYMOUS);
   ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
-  
+
   WsXmlNodeH option_set = ws_xml_add_child(header, XML_NS_WS_MAN, WSM_OPTION_SET, nullptr);
   ws_xml_ns_add(option_set, XML_NS_SCHEMA_INSTANCE, XML_NS_SCHEMA_INSTANCE_PREFIX);
 
@@ -247,11 +264,18 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
   WsXmlNodeH subscribe_node = ws_xml_add_child(body, XML_NS_EVENTING, WSEVENT_SUBSCRIBE, nullptr);
   
   // EndTo
+  utils::Identifier subscription_id = processor_.id_generator_->generate(); // TODO
+  utils::Identifier event_id = processor_.id_generator_->generate(); // TODO
   WsXmlNodeH endto_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_ENDTO, nullptr);
   {
-    ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://23.96.27.78:5986/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DED");
+    ws_xml_add_child_format(endto_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s/%s",
+                            processor_.listen_hostname_.c_str(),
+                            processor_.listen_port_,
+                            processor_.subscriptions_base_path_.c_str(),
+                            subscription_id.to_string().c_str()
+                           );
     node = ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
-    ws_xml_add_child(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "430055A3-8146-49AA-A5C1-D87DC542AB0C");
+    ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", event_id.to_string().c_str());
   }
   
   // Delivery
@@ -262,21 +286,25 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
   
   WsXmlNodeH notify_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
   {
-    ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://23.96.27.78:5986/wsman/subscriptions/07C41EF8-1EE6-4519-86C5-47A78FB16DED");
+    ws_xml_add_child_format(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s/%s",
+                            processor_.listen_hostname_.c_str(),
+                            processor_.listen_port_,
+                            processor_.subscriptions_base_path_.c_str(),
+                            subscription_id.to_string().c_str()
+                           );
     node = ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
-    ws_xml_add_child(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "430055A3-8146-49AA-A5C1-D87DC542AB0C");
+    ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", event_id.to_string().c_str());
     // Policy
-    const char* legacy_policy_ns = "http://schemas.xmlsoap.org/ws/2002/12/policy";
-    const char* authentication_ns = "http://schemas.microsoft.com/wbem/wsman/1/authentication";
     WsXmlNodeH policy = ws_xml_add_child(notify_node, nullptr, "Policy", nullptr);
-    ws_xml_set_ns(policy, legacy_policy_ns, "c");
-    ws_xml_ns_add(policy, authentication_ns, "auth");
-    WsXmlNodeH exactly_one = ws_xml_add_child(policy, legacy_policy_ns, "ExactlyOne", nullptr);
-    WsXmlNodeH all = ws_xml_add_child(exactly_one, legacy_policy_ns, "All", nullptr);
-    WsXmlNodeH authentication = ws_xml_add_child(all, authentication_ns, "Authentication", nullptr);
-    ws_xml_add_node_attr(authentication, nullptr, "Profile", "http://schemas.dmtf.org/wbem/wsman/1/wsman/secprofile/https/mutual");
-    WsXmlNodeH client_certificate = ws_xml_add_child(authentication, authentication_ns, "ClientCertificate", nullptr);
-    WsXmlNodeH thumbprint = ws_xml_add_child(client_certificate, authentication_ns, "Thumbprint", "EFA9F12309CEA6EAD08699B3B72E49F7F5B7185C");
+    ws_xml_set_ns(policy, XML_NS_CUSTOM_POLICY, "c");
+    ws_xml_ns_add(policy, XML_NS_CUSTOM_AUTHENTICATION, "auth");
+    WsXmlNodeH exactly_one = ws_xml_add_child(policy, XML_NS_CUSTOM_POLICY, "ExactlyOne", nullptr);
+    WsXmlNodeH all = ws_xml_add_child(exactly_one, XML_NS_CUSTOM_POLICY, "All", nullptr);
+    WsXmlNodeH authentication = ws_xml_add_child(all, XML_NS_CUSTOM_AUTHENTICATION, "Authentication", nullptr);
+    ws_xml_add_node_attr(authentication, nullptr, "Profile", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
+    WsXmlNodeH client_certificate = ws_xml_add_child(authentication, XML_NS_CUSTOM_AUTHENTICATION, "ClientCertificate", nullptr);
+//     WsXmlNodeH thumbprint = ws_xml_add_child(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "EFA9F12309CEA6EAD08699B3B72E49F7F5B7185C");
+    WsXmlNodeH thumbprint = ws_xml_add_child_format(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "%s", processor_.ssl_ca_cert_thumbprint_.c_str());
     ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
   }
   
@@ -294,25 +322,53 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
   ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_SENDBOOKMARKS, nullptr);
   }
 
-  //
+  // Copy whole Subscription
   WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_item);
   ws_xml_copy_node(subscription_node, subscription);
-  
-  
+  ws_xml_destroy_doc(subscription_item);
+
   // Send response
-  xml_buf = nullptr;
-  xml_buf_size = 0;
+  char* xml_buf = nullptr;
+  int xml_buf_size = 0;
   ws_xml_dump_memory_enc(response, &xml_buf, &xml_buf_size, "UTF-8");
-  
-//     std::cerr << "Response: " << std::string(xml_buf, xml_buf_size);
-      ws_xml_dump_doc(stderr, response);
+
+  ws_xml_dump_doc(stderr, response);
   
   mg_printf(conn, "HTTP/1.1 200 OK\r\n");
   mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
-  mg_printf(conn, "Authorization: http://schemas.dmtf.org/wbem/wsman/1/wsman/secprofile/https/mutual\r\n");
+  mg_printf(conn, "Authorization: %s\r\n", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
   mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
   mg_printf(conn, "\r\n");
   mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
+  
+  ws_xml_free_memory(xml_buf);
+  ws_xml_destroy_doc(request);
+
+  return true;
+}
+
+bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
+  WsXmlDocH ack = wsman_create_response_envelope(request, WSMAN_CUSTOM_ACTION_ACK);
+  WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
+
+  utils::Identifier msg_id = processor_.id_generator_->generate();
+  ws_xml_add_child_format(ack_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
+
+  // Send ACK
+  char* xml_buf = nullptr;
+  int xml_buf_size = 0;
+  ws_xml_dump_memory_enc(ack, &xml_buf, &xml_buf_size, "UTF-8");
+  ws_xml_dump_doc(stderr, ack);
+
+  mg_printf(conn, "HTTP/1.1 200 OK\r\n");
+  mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
+  mg_printf(conn, "Authorization: %s\r\n", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
+  mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
+  mg_printf(conn, "\r\n");
+  mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
+
+  ws_xml_free_memory(xml_buf);
+  ws_xml_destroy_doc(request);
 
   return true;
 }
@@ -383,7 +439,49 @@ void SourceInitiatedSubscription::onSchedule(const std::shared_ptr<core::Process
     return;
   }
 
+  FILE* fp = fopen(ssl_ca_file.c_str(), "rb");
+  if (fp == nullptr) {
+    logger_->log_error("Failed to open file specified by SSL Certificate Authority attribute");
+    return;
+  }
+  X509* ca = nullptr;
+  PEM_read_X509(fp, &ca, nullptr, nullptr);
+  fclose(fp);
+  if (ca == nullptr) {
+    logger_->log_error("Failed to parse file specified by SSL Certificate Authority attribute");
+    return;
+  }
+  std::array<uint8_t, 20U> hash_buf;
+  int ret = X509_digest(ca, EVP_sha1(), hash_buf.data(), nullptr);
+  X509_free(ca);
+  if (ret != 1) {
+    logger_->log_error("Failed to get fingerprint for CA specified by SSL Certificate Authority attribute");
+    return;
+  }
+  ssl_ca_cert_thumbprint_ = utils::StringUtils::to_hex(hash_buf.data(), hash_buf.size(), true /*uppercase*/);
+  logger_->log_debug("%s SHA-1 thumbprint is %s", ssl_ca_file.c_str(), ssl_ca_cert_thumbprint_.c_str());
+
   session_factory_ = sessionFactory;
+
+  std::vector<std::string> options;
+  options.emplace_back("enable_keep_alive");
+  options.emplace_back("yes");
+  options.emplace_back("keep_alive_timeout_ms");
+  options.emplace_back("15000");
+  options.emplace_back("num_threads");
+  options.emplace_back("1");
+  options.emplace_back("listening_ports");
+  options.emplace_back(std::to_string(listen_port_) + "s");
+  options.emplace_back("ssl_certificate");
+  options.emplace_back(ssl_certificate_file);
+  options.emplace_back("ssl_ca_file");
+  options.emplace_back(ssl_ca_file);
+  options.emplace_back("ssl_verify_peer");
+  options.emplace_back(verify_peer ? "yes" : "no");
+
+  server_ = std::unique_ptr<CivetServer>(new CivetServer(options));
+  handler_ = std::unique_ptr<Handler>(new Handler(*this));
+  server_->addHandler("**", *handler_);
 }
 
 void SourceInitiatedSubscription::notifyStop() {
