@@ -85,12 +85,26 @@ class SourceInitiatedSubscription : public core::Processor {
    public:
     Handler(SourceInitiatedSubscription& processor);
     bool handlePost(CivetServer* server, struct mg_connection* conn);
+    
+    class WriteCallback : public OutputStreamCallback {
+     public:
+      WriteCallback(char* text);
+      int64_t process(std::shared_ptr<io::BaseStream> stream);
+
+     private:
+      char* text_;
+    };
 
    private:
     SourceInitiatedSubscription& processor_;
     
     bool handleSubscriptionManager(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request);
     bool handleSubscriptions(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request);
+    
+    static int enumerateEventCallback(WsXmlNodeH node, void* data);
+    std::string getSoapAction(WsXmlDocH doc);
+    std::string getMachineId(WsXmlDocH doc);
+    void sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size);
   };
 
  protected:

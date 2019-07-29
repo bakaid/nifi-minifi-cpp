@@ -56,7 +56,10 @@ extern "C" {
 #define XML_NS_CUSTOM_SUBSCRIPTION "http://schemas.microsoft.com/wbem/wsman/1/subscription"
 #define XML_NS_CUSTOM_AUTHENTICATION "http://schemas.microsoft.com/wbem/wsman/1/authentication"
 #define XML_NS_CUSTOM_POLICY "http://schemas.xmlsoap.org/ws/2002/12/policy"
+#define XML_NS_CUSTOM_MACHINEID "http://schemas.microsoft.com/wbem/wsman/1/machineid"
 #define WSMAN_CUSTOM_ACTION_ACK "http://schemas.dmtf.org/wbem/wsman/1/wsman/Ack"
+#define WSMAN_CUSTOM_ACTION_HEARTBEAT "http://schemas.dmtf.org/wbem/wsman/1/wsman/Heartbeat"
+#define WSMAN_CUSTOM_ACTION_EVENTS "http://schemas.dmtf.org/wbem/wsman/1/wsman/Events"
 
 namespace org {
 namespace apache {
@@ -88,7 +91,7 @@ core::Property SourceInitiatedSubscription::XPathXmlQuery(
     core::PropertyBuilder::createProperty("XPath XML Query")->withDescription("An XPath Query in structured XML format conforming to the Query Schema described in https://docs.microsoft.com/en-gb/windows/win32/wes/queryschema-schema, "
     "see an example here: https://docs.microsoft.com/en-gb/windows/win32/wes/consuming-events")
         ->isRequired(true)
-        ->withDefaultValue("QueryList>\n"
+        ->withDefaultValue("<QueryList>\n"
                            "  <Query Id=\"0\">\n"
                            "    <Select Path=\"Application\">*</Select>\n"
                            "  </Query>\n"
@@ -133,10 +136,10 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
     processor_.logger_->log_error("Failed to get called endpoint (local_uri)");
     return false;
   }
-  processor_.logger_->log_debug("Endpoint \"%s\" has been called", endpoint);
+  processor_.logger_->log_trace("Endpoint \"%s\" has been called", endpoint);
 
   for (int i = 0; i < req_info->num_headers; i++) {
-    processor_.logger_->log_debug("Received header \"%s: %s\"", req_info->http_headers[i].name, req_info->http_headers[i].value);
+    processor_.logger_->log_trace("Received header \"%s: %s\"", req_info->http_headers[i].name, req_info->http_headers[i].value);
   }
 
   const char* content_type = mg_get_header(conn, "Content-Type");
@@ -159,7 +162,7 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
         charset = std::string(charset_begin, charset_end - charset_begin);
     }
   }
-  processor_.logger_->log_debug("charset is \"%s\"", charset.c_str());
+  processor_.logger_->log_trace("charset is \"%s\"", charset.c_str());
 
   std::vector<uint8_t> raw_data;
   {
@@ -190,8 +193,8 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
     int xml_buf_size = 0;
     ws_xml_dump_memory_node_tree_enc(node, &xml_buf, &xml_buf_size, "UTF-8");
     if (xml_buf != nullptr) {
-        logging::LOG_DEBUG(processor_.logger_) << "Received request: \"" << std::string(xml_buf, xml_buf_size) << "\"";
-        free(xml_buf);
+        logging::LOG_TRACE(processor_.logger_) << "Received request: \"" << std::string(xml_buf, xml_buf_size) << "\"";
+        ws_xml_free_memory(xml_buf);
     }
   }
 
@@ -205,7 +208,56 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
   }
 }
 
+std::string SourceInitiatedSubscription::Handler::getSoapAction(WsXmlDocH doc) {
+  WsXmlNodeH header = ws_xml_get_soap_header(doc);
+  if (header == nullptr) {
+    return "";
+  }
+  WsXmlNodeH action_node = ws_xml_get_child(header, 0 /*index*/, XML_NS_ADDRESSING, WSA_ACTION);
+  if (action_node == nullptr) {
+    return "";
+  }
+  char* text = ws_xml_get_node_text(action_node);
+  if (text == nullptr) {
+    return "";
+  }
+
+  return text;
+}
+
+std::string SourceInitiatedSubscription::Handler::getMachineId(WsXmlDocH doc) {
+  WsXmlNodeH header = ws_xml_get_soap_header(doc);
+  if (header == nullptr) {
+    return "";
+  }
+  WsXmlNodeH machineid_node = ws_xml_get_child(header, 0 /*index*/, XML_NS_CUSTOM_MACHINEID, "MachineID");
+  if (machineid_node == nullptr) {
+    return "";
+  }
+  char* text = ws_xml_get_node_text(machineid_node);
+  if (text == nullptr) {
+    return "";
+  }
+  
+  return text;
+}
+
+void SourceInitiatedSubscription::Handler::sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size) {
+  logging::LOG_TRACE(processor_.logger_) << "Sending response to " << machineId << " (" << remoteIp << "): \"" << std::string(xml_buf, xml_buf_size) << "\"";
+
+  mg_printf(conn, "HTTP/1.1 200 OK\r\n");
+  mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
+  mg_printf(conn, "Authorization: %s\r\n", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
+  mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
+  mg_printf(conn, "\r\n");
+  mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
+}
+
 bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_connection* conn, const std::string& /*endpoint*/, WsXmlDocH request) {
+  utils::ScopeGuard guard([&]() {
+      ws_xml_destroy_doc(request);
+  });
+
   WsXmlDocH response = wsman_create_response_envelope(request, nullptr);
 
   WsXmlNodeH response_header = ws_xml_get_soap_header(response);
@@ -303,7 +355,6 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
     WsXmlNodeH authentication = ws_xml_add_child(all, XML_NS_CUSTOM_AUTHENTICATION, "Authentication", nullptr);
     ws_xml_add_node_attr(authentication, nullptr, "Profile", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
     WsXmlNodeH client_certificate = ws_xml_add_child(authentication, XML_NS_CUSTOM_AUTHENTICATION, "ClientCertificate", nullptr);
-//     WsXmlNodeH thumbprint = ws_xml_add_child(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "EFA9F12309CEA6EAD08699B3B72E49F7F5B7185C");
     WsXmlNodeH thumbprint = ws_xml_add_child_format(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "%s", processor_.ssl_ca_cert_thumbprint_.c_str());
     ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
   }
@@ -311,12 +362,14 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
 
   // Filter
-  WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, nullptr);
-  WsXmlNodeH query_list = ws_xml_add_child(filter_node, nullptr, "QueryList", nullptr);
-  WsXmlNodeH query = ws_xml_add_child(query_list, nullptr, "Query", nullptr);
-  ws_xml_add_node_attr(query, nullptr, "Id", "0");
-  WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
-  ws_xml_add_node_attr(select, nullptr, "Path", "Application");
+  WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, processor_.xpath_xml_query_.c_str());
+//   ws_xml_add_node_attr(filter_node, nullptr, "Dialect", "http://schemas.microsoft.com/win/2004/08/events/eventquery");
+  
+//   WsXmlNodeH query_list = ws_xml_add_child(filter_node, nullptr, "QueryList", nullptr);
+//   WsXmlNodeH query = ws_xml_add_child(query_list, nullptr, "Query", nullptr);
+//   ws_xml_add_node_attr(query, nullptr, "Id", "0");
+//   WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
+//   ws_xml_add_node_attr(select, nullptr, "Path", "Application");
   
   // Send Bookmarks
   ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_SENDBOOKMARKS, nullptr);
@@ -332,22 +385,86 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   int xml_buf_size = 0;
   ws_xml_dump_memory_enc(response, &xml_buf, &xml_buf_size, "UTF-8");
 
-  ws_xml_dump_doc(stderr, response);
-  
-  mg_printf(conn, "HTTP/1.1 200 OK\r\n");
-  mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
-  mg_printf(conn, "Authorization: %s\r\n", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
-  mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
-  mg_printf(conn, "\r\n");
-  mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
-  
+  const struct mg_request_info* req_info = mg_get_request_info(conn);
+  sendResponse(conn, getMachineId(request), req_info->remote_addr, xml_buf, xml_buf_size);
+
   ws_xml_free_memory(xml_buf);
-  ws_xml_destroy_doc(request);
 
   return true;
 }
 
+SourceInitiatedSubscription::Handler::WriteCallback::WriteCallback(char* text)
+    : text_(text) {
+}
+
+int64_t SourceInitiatedSubscription::Handler::WriteCallback::process(std::shared_ptr<io::BaseStream> stream) {
+  return stream->write(reinterpret_cast<uint8_t*>(text_), strlen(text_));
+}
+
+int SourceInitiatedSubscription::Handler::enumerateEventCallback(WsXmlNodeH node, void* data) {
+  if (data == nullptr) {
+    return 1; // TODO
+  }
+
+  SourceInitiatedSubscription::Handler* self = nullptr;
+  std::string machine_id;
+  std::string remote_ip;
+  std::tie(self, machine_id, remote_ip) = *static_cast<std::tuple<SourceInitiatedSubscription::Handler*, std::string, std::string>*>(data);
+
+  char* text = ws_xml_get_node_text(node);
+  if (text == nullptr) {
+      return 1; // TODO
+  }
+
+  auto session = self->processor_.session_factory_->createSession();
+  auto flow_file = std::static_pointer_cast<FlowFileRecord>(session->create());
+  if (flow_file == nullptr) {
+    return 1; // TODO
+  }
+  
+  WriteCallback callback(text);
+  session->write(flow_file, &callback);
+
+  session->putAttribute(flow_file, FlowAttributeKey(MIME_TYPE), "application/xml");
+  flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_MACHINEID, machine_id);
+  flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_IP, remote_ip);
+
+  session->transfer(flow_file, SourceInitiatedSubscription::Success);
+  session->commit();
+
+  return 0;
+}
+
 bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
+  utils::ScopeGuard guard([&]() {
+      ws_xml_destroy_doc(request);
+  });
+  auto action = getSoapAction(request);
+  auto machine_id = getMachineId(request);
+  const struct mg_request_info* req_info = mg_get_request_info(conn);
+  std::string remote_ip = req_info->remote_addr;
+  if (action == WSMAN_CUSTOM_ACTION_HEARTBEAT) {
+    processor_.logger_->log_debug("Received Heartbeat on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
+  } else if (action == WSMAN_CUSTOM_ACTION_EVENTS) {
+    processor_.logger_->log_debug("Received Events on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
+    WsXmlNodeH body = ws_xml_get_soap_body(request);
+    if (body == nullptr) {
+      processor_.logger_->log_error("Received malformed Events request on %s from %s (%s), SOAP Body missing", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
+      return false;
+    }
+    WsXmlNodeH events_node = ws_xml_get_child(body, 0 /*index*/, XML_NS_WS_MAN, WSM_EVENTS);
+    if (events_node == nullptr) {
+      processor_.logger_->log_error("Received malformed Events request on %s from %s (%s), Events missing", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
+      return false;
+    }
+    const struct mg_request_info* req_info = mg_get_request_info(conn);
+    std::tuple<SourceInitiatedSubscription::Handler*, std::string, std::string> callback_args = std::forward_as_tuple(this, machine_id, remote_ip);
+    ws_xml_enum_children(events_node, &SourceInitiatedSubscription::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
+  } else {
+    processor_.logger_->log_error("%s called by %s (%s) with unknown Action \"%s\"", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str(), action.c_str());
+    return false; // TODO
+  }
+
   WsXmlDocH ack = wsman_create_response_envelope(request, WSMAN_CUSTOM_ACTION_ACK);
   WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
 
@@ -358,23 +475,16 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
   char* xml_buf = nullptr;
   int xml_buf_size = 0;
   ws_xml_dump_memory_enc(ack, &xml_buf, &xml_buf_size, "UTF-8");
-  ws_xml_dump_doc(stderr, ack);
 
-  mg_printf(conn, "HTTP/1.1 200 OK\r\n");
-  mg_printf(conn, "Content-Type: application/soap+xml;charset=UTF-8\r\n");
-  mg_printf(conn, "Authorization: %s\r\n", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
-  mg_printf(conn, "Content-Length: %d\r\n", xml_buf_size);
-  mg_printf(conn, "\r\n");
-  mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
+  sendResponse(conn, machine_id, remote_ip, xml_buf, xml_buf_size);
 
   ws_xml_free_memory(xml_buf);
-  ws_xml_destroy_doc(request);
 
   return true;
 }
 
 void SourceInitiatedSubscription::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-    logger_->log_trace("SourceInitiatedSubscription onTrigger called");
+  logger_->log_trace("SourceInitiatedSubscription onTrigger called");
 }
 
 void SourceInitiatedSubscription::initialize() {
