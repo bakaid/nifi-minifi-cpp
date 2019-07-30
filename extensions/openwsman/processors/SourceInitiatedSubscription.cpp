@@ -124,6 +124,20 @@ SourceInitiatedSubscription::Handler::Handler(SourceInitiatedSubscription& proce
     : processor_(processor) {
 }
 
+SourceInitiatedSubscription::SubscriberData::SubscriberData()
+    : bookmark(nullptr)
+    , subscription(nullptr) {
+}
+
+SourceInitiatedSubscription::SubscriberData::~SubscriberData() {
+  if (bookmark != nullptr) {
+    ws_xml_destroy_doc(bookmark);
+  }
+  if (subscription != nullptr) {
+    ws_xml_destroy_doc(subscription);
+  }
+}
+
 bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struct mg_connection* conn) {
   const struct mg_request_info* req_info = mg_get_request_info(conn);
   if (req_info == nullptr) {
@@ -279,9 +293,15 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   ws_xml_add_child_format(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:%s", subscription_version.to_string().c_str());
 
   // Subscription
-  WsXmlDocH subscription_item = ws_xml_create_envelope();
+  std::lock_guard<std::mutex> lock(processor_.mutex_);
+  auto it = processor_.subscribers_.find(machine_id);
+  if (it != processor_.subscribers_.end() && it->second.subscription != nullptr) {
+    WsXmlNodeH subscription_node = ws_xml_get_doc_root(it->second.subscription);
+    ws_xml_copy_node(subscription_node, subscription);
+  } else {
+  WsXmlDocH subscription_doc = ws_xml_create_envelope();
   {
-  WsXmlNodeH header = ws_xml_get_soap_header(subscription_item);
+  WsXmlNodeH header = ws_xml_get_soap_header(subscription_doc);
   WsXmlNodeH node;
 
   node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_ACTION, EVT_ACTION_SUBSCRIBE);
@@ -314,7 +334,7 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
 //   node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
 //   ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
 
-  WsXmlNodeH body = ws_xml_get_soap_body(subscription_item);
+  WsXmlNodeH body = ws_xml_get_soap_body(subscription_doc);
   WsXmlNodeH subscribe_node = ws_xml_add_child(body, XML_NS_EVENTING, WSEVENT_SUBSCRIBE, nullptr);
   
   // EndTo
@@ -364,6 +384,9 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
   ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSENUM_MAX_TIME, "PT5.000S");
 
+  // Expires
+  ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_EXPIRES, "PT60.000S");
+
   // Filter
   WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, processor_.xpath_xml_query_.c_str());
 //   ws_xml_add_node_attr(filter_node, nullptr, "Dialect", "http://schemas.microsoft.com/win/2004/08/events/eventquery");
@@ -375,15 +398,11 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
 //   ws_xml_add_node_attr(select, nullptr, "Path", "Application");
 
   // Bookmark
-  {
-    std::lock_guard<std::mutex> lock(processor_.mutex_);
-    auto it = processor_.bookmarks_.find(machine_id);
-    if (it != processor_.bookmarks_.end()) {
-      WsXmlNodeH bookmark_node = ws_xml_get_doc_root(it->second);
-      ws_xml_copy_node(bookmark_node, subscribe_node);
-    } else if (processor_.initial_existing_events_strategy_ == INITIAL_EXISTING_EVENTS_STRATEGY_ALL) {
-      ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_BOOKMARK, "http://schemas.dmtf.org/wbem/wsman/1/wsman/bookmark/earliest");
-    }
+  if (it != processor_.subscribers_.end() && it->second.bookmark != nullptr) {
+    WsXmlNodeH bookmark_node = ws_xml_get_doc_root(it->second.bookmark);
+    ws_xml_copy_node(bookmark_node, subscribe_node);
+  } else if (processor_.initial_existing_events_strategy_ == INITIAL_EXISTING_EVENTS_STRATEGY_ALL) {
+    ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_BOOKMARK, "http://schemas.dmtf.org/wbem/wsman/1/wsman/bookmark/earliest");
   }
 
   // Send Bookmarks
@@ -391,9 +410,20 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   }
 
   // Copy whole Subscription
-  WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_item);
+  WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_doc);
   ws_xml_copy_node(subscription_node, subscription);
-  ws_xml_destroy_doc(subscription_item);
+//   ws_xml_destroy_doc(subscription_doc);
+  
+  // Save subscription
+  if (it != processor_.subscribers_.end()) {
+    if (it->second.subscription != nullptr) {
+      ws_xml_destroy_doc(it->second.subscription);
+    }
+  } else {
+    it = processor_.subscribers_.emplace(machine_id, SubscriberData()).first;
+  }
+  it->second.subscription = subscription_doc;
+  }
 
   // Send response
   char* xml_buf = nullptr;
@@ -489,13 +519,20 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
       ws_xml_duplicate_children(temp, bookmark_node);
 
       std::lock_guard<std::mutex> lock(processor_.mutex_);
-      auto it = processor_.bookmarks_.find(machine_id);
-      if (it != processor_.bookmarks_.end()) {
-        ws_xml_destroy_doc(it->second);
+      auto it = processor_.subscribers_.find(machine_id);
+      if (it != processor_.subscribers_.end()) {
+          if (it->second.bookmark != nullptr) {
+            ws_xml_destroy_doc(it->second.bookmark);
+          }
       } else {
-        it = processor_.bookmarks_.emplace(machine_id, nullptr).first;
+        it = processor_.subscribers_.emplace(machine_id, SubscriberData()).first;
       }
-      it->second = bookmark_doc;
+      it->second.bookmark = bookmark_doc;
+      // Bookmark changed, invalidate subscription
+      if (it->second.subscription != nullptr) {
+        ws_xml_destroy_doc(it->second.subscription);
+        it->second.subscription = nullptr;
+      }
 
       char* xml_buf = nullptr;
       int xml_buf_size = 0;
