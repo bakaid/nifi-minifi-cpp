@@ -51,6 +51,8 @@
 #include "io/StreamFactory.h"
 #include "processors/SourceInitiatedSubscription.h"
 #include "processors/LogAttribute.h"
+#include "processors/UpdateAttribute.h"
+#include "processors/PutFile.h"
 
 TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
   TestController testController;
@@ -61,10 +63,14 @@ TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
   
   auto source_initiated_subscription = plan->addProcessor("SourceInitiatedSubscription",
                                                           "SourceInitiatedSubscription");
-  auto log_attribute = plan->addProcessor("LogAttribute",
-                                          "LogAttribute",
-                                          core::Relationship("success", "d"),
-                                          true);
+  auto put_file = plan->addProcessor("PutFile",
+                                     "PutFile",
+                                     core::Relationship("success", "d"),
+                                     true);
+//   auto log_attribute = plan->addProcessor("LogAttribute",
+//                                           "LogAttribute",
+//                                           core::Relationship("success", "d"),
+//                                           true);
 
   plan->setProperty(source_initiated_subscription, "Listen Hostname", "23.96.27.78");
   plan->setProperty(source_initiated_subscription, "Listen Port", "5986");
@@ -73,14 +79,16 @@ TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
   plan->setProperty(source_initiated_subscription, "Initial Existing Events Strategy", processors::SourceInitiatedSubscription::INITIAL_EXISTING_EVENTS_STRATEGY_ALL);
   plan->setProperty(source_initiated_subscription, "State File", "/tmp/wef.state");
   
-  plan->setProperty(log_attribute, "FlowFiles To Log", "0");
+//   plan->setProperty(log_attribute, "FlowFiles To Log", "0");
+  
+  plan->setProperty(put_file, "Directory", "/tmp/wef");
 
   plan->runNextProcessor();
   plan->runNextProcessor();
   
   while (true) {
       plan->runCurrentProcessor();
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 }
 

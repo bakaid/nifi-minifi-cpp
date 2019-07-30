@@ -257,6 +257,8 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   utils::ScopeGuard guard([&]() {
       ws_xml_destroy_doc(request);
   });
+  
+  auto machine_id = getMachineId(request);
 
   WsXmlDocH response = wsman_create_response_envelope(request, nullptr);
 
@@ -309,8 +311,8 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   ws_xml_add_node_attr(node, nullptr, WSM_NAME, "IgnoreChannelError");
   ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
 
-  node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
-  ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
+//   node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
+//   ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
 
   WsXmlNodeH body = ws_xml_get_soap_body(subscription_item);
   WsXmlNodeH subscribe_node = ws_xml_add_child(body, XML_NS_EVENTING, WSEVENT_SUBSCRIBE, nullptr);
@@ -370,7 +372,19 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
 //   ws_xml_add_node_attr(query, nullptr, "Id", "0");
 //   WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
 //   ws_xml_add_node_attr(select, nullptr, "Path", "Application");
-  
+
+  // Bookmark
+  {
+    std::lock_guard<std::mutex> lock(processor_.mutex_);
+    auto it = processor_.bookmarks_.find(machine_id);
+    if (it != processor_.bookmarks_.end()) {
+      WsXmlNodeH bookmark_node = ws_xml_get_doc_root(it->second);
+      ws_xml_copy_node(bookmark_node, subscribe_node);
+    } else if (processor_.initial_existing_events_strategy_ == INITIAL_EXISTING_EVENTS_STRATEGY_ALL) {
+      ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_BOOKMARK, "http://schemas.dmtf.org/wbem/wsman/1/wsman/bookmark/earliest");
+    }
+  }
+
   // Send Bookmarks
   ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_SENDBOOKMARKS, nullptr);
   }
@@ -386,7 +400,7 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   ws_xml_dump_memory_enc(response, &xml_buf, &xml_buf_size, "UTF-8");
 
   const struct mg_request_info* req_info = mg_get_request_info(conn);
-  sendResponse(conn, getMachineId(request), req_info->remote_addr, xml_buf, xml_buf_size);
+  sendResponse(conn, machine_id, req_info->remote_addr, xml_buf, xml_buf_size);
 
   ws_xml_free_memory(xml_buf);
 
@@ -460,6 +474,29 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
     const struct mg_request_info* req_info = mg_get_request_info(conn);
     std::tuple<SourceInitiatedSubscription::Handler*, std::string, std::string> callback_args = std::forward_as_tuple(this, machine_id, remote_ip);
     ws_xml_enum_children(events_node, &SourceInitiatedSubscription::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
+    // Bookmark
+    WsXmlNodeH header = ws_xml_get_soap_header(request);
+    WsXmlNodeH bookmark_node = ws_xml_get_child(header, 0 /*index*/, XML_NS_WS_MAN, WSM_BOOKMARK);
+    if (bookmark_node != nullptr) {
+      WsXmlDocH bookmark_doc = ws_xml_create_doc(XML_NS_WS_MAN, WSM_BOOKMARK);
+      WsXmlNodeH temp = ws_xml_get_doc_root(bookmark_doc);
+      ws_xml_duplicate_children(temp, bookmark_node);
+
+      std::lock_guard<std::mutex> lock(processor_.mutex_);
+      auto it = processor_.bookmarks_.find(machine_id);
+      if (it != processor_.bookmarks_.end()) {
+        ws_xml_destroy_doc(it->second);
+      } else {
+        it = processor_.bookmarks_.emplace(machine_id, nullptr).first;
+      }
+      it->second = bookmark_doc;
+
+      char* xml_buf = nullptr;
+      int xml_buf_size = 0;
+      ws_xml_dump_memory_enc(bookmark_doc, &xml_buf, &xml_buf_size, "UTF-8");
+      processor_.logger_->log_debug("Saved new bookmark for %s: \"%.*s\"", machine_id.c_str(), xml_buf_size, xml_buf);
+      ws_xml_free_memory(xml_buf);
+    }
   } else {
     processor_.logger_->log_error("%s called by %s (%s) with unknown Action \"%s\"", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str(), action.c_str());
     return false; // TODO

@@ -125,6 +125,9 @@ class SourceInitiatedSubscription : public core::Processor {
 
   std::unique_ptr<CivetServer> server_;
   std::unique_ptr<Handler> handler_;
+
+  std::mutex mutex_;
+  std::map<std::string /*machineId*/, WsXmlDocH /*bookmark*/> bookmarks_;
 };
 
 REGISTER_RESOURCE(SourceInitiatedSubscription, "SourceInitiatedSubscription TODO")
