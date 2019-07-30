@@ -362,6 +362,7 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   }
   
   ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
+  ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSENUM_MAX_TIME, "PT5.000S");
 
   // Filter
   WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, processor_.xpath_xml_query_.c_str());
@@ -430,12 +431,13 @@ int SourceInitiatedSubscription::Handler::enumerateEventCallback(WsXmlNodeH node
       return 1; // TODO
   }
 
+  self->processor_.logger_->log_trace("Found Event");
   auto session = self->processor_.session_factory_->createSession();
   auto flow_file = std::static_pointer_cast<FlowFileRecord>(session->create());
   if (flow_file == nullptr) {
     return 1; // TODO
   }
-  
+
   WriteCallback callback(text);
   session->write(flow_file, &callback);
 
@@ -473,7 +475,11 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
     }
     const struct mg_request_info* req_info = mg_get_request_info(conn);
     std::tuple<SourceInitiatedSubscription::Handler*, std::string, std::string> callback_args = std::forward_as_tuple(this, machine_id, remote_ip);
-    ws_xml_enum_children(events_node, &SourceInitiatedSubscription::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
+    int ret = ws_xml_enum_children(events_node, &SourceInitiatedSubscription::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
+    if (ret != 0) {
+      processor_.logger_->log_error("Failed to parse events on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
+      // TODO
+    }
     // Bookmark
     WsXmlNodeH header = ws_xml_get_soap_header(request);
     WsXmlNodeH bookmark_node = ws_xml_get_child(header, 0 /*index*/, XML_NS_WS_MAN, WSM_BOOKMARK);
