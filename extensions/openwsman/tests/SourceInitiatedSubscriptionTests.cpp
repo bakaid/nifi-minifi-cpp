@@ -86,12 +86,12 @@ TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
   plan->setProperty(source_initiated_subscription, "SSL Certificate Authority", "/home/bakaid/certs/ca.crt");
   plan->setProperty(source_initiated_subscription, "Initial Existing Events Strategy", processors::SourceInitiatedSubscription::INITIAL_EXISTING_EVENTS_STRATEGY_ALL);
   plan->setProperty(source_initiated_subscription, "State File", "/tmp/wef.state");
-//   plan->setProperty(source_initiated_subscription, "XPath XML Query",
-//     "<QueryList>\n"
-//     "  <Query Id=\"0\">\n"
-//     "    <Select Path=\"Application\">*[System[Level=1 or Level=2]]</Select>\n"
-//     "  </Query>\n"
-//     "</QueryList>\n");
+  plan->setProperty(source_initiated_subscription, "XPath XML Query",
+    "<QueryList>\n"
+    "  <Query Id=\"0\">\n"
+    "    <Select Path=\"Application\">*[System[Level=1 or Level=2]]</Select>\n"
+    "  </Query>\n"
+    "</QueryList>\n");
   
 //   plan->setProperty(log_attribute, "FlowFiles To Log", "0");
   

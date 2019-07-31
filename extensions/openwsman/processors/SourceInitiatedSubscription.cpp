@@ -101,6 +101,21 @@ core::Property SourceInitiatedSubscription::InitialExistingEventsStrategy(
     "None: will not request existing events\n"
     "All: will request all existing events matching the query")
         ->isRequired(true)->withAllowableValues<std::string>({INITIAL_EXISTING_EVENTS_STRATEGY_NONE, INITIAL_EXISTING_EVENTS_STRATEGY_ALL})->withDefaultValue(INITIAL_EXISTING_EVENTS_STRATEGY_NONE)->build());
+core::Property SourceInitiatedSubscription::SubscriptionExpirationInterval(
+    core::PropertyBuilder::createProperty("Subscription Expiration Interval")->withDescription("The interval while a subscription is valid without renewal. "
+    "Because in a source-initiated subscription, the collector can not cancel the subscription, "
+    "setting this too large could cause unecessary load on the source machine. "
+    "Setting this too small causes frequent reenumeration and resubscription which is ineffective.")
+        ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("10 min")->build());
+core::Property SourceInitiatedSubscription::HeartbeatInterval(
+    core::PropertyBuilder::createProperty("Heartbeat Interval")->withDescription("The processor will ask the sources to send heartbeats with this interval.")
+        ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("30 sec")->build());
+core::Property SourceInitiatedSubscription::MaxElements(
+    core::PropertyBuilder::createProperty("Max Elements")->withDescription("The maximum number of events a source will batch together and send at once.")
+        ->isRequired(true)->withDefaultValue<uint32_t>(20U)->build());
+core::Property SourceInitiatedSubscription::MaxLatency(
+    core::PropertyBuilder::createProperty("Max Latency")->withDescription("The maximum time a source will wait to send new events.")
+        ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("10 sec")->build());
 core::Property SourceInitiatedSubscription::StateFile(
     core::PropertyBuilder::createProperty("State File")->withDescription("The file the Processor will use to store the current bookmark for each event source. "
     "This will be used after restart to continue event ingestion from the point the Processor left off.")
@@ -114,7 +129,11 @@ SourceInitiatedSubscription::SourceInitiatedSubscription(std::string name, utils
     , logger_(logging::LoggerFactory<SourceInitiatedSubscription>::getLogger())
     , id_generator_(utils::IdGenerator::getIdGenerator())
     , session_factory_(nullptr)
-    , listen_port_(0U) {
+    , listen_port_(0U)
+    , subscription_expiration_interval_(0)
+    , heartbeat_interval_(0)
+    , max_elements_(0U)
+    , max_latency_(0) {
 }
 
 SourceInitiatedSubscription::~SourceInitiatedSubscription() {
@@ -136,6 +155,12 @@ SourceInitiatedSubscription::SubscriberData::~SubscriberData() {
   if (subscription != nullptr) {
     ws_xml_destroy_doc(subscription);
   }
+}
+
+std::string SourceInitiatedSubscription::Handler::millisecondsToXsdDuration(int64_t milliseconds) {
+  char buf[1024];
+  snprintf(buf, sizeof(buf), "PT%lld.%03lldS", milliseconds / 1000, milliseconds % 1000);
+  return buf;
 }
 
 bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struct mg_connection* conn) {
@@ -364,7 +389,7 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
     WsXmlNodeH delivery_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_DELIVERY, nullptr);
     ws_xml_add_node_attr(delivery_node, nullptr, WSEVENT_DELIVERY_MODE, WSEVENT_DELIVERY_MODE_EVENTS);
 
-    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_HEARTBEATS, "PT10.000S");
+    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_HEARTBEATS, millisecondsToXsdDuration(processor_.heartbeat_interval_).c_str());
     
     WsXmlNodeH notify_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
     {
@@ -389,11 +414,11 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
       ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
     }
     
-    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
-    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSENUM_MAX_TIME, "PT5.000S");
+    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, std::to_string(processor_.max_elements_).c_str());
+    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSENUM_MAX_TIME, millisecondsToXsdDuration(processor_.max_latency_).c_str());
 
     // Expires
-    ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_EXPIRES, "PT600.000S");
+    ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_EXPIRES, millisecondsToXsdDuration(processor_.subscription_expiration_interval_).c_str());
 
     // Filter
     WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, processor_.xpath_xml_query_.c_str());
@@ -590,6 +615,10 @@ void SourceInitiatedSubscription::initialize() {
   properties.insert(SSLVerifyPeer);
   properties.insert(XPathXmlQuery);
   properties.insert(InitialExistingEventsStrategy);
+  properties.insert(SubscriptionExpirationInterval);
+  properties.insert(HeartbeatInterval);
+  properties.insert(MaxElements);
+  properties.insert(MaxLatency);
   properties.insert(StateFile);
   setSupportedProperties(properties);
 
@@ -636,6 +665,43 @@ void SourceInitiatedSubscription::onSchedule(const std::shared_ptr<core::Process
   if (!context->getProperty(StateFile.getName(), state_file_path_)) {
     logger_->log_error("State File attribute is missing or invalid");
     return;
+  }
+  if (!context->getProperty(SubscriptionExpirationInterval.getName(), value)) {
+    logger_->log_error("Subscription Expiration Interval attribute is missing or invalid");
+    return;
+  } else {
+    core::TimeUnit unit;
+    if (!core::Property::StringToTime(value, subscription_expiration_interval_, unit) || !core::Property::ConvertTimeUnitToMS(subscription_expiration_interval_, unit, subscription_expiration_interval_)) {
+      logger_->log_error("Subscription Expiration Interval attribute is invalid");
+      return;
+    }
+  }
+  if (!context->getProperty(HeartbeatInterval.getName(), value)) {
+    logger_->log_error("Heartbeat Interval attribute is missing or invalid");
+    return;
+  } else {
+    core::TimeUnit unit;
+    if (!core::Property::StringToTime(value, heartbeat_interval_, unit) || !core::Property::ConvertTimeUnitToMS(heartbeat_interval_, unit, heartbeat_interval_)) {
+      logger_->log_error("Heartbeat Interval attribute is invalid");
+      return;
+    }
+  }
+  if (!context->getProperty(MaxElements.getName(), value)) {
+    logger_->log_error("Max Elements attribute is missing or invalid");
+    return;
+  } else if (!core::Property::StringToInt(value, max_elements_)) {
+     logger_->log_error("Max Elements attribute is invalid");
+     return;
+  }
+  if (!context->getProperty(MaxLatency.getName(), value)) {
+    logger_->log_error("Max Latency attribute is missing or invalid");
+    return;
+  } else {
+    core::TimeUnit unit;
+    if (!core::Property::StringToTime(value, max_latency_, unit) || !core::Property::ConvertTimeUnitToMS(max_latency_, unit, max_latency_)) {
+      logger_->log_error("Max Latency attribute is invalid");
+      return;
+    }
   }
 
   FILE* fp = fopen(ssl_ca_file.c_str(), "rb");

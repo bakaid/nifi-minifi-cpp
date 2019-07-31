@@ -67,6 +67,10 @@ class SourceInitiatedSubscription : public core::Processor {
   static core::Property SSLVerifyPeer;
   static core::Property XPathXmlQuery;
   static core::Property InitialExistingEventsStrategy;
+  static core::Property SubscriptionExpirationInterval;
+  static core::Property HeartbeatInterval;
+  static core::Property MaxElements;
+  static core::Property MaxLatency;
   static core::Property StateFile;
 
   // Supported Relationships
@@ -105,6 +109,8 @@ class SourceInitiatedSubscription : public core::Processor {
     std::string getSoapAction(WsXmlDocH doc);
     std::string getMachineId(WsXmlDocH doc);
     void sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size);
+    
+    static std::string millisecondsToXsdDuration(int64_t milliseconds);
   };
 
  protected:
@@ -121,6 +127,10 @@ class SourceInitiatedSubscription : public core::Processor {
   std::string ssl_ca_cert_thumbprint_;
   std::string xpath_xml_query_;
   std::string initial_existing_events_strategy_;
+  int64_t subscription_expiration_interval_;
+  int64_t heartbeat_interval_;
+  uint32_t max_elements_;
+  int64_t max_latency_;
   std::string state_file_path_;
 
   std::unique_ptr<CivetServer> server_;
