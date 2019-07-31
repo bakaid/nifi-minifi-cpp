@@ -271,7 +271,7 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   utils::ScopeGuard guard([&]() {
       ws_xml_destroy_doc(request);
   });
-  
+
   auto machine_id = getMachineId(request);
 
   WsXmlDocH response = wsman_create_response_envelope(request, nullptr);
@@ -289,140 +289,148 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   WsXmlNodeH subscription = ws_xml_add_child(enumeration_items, nullptr, "Subscription", nullptr);
   ws_xml_set_ns(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "m");
 
-  utils::Identifier subscription_version = processor_.id_generator_->generate(); // TODO
-  ws_xml_add_child_format(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:%s", subscription_version.to_string().c_str());
-
-  // Subscription
+  // Subscription version
   std::lock_guard<std::mutex> lock(processor_.mutex_);
   auto it = processor_.subscribers_.find(machine_id);
+
+  std::string subscription_version;
+  if (it != processor_.subscribers_.end() && it->second.subscription != nullptr) {
+    subscription_version = it->second.subscription_version;
+  } else {
+    utils::Identifier id = processor_.id_generator_->generate();
+    subscription_version = id.to_string();
+  }
+  ws_xml_add_child_format(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:%s", subscription_version.c_str());
+
+  // Subscription
   if (it != processor_.subscribers_.end() && it->second.subscription != nullptr) {
     WsXmlNodeH subscription_node = ws_xml_get_doc_root(it->second.subscription);
     ws_xml_copy_node(subscription_node, subscription);
   } else {
-  WsXmlDocH subscription_doc = ws_xml_create_envelope();
-  {
-  WsXmlNodeH header = ws_xml_get_soap_header(subscription_doc);
-  WsXmlNodeH node;
+    WsXmlDocH subscription_doc = ws_xml_create_envelope();
 
-  node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_ACTION, EVT_ACTION_SUBSCRIBE);
-  ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
+    WsXmlNodeH header = ws_xml_get_soap_header(subscription_doc);
+    WsXmlNodeH node;
 
-  utils::Identifier msg_id = processor_.id_generator_->generate();
-  ws_xml_add_child_format(header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
+    node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_ACTION, EVT_ACTION_SUBSCRIBE);
+    ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
 
-  node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_TO, WSA_TO_ANONYMOUS);
-  ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
+    utils::Identifier msg_id = processor_.id_generator_->generate();
+    ws_xml_add_child_format(header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
 
-  node = ws_xml_add_child(header, XML_NS_WS_MAN, WSM_RESOURCE_URI, "http://schemas.microsoft.com/wbem/wsman/1/windows/EventLog");
-  ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
+    node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_TO, WSA_TO_ANONYMOUS);
+    ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
 
-  node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_REPLY_TO, nullptr);
-  node = ws_xml_add_child(node, XML_NS_ADDRESSING, WSA_ADDRESS, WSA_TO_ANONYMOUS);
-  ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
+    node = ws_xml_add_child(header, XML_NS_WS_MAN, WSM_RESOURCE_URI, "http://schemas.microsoft.com/wbem/wsman/1/windows/EventLog");
+    ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
 
-  WsXmlNodeH option_set = ws_xml_add_child(header, XML_NS_WS_MAN, WSM_OPTION_SET, nullptr);
-  ws_xml_ns_add(option_set, XML_NS_SCHEMA_INSTANCE, XML_NS_SCHEMA_INSTANCE_PREFIX);
+    node = ws_xml_add_child(header, XML_NS_ADDRESSING, WSA_REPLY_TO, nullptr);
+    node = ws_xml_add_child(node, XML_NS_ADDRESSING, WSA_ADDRESS, WSA_TO_ANONYMOUS);
+    ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
 
-  node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, nullptr);
-  ws_xml_add_node_attr(node, nullptr, WSM_NAME, "CDATA");
-  ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
+    WsXmlNodeH option_set = ws_xml_add_child(header, XML_NS_WS_MAN, WSM_OPTION_SET, nullptr);
+    ws_xml_ns_add(option_set, XML_NS_SCHEMA_INSTANCE, XML_NS_SCHEMA_INSTANCE_PREFIX);
 
-  node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, nullptr);
-  ws_xml_add_node_attr(node, nullptr, WSM_NAME, "IgnoreChannelError");
-  ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
+    node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, nullptr);
+    ws_xml_add_node_attr(node, nullptr, WSM_NAME, "CDATA");
+    ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
 
-//   node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
-//   ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
+    node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, nullptr);
+    ws_xml_add_node_attr(node, nullptr, WSM_NAME, "IgnoreChannelError");
+    ws_xml_add_node_attr(node, XML_NS_SCHEMA_INSTANCE, XML_SCHEMA_NIL, "true");
 
-  WsXmlNodeH body = ws_xml_get_soap_body(subscription_doc);
-  WsXmlNodeH subscribe_node = ws_xml_add_child(body, XML_NS_EVENTING, WSEVENT_SUBSCRIBE, nullptr);
-  
-  // EndTo
-  utils::Identifier subscription_id = processor_.id_generator_->generate(); // TODO
-  utils::Identifier event_id = processor_.id_generator_->generate(); // TODO
-  WsXmlNodeH endto_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_ENDTO, nullptr);
-  {
-    ws_xml_add_child_format(endto_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s/%s",
-                            processor_.listen_hostname_.c_str(),
-                            processor_.listen_port_,
-                            processor_.subscriptions_base_path_.c_str(),
-                            subscription_id.to_string().c_str()
-                           );
-    node = ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
-    ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", event_id.to_string().c_str());
-  }
-  
-  // Delivery
-  WsXmlNodeH delivery_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_DELIVERY, nullptr);
-  ws_xml_add_node_attr(delivery_node, nullptr, WSEVENT_DELIVERY_MODE, WSEVENT_DELIVERY_MODE_EVENTS);
+    // node = ws_xml_add_child(option_set, XML_NS_WS_MAN, WSM_OPTION, "true");
+    // ws_xml_add_node_attr(node, nullptr, WSM_NAME, "ReadExistingEvents");
 
-  ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_HEARTBEATS, "PT10.000S");
-  
-  WsXmlNodeH notify_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
-  {
-    ws_xml_add_child_format(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s/%s",
-                            processor_.listen_hostname_.c_str(),
-                            processor_.listen_port_,
-                            processor_.subscriptions_base_path_.c_str(),
-                            subscription_id.to_string().c_str()
-                           );
-    node = ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
-    ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", event_id.to_string().c_str());
-    // Policy
-    WsXmlNodeH policy = ws_xml_add_child(notify_node, nullptr, "Policy", nullptr);
-    ws_xml_set_ns(policy, XML_NS_CUSTOM_POLICY, "c");
-    ws_xml_ns_add(policy, XML_NS_CUSTOM_AUTHENTICATION, "auth");
-    WsXmlNodeH exactly_one = ws_xml_add_child(policy, XML_NS_CUSTOM_POLICY, "ExactlyOne", nullptr);
-    WsXmlNodeH all = ws_xml_add_child(exactly_one, XML_NS_CUSTOM_POLICY, "All", nullptr);
-    WsXmlNodeH authentication = ws_xml_add_child(all, XML_NS_CUSTOM_AUTHENTICATION, "Authentication", nullptr);
-    ws_xml_add_node_attr(authentication, nullptr, "Profile", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
-    WsXmlNodeH client_certificate = ws_xml_add_child(authentication, XML_NS_CUSTOM_AUTHENTICATION, "ClientCertificate", nullptr);
-    WsXmlNodeH thumbprint = ws_xml_add_child_format(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "%s", processor_.ssl_ca_cert_thumbprint_.c_str());
-    ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
-  }
-  
-  ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
-  ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSENUM_MAX_TIME, "PT5.000S");
-
-  // Expires
-  ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_EXPIRES, "PT60.000S");
-
-  // Filter
-  WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, processor_.xpath_xml_query_.c_str());
-//   ws_xml_add_node_attr(filter_node, nullptr, "Dialect", "http://schemas.microsoft.com/win/2004/08/events/eventquery");
-  
-//   WsXmlNodeH query_list = ws_xml_add_child(filter_node, nullptr, "QueryList", nullptr);
-//   WsXmlNodeH query = ws_xml_add_child(query_list, nullptr, "Query", nullptr);
-//   ws_xml_add_node_attr(query, nullptr, "Id", "0");
-//   WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
-//   ws_xml_add_node_attr(select, nullptr, "Path", "Application");
-
-  // Bookmark
-  if (it != processor_.subscribers_.end() && it->second.bookmark != nullptr) {
-    WsXmlNodeH bookmark_node = ws_xml_get_doc_root(it->second.bookmark);
-    ws_xml_copy_node(bookmark_node, subscribe_node);
-  } else if (processor_.initial_existing_events_strategy_ == INITIAL_EXISTING_EVENTS_STRATEGY_ALL) {
-    ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_BOOKMARK, "http://schemas.dmtf.org/wbem/wsman/1/wsman/bookmark/earliest");
-  }
-
-  // Send Bookmarks
-  ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_SENDBOOKMARKS, nullptr);
-  }
-
-  // Copy whole Subscription
-  WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_doc);
-  ws_xml_copy_node(subscription_node, subscription);
-//   ws_xml_destroy_doc(subscription_doc);
-  
-  // Save subscription
-  if (it != processor_.subscribers_.end()) {
-    if (it->second.subscription != nullptr) {
-      ws_xml_destroy_doc(it->second.subscription);
+    WsXmlNodeH body = ws_xml_get_soap_body(subscription_doc);
+    WsXmlNodeH subscribe_node = ws_xml_add_child(body, XML_NS_EVENTING, WSEVENT_SUBSCRIBE, nullptr);
+    
+    // EndTo
+    utils::Identifier subscription_id = processor_.id_generator_->generate(); // TODO
+    utils::Identifier event_id = processor_.id_generator_->generate(); // TODO
+    WsXmlNodeH endto_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_ENDTO, nullptr);
+    {
+      ws_xml_add_child_format(endto_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s/%s",
+                              processor_.listen_hostname_.c_str(),
+                              processor_.listen_port_,
+                              processor_.subscriptions_base_path_.c_str(),
+                              subscription_id.to_string().c_str()
+                            );
+      node = ws_xml_add_child(endto_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
+      ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", event_id.to_string().c_str());
     }
-  } else {
-    it = processor_.subscribers_.emplace(machine_id, SubscriberData()).first;
-  }
-  it->second.subscription = subscription_doc;
+    
+    // Delivery
+    WsXmlNodeH delivery_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_DELIVERY, nullptr);
+    ws_xml_add_node_attr(delivery_node, nullptr, WSEVENT_DELIVERY_MODE, WSEVENT_DELIVERY_MODE_EVENTS);
+
+    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_HEARTBEATS, "PT10.000S");
+    
+    WsXmlNodeH notify_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
+    {
+      ws_xml_add_child_format(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s/%s",
+                              processor_.listen_hostname_.c_str(),
+                              processor_.listen_port_,
+                              processor_.subscriptions_base_path_.c_str(),
+                              subscription_id.to_string().c_str()
+                            );
+      node = ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
+      ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", event_id.to_string().c_str());
+      // Policy
+      WsXmlNodeH policy = ws_xml_add_child(notify_node, nullptr, "Policy", nullptr);
+      ws_xml_set_ns(policy, XML_NS_CUSTOM_POLICY, "c");
+      ws_xml_ns_add(policy, XML_NS_CUSTOM_AUTHENTICATION, "auth");
+      WsXmlNodeH exactly_one = ws_xml_add_child(policy, XML_NS_CUSTOM_POLICY, "ExactlyOne", nullptr);
+      WsXmlNodeH all = ws_xml_add_child(exactly_one, XML_NS_CUSTOM_POLICY, "All", nullptr);
+      WsXmlNodeH authentication = ws_xml_add_child(all, XML_NS_CUSTOM_AUTHENTICATION, "Authentication", nullptr);
+      ws_xml_add_node_attr(authentication, nullptr, "Profile", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
+      WsXmlNodeH client_certificate = ws_xml_add_child(authentication, XML_NS_CUSTOM_AUTHENTICATION, "ClientCertificate", nullptr);
+      WsXmlNodeH thumbprint = ws_xml_add_child_format(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "%s", processor_.ssl_ca_cert_thumbprint_.c_str());
+      ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
+    }
+    
+    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, "20");
+    ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSENUM_MAX_TIME, "PT5.000S");
+
+    // Expires
+    ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_EXPIRES, "PT600.000S");
+
+    // Filter
+    WsXmlNodeH filter_node = ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_FILTER, processor_.xpath_xml_query_.c_str());
+    // ws_xml_add_node_attr(filter_node, nullptr, "Dialect", "http://schemas.microsoft.com/win/2004/08/events/eventquery");
+    
+    // WsXmlNodeH query_list = ws_xml_add_child(filter_node, nullptr, "QueryList", nullptr);
+    // WsXmlNodeH query = ws_xml_add_child(query_list, nullptr, "Query", nullptr);
+    // ws_xml_add_node_attr(query, nullptr, "Id", "0");
+    // WsXmlNodeH select = ws_xml_add_child(query, nullptr, "Select", "*");
+    // ws_xml_add_node_attr(select, nullptr, "Path", "Application");
+
+    // Bookmark
+    if (it != processor_.subscribers_.end() && it->second.bookmark != nullptr) {
+      WsXmlNodeH bookmark_node = ws_xml_get_doc_root(it->second.bookmark);
+      ws_xml_copy_node(bookmark_node, subscribe_node);
+    } else if (processor_.initial_existing_events_strategy_ == INITIAL_EXISTING_EVENTS_STRATEGY_ALL) {
+      ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_BOOKMARK, "http://schemas.dmtf.org/wbem/wsman/1/wsman/bookmark/earliest");
+    }
+
+    // Send Bookmarks
+    ws_xml_add_child(subscribe_node, XML_NS_WS_MAN, WSM_SENDBOOKMARKS, nullptr);
+
+
+    // Copy whole Subscription
+    WsXmlNodeH subscription_node = ws_xml_get_doc_root(subscription_doc);
+    ws_xml_copy_node(subscription_node, subscription);
+    
+    // Save subscription
+    if (it != processor_.subscribers_.end()) {
+      if (it->second.subscription != nullptr) {
+        ws_xml_destroy_doc(it->second.subscription);
+      }
+    } else {
+      it = processor_.subscribers_.emplace(machine_id, SubscriberData()).first;
+    }
+    it->second.subscription_version = std::move(subscription_version);
+    it->second.subscription = subscription_doc;
   }
 
   // Send response
@@ -530,6 +538,7 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
       it->second.bookmark = bookmark_doc;
       // Bookmark changed, invalidate subscription
       if (it->second.subscription != nullptr) {
+        it->second.subscription_version.clear();
         ws_xml_destroy_doc(it->second.subscription);
         it->second.subscription = nullptr;
       }
