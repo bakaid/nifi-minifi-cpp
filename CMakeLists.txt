@@ -357,7 +357,6 @@ include(ExternalProject)
 
 set(CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING OFF CACHE BOOL "Disable dynamic SSL library loading")
 set(CIVETWEB_ENABLE_CXX ON CACHE BOOL "Enable civet C++ library")
-set(CIVETWEB_ENABLE_SSL ON CACHE BOOL "DISABLE SSL")
 
 SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
 if ( NOT APPLE)
@@ -565,9 +564,10 @@ if ((ENABLE_ALL OR ENABLE_SFTP) AND NOT DISABLE_CURL)
 endif()
 
 ## Openwsman Extesions
-option(ENABLE_OPENWSMAN "Disables the Openwsman extensions." ON)
-if (ENABLE_OPENWSMAN)
-	createExtension(OPENWSMAN-EXTENSIONS "OPENCV EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman" "extensions/openwsman/tests")
+option(ENABLE_OPENWSMAN "Disables the Openwsman extensions." OFF)
+if (ENABLE_OPENWSMAN AND NOT DISABLE_CIVET)
+    find_package(LibXml2 REQUIRED)
+    createExtension(OPENWSMAN-EXTENSIONS "OPENWSMAN EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman" "extensions/openwsman/tests")
 endif()
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN
