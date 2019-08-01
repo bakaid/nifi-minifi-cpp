@@ -565,9 +565,13 @@ endif()
 
 ## Openwsman Extesions
 option(ENABLE_OPENWSMAN "Disables the Openwsman extensions." OFF)
-if (ENABLE_OPENWSMAN AND NOT DISABLE_CIVET)
+if (ENABLE_OPENWSMAN AND NOT DISABLE_CIVET AND NOT DISABLE_CURL)
     find_package(LibXml2 REQUIRED)
     createExtension(OPENWSMAN-EXTENSIONS "OPENWSMAN EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman" "extensions/openwsman/tests")
+    if(NOT USE_SYSTEM_CURL)
+        message("minifi-openwsman will depend on curl-external")
+        add_dependencies(minifi-openwsman curl-external)
+    endif()
 endif()
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN

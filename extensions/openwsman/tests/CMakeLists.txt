@@ -36,9 +36,9 @@ FOREACH(testfile ${OPENWSMAN_INTEGRATION_TESTS})
     target_include_directories(${testfilename} BEFORE PRIVATE ./tools)
 
     if (APPLE)
-        target_link_libraries (${testfilename} -Wl,-all_load ${OPENSSL_LIBRARIES} minifi-openwsman minifi-standard-processors)
+        target_link_libraries (${testfilename} -Wl,-all_load ${OPENSSL_LIBRARIES} ${LIBXML2_LIBRARIES} minifi-openwsman minifi-standard-processors)
     else ()
-        target_link_libraries (${testfilename} -Wl,--whole-archive ${OPENSSL_LIBRARIES} minifi-openwsman minifi-standard-processors -Wl,--no-whole-archive)
+        target_link_libraries (${testfilename} -Wl,--whole-archive ${OPENSSL_LIBRARIES} ${LIBXML2_LIBRARIES} minifi-openwsman minifi-standard-processors -Wl,--no-whole-archive)
     endif ()
 
     createTests("${testfilename}")
