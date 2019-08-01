@@ -108,6 +108,7 @@ class SourceInitiatedSubscription : public core::Processor {
     static int enumerateEventCallback(WsXmlNodeH node, void* data);
     std::string getSoapAction(WsXmlDocH doc);
     std::string getMachineId(WsXmlDocH doc);
+    bool isAckRequested(WsXmlDocH doc);
     void sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size);
     
     static std::string millisecondsToXsdDuration(int64_t milliseconds);

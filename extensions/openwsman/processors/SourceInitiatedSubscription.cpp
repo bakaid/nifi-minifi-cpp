@@ -281,6 +281,15 @@ std::string SourceInitiatedSubscription::Handler::getMachineId(WsXmlDocH doc) {
   return text;
 }
 
+bool SourceInitiatedSubscription::Handler::isAckRequested(WsXmlDocH doc) {
+  WsXmlNodeH header = ws_xml_get_soap_header(doc);
+  if (header == nullptr) {
+    return false;
+  }
+  WsXmlNodeH ack_requested_node = ws_xml_get_child(header, 0 /*index*/, XML_NS_WS_MAN, WSM_ACKREQUESTED);
+  return ack_requested_node != nullptr;
+}
+
 void SourceInitiatedSubscription::Handler::sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size) {
   logging::LOG_TRACE(processor_.logger_) << "Sending response to " << machineId << " (" << remoteIp << "): \"" << std::string(xml_buf, xml_buf_size) << "\"";
 
@@ -292,12 +301,19 @@ void SourceInitiatedSubscription::Handler::sendResponse(struct mg_connection* co
   mg_printf(conn, "%.*s", xml_buf_size, xml_buf);
 }
 
-bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_connection* conn, const std::string& /*endpoint*/, WsXmlDocH request) {
+bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
   utils::ScopeGuard guard([&]() {
       ws_xml_destroy_doc(request);
   });
-
+  
+  auto action = getSoapAction(request);
   auto machine_id = getMachineId(request);
+  const struct mg_request_info* req_info = mg_get_request_info(conn);
+  std::string remote_ip = req_info->remote_addr;
+  if (action != ENUM_ACTION_ENUMERATE) {
+    processor_.logger_->log_error("%s called by %s (%s) with unknown Action \"%s\"", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str(), action.c_str());
+    return false; // TODO
+  }
 
   WsXmlDocH response = wsman_create_response_envelope(request, nullptr);
 
@@ -463,7 +479,6 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   int xml_buf_size = 0;
   ws_xml_dump_memory_enc(response, &xml_buf, &xml_buf_size, "UTF-8");
 
-  const struct mg_request_info* req_info = mg_get_request_info(conn);
   sendResponse(conn, machine_id, req_info->remote_addr, xml_buf, xml_buf_size);
 
   ws_xml_free_memory(xml_buf);
@@ -522,7 +537,14 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
   auto machine_id = getMachineId(request);
   const struct mg_request_info* req_info = mg_get_request_info(conn);
   std::string remote_ip = req_info->remote_addr;
-  if (action == WSMAN_CUSTOM_ACTION_HEARTBEAT) {
+  if (action == EVT_ACTION_SUBEND) {
+    std::lock_guard<std::mutex> lock(processor_.mutex_);
+    auto it = processor_.subscribers_.find(machine_id);
+    if (it != processor_.subscribers_.end()) {
+        processor_.subscribers_.erase(it);
+    }
+    // TODO: make sure whether we have to clean the bookmark as well
+  } else if (action == WSMAN_CUSTOM_ACTION_HEARTBEAT) {
     processor_.logger_->log_debug("Received Heartbeat on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
   } else if (action == WSMAN_CUSTOM_ACTION_EVENTS) {
     processor_.logger_->log_debug("Received Events on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
@@ -579,20 +601,23 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
     return false; // TODO
   }
 
-  WsXmlDocH ack = wsman_create_response_envelope(request, WSMAN_CUSTOM_ACTION_ACK);
-  WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
+  if (isAckRequested(request)) {
+    // Assemble ACK
+    WsXmlDocH ack = wsman_create_response_envelope(request, WSMAN_CUSTOM_ACTION_ACK);
+    WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
 
-  utils::Identifier msg_id = processor_.id_generator_->generate();
-  ws_xml_add_child_format(ack_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
+    utils::Identifier msg_id = processor_.id_generator_->generate();
+    ws_xml_add_child_format(ack_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
 
-  // Send ACK
-  char* xml_buf = nullptr;
-  int xml_buf_size = 0;
-  ws_xml_dump_memory_enc(ack, &xml_buf, &xml_buf_size, "UTF-8");
+    // Send ACK
+    char* xml_buf = nullptr;
+    int xml_buf_size = 0;
+    ws_xml_dump_memory_enc(ack, &xml_buf, &xml_buf_size, "UTF-8");
 
-  sendResponse(conn, machine_id, remote_ip, xml_buf, xml_buf_size);
+    sendResponse(conn, machine_id, remote_ip, xml_buf, xml_buf_size);
 
-  ws_xml_free_memory(xml_buf);
+    ws_xml_free_memory(xml_buf);
+  }
 
   return true;
 }
