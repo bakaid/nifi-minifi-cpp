@@ -25,6 +25,7 @@ set(BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman")
 
 # openwsman 2.6.9
 set(OPENWSMAN_CMAKE_ARGS
+        ${PASSTHROUGH_CMAKE_ARGS}
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-install"
         -DBUILD_PYTHON=NO
@@ -40,28 +41,56 @@ set(OPENWSMAN_CMAKE_ARGS
         -DDISABLE_PLUGINS=YES
         -DUSE_PAM=NO
         -DBUILD_TESTS=NO
-        -DDISABLE_SERVER=YES
+#        -DDISABLE_SERVER=YES
         -DBUILD_SHARED_LIBS=NO
     )
 
-set(BYPRODUCTS
-        "lib64/libwsman.a"
+if(NOT USE_SYSTEM_OPENSSL OR USE_SYSTEM_OPENSSL STREQUAL "OFF")
+    list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_SOURCE_DIR}/cmake/ssl)
+    list(APPEND OPENWSMAN_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
+            "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
+            "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
+            "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
+endif()
+if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
+    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
+    list(APPEND OPENWSMAN_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
+endif()
+message(OPENWSMAN_CMAKE_ARGS: ${OPENWSMAN_CMAKE_ARGS})
+
+if (APPLE)
+    set(BYPRODUCTS
+        "lib/libwsman.a"
+#         "lib/libwsman_server.a"
+         "lib/libwsman_client.a"
+         "lib/libwsman_curl_client_transport.a"
+        )
+else()
+    set(BYPRODUCTS
+            "lib64/libwsman.a"
 #         "lib64/libwsman_server.a"
 #         "lib64/libwsman_client.a"
 #         "lib64/libwsman_curl_client_transport.a"
-        )
+            )
+endif()
 
 FOREACH(BYPRODUCT ${BYPRODUCTS})
     LIST(APPEND OPENWSMAN_LIBRARIES_LIST "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-install/${BYPRODUCT}")
-ENDFOREACH(b)
+ENDFOREACH(BYPRODUCT)
     
 ExternalProject_Add(
             openwsman-external
             URL "https://github.com/Openwsman/openwsman/archive/v2.6.9.tar.gz"
             SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-src"
+            PATCH_COMMAND patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparty/openwsman/openwsman.patch
+            LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${OPENWSMAN_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${OPENWSMAN_LIBRARIES_LIST}"
     )
+
+if(NOT USE_SYSTEM_OPENSSL OR USE_SYSTEM_OPENSSL STREQUAL "OFF")
+    add_dependencies(openwsman-external libressl-portable)
+endif()
 
 set(OPENWSMAN_FOUND "YES" CACHE STRING "" FORCE)
 set(OPENWSMAN_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/openwsman-src/include" CACHE STRING "" FORCE)
