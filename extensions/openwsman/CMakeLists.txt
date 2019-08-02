@@ -41,16 +41,24 @@ set(OPENWSMAN_CMAKE_ARGS
         -DDISABLE_PLUGINS=YES
         -DUSE_PAM=NO
         -DBUILD_TESTS=NO
-#        -DDISABLE_SERVER=YES
+        -DDISABLE_SERVER=YES
         -DBUILD_SHARED_LIBS=NO
     )
 
 if(NOT USE_SYSTEM_OPENSSL OR USE_SYSTEM_OPENSSL STREQUAL "OFF")
     list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_SOURCE_DIR}/cmake/ssl)
-    list(APPEND OPENWSMAN_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
+    list(APPEND OPENWSMAN_CMAKE_ARGS
+            "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
             "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
             "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
             "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
+endif()
+if(NOT USE_SYSTEM_CURL OR USE_SYSTEM_CURL STREQUAL "OFF")
+    list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_SOURCE_DIR}/cmake/curl/dummy)
+    list(APPEND OPENWSMAN_CMAKE_ARGS
+            "-DCURL_SRC_DIR=${CURL_SRC_DIR}"
+            "-DCURL_BIN_DIR=${CURL_BIN_DIR}"
+            "-DCURL_BYPRODUCT_DIR=${CURL_BYPRODUCT_DIR}")
 endif()
 if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
     string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
@@ -66,12 +74,11 @@ if (APPLE)
          "lib/libwsman_curl_client_transport.a"
         )
 else()
-    set(BYPRODUCTS
-            "lib64/libwsman.a"
-#         "lib64/libwsman_server.a"
-#         "lib64/libwsman_client.a"
-#         "lib64/libwsman_curl_client_transport.a"
-            )
+    if("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
+        set(BYPRODUCTS "lib64/libwsman.a" )
+    else()
+        set(BYPRODUCTS "lib/libwsman.a" )
+    endif()
 endif()
 
 FOREACH(BYPRODUCT ${BYPRODUCTS})
@@ -90,6 +97,9 @@ ExternalProject_Add(
 
 if(NOT USE_SYSTEM_OPENSSL OR USE_SYSTEM_OPENSSL STREQUAL "OFF")
     add_dependencies(openwsman-external libressl-portable)
+endif()
+if(NOT USE_SYSTEM_CURL OR USE_SYSTEM_CURL STREQUAL "OFF")
+    add_dependencies(openwsman-external curl-external)
 endif()
 
 set(OPENWSMAN_FOUND "YES" CACHE STRING "" FORCE)
@@ -114,6 +124,11 @@ target_link_libraries(minifi-openwsman ${LIBMINIFI} ${UUID_LIBRARIES})
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
+
+# Include cURL
+find_package(CURL REQUIRED)
+include_directories(${CURL_INCLUDE_DIRS})
+target_link_libraries(minifi-openwsman ${CURL_LIBRARIES})
 
 # Include CivetWeb
 target_link_libraries(minifi-openwsman civetweb-cpp c-library)
