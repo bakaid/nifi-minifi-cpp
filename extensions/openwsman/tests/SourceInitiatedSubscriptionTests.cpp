@@ -82,8 +82,8 @@ TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
 
   plan->setProperty(source_initiated_subscription, "Listen Hostname", "23.96.27.78");
   plan->setProperty(source_initiated_subscription, "Listen Port", "5986");
-  plan->setProperty(source_initiated_subscription, "SSL Certificate", "/home/bakaid/certs/server.pem");
-  plan->setProperty(source_initiated_subscription, "SSL Certificate Authority", "/home/bakaid/certs/ca.crt");
+  plan->setProperty(source_initiated_subscription, "SSL Certificate", "/Users/danielbakai/certs/server.pem");
+  plan->setProperty(source_initiated_subscription, "SSL Certificate Authority", "/Users/danielbakai/certs/ca.crt");
   plan->setProperty(source_initiated_subscription, "Initial Existing Events Strategy", processors::SourceInitiatedSubscription::INITIAL_EXISTING_EVENTS_STRATEGY_ALL);
   plan->setProperty(source_initiated_subscription, "State File", "/tmp/wef.state");
   plan->setProperty(source_initiated_subscription, "XPath XML Query",

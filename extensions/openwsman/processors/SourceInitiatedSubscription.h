@@ -138,12 +138,19 @@ class SourceInitiatedSubscription : public core::Processor {
   std::unique_ptr<Handler> handler_;
   
   struct SubscriberData {
-      WsXmlDocH bookmark;
-      std::string subscription_version;
-      WsXmlDocH subscription;
-      
+      WsXmlDocH bookmark_;
+      std::string subscription_version_;
+      WsXmlDocH subscription_;
+      std::string subscription_endpoint_;
+      std::string subscription_identifier_;
+
       SubscriberData();
       ~SubscriberData();
+
+      void setSubscription(const std::string& subscription_version, WsXmlDocH subscription, const std::string& subscription_endpoint, const std::string& subscription_identifier);
+      void clearSubscription();
+      void setBookmark(WsXmlDocH bookmark);
+      void clearBookmark();
   };
 
   std::mutex mutex_;
