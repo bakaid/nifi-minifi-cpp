@@ -50,12 +50,12 @@
 #include "properties/Configure.h"
 #include "unit/ProvenanceTestHelper.h"
 #include "io/StreamFactory.h"
-#include "processors/SourceInitiatedSubscription.h"
+#include "processors/SourceInitiatedSubscriptionListener.h"
 #include "processors/LogAttribute.h"
 #include "processors/UpdateAttribute.h"
 #include "processors/PutFile.h"
 
-TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
+TEST_CASE("SourceInitiatedSubscriptionListenerTest", "[basic]") {
   TestController testController;
   auto plan = testController.createPlan();
 
@@ -64,13 +64,13 @@ TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
   LogTestController::getInstance().setDebug<minifi::core::ProcessGroup>();
   LogTestController::getInstance().setDebug<minifi::core::Processor>();
   LogTestController::getInstance().setDebug<minifi::core::ProcessSession>();
-  LogTestController::getInstance().setTrace<processors::SourceInitiatedSubscription>();
+  LogTestController::getInstance().setTrace<processors::SourceInitiatedSubscriptionListener>();
   LogTestController::getInstance().setDebug<processors::LogAttribute>();
   LogTestController::getInstance().setDebug<processors::PutFile>();
   LogTestController::getInstance().setDebug<minifi::core::repository::VolatileContentRepository>();
   
-  auto source_initiated_subscription = plan->addProcessor("SourceInitiatedSubscription",
-                                                          "SourceInitiatedSubscription");
+  auto source_initiated_subscription = plan->addProcessor("SourceInitiatedSubscriptionListener",
+                                                          "SourceInitiatedSubscriptionListener");
   auto put_file = plan->addProcessor("PutFile",
                                      "PutFile",
                                      core::Relationship("success", "d"),
@@ -84,7 +84,7 @@ TEST_CASE("SourceInitiatedSubscriptionTest", "[basic]") {
   plan->setProperty(source_initiated_subscription, "Listen Port", "5986");
   plan->setProperty(source_initiated_subscription, "SSL Certificate", "/Users/danielbakai/certs/server.pem");
   plan->setProperty(source_initiated_subscription, "SSL Certificate Authority", "/Users/danielbakai/certs/ca.crt");
-  plan->setProperty(source_initiated_subscription, "Initial Existing Events Strategy", processors::SourceInitiatedSubscription::INITIAL_EXISTING_EVENTS_STRATEGY_ALL);
+  plan->setProperty(source_initiated_subscription, "Initial Existing Events Strategy", processors::SourceInitiatedSubscriptionListener::INITIAL_EXISTING_EVENTS_STRATEGY_ALL);
   plan->setProperty(source_initiated_subscription, "State File", "/tmp/wef.state");
   plan->setProperty(source_initiated_subscription, "XPath XML Query",
     "<QueryList>\n"

@@ -47,15 +47,15 @@ namespace nifi {
 namespace minifi {
 namespace processors {
 
-class SourceInitiatedSubscription : public core::Processor {
+class SourceInitiatedSubscriptionListener : public core::Processor {
  public:
   static constexpr char const *INITIAL_EXISTING_EVENTS_STRATEGY_NONE = "None";
   static constexpr char const *INITIAL_EXISTING_EVENTS_STRATEGY_ALL = "All";
 
-  static constexpr char const* ProcessorName = "SourceInitiatedSubscription";
+  static constexpr char const* ProcessorName = "SourceInitiatedSubscriptionListener";
 
-  SourceInitiatedSubscription(std::string name, utils::Identifier uuid = utils::Identifier());
-  virtual ~SourceInitiatedSubscription();
+  SourceInitiatedSubscriptionListener(std::string name, utils::Identifier uuid = utils::Identifier());
+  virtual ~SourceInitiatedSubscriptionListener();
 
   // Supported Properties
   static core::Property ListenHostname;
@@ -87,7 +87,7 @@ class SourceInitiatedSubscription : public core::Processor {
   
   class Handler: public CivetHandler {
    public:
-    Handler(SourceInitiatedSubscription& processor);
+    Handler(SourceInitiatedSubscriptionListener& processor);
     bool handlePost(CivetServer* server, struct mg_connection* conn);
     
     class WriteCallback : public OutputStreamCallback {
@@ -100,7 +100,7 @@ class SourceInitiatedSubscription : public core::Processor {
     };
 
    private:
-    SourceInitiatedSubscription& processor_;
+    SourceInitiatedSubscriptionListener& processor_;
     
     bool handleSubscriptionManager(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request);
     bool handleSubscriptions(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request);
@@ -157,7 +157,7 @@ class SourceInitiatedSubscription : public core::Processor {
   std::map<std::string /*machineId*/, SubscriberData> subscribers_;
 };
 
-REGISTER_RESOURCE(SourceInitiatedSubscription, "SourceInitiatedSubscription TODO")
+REGISTER_RESOURCE(SourceInitiatedSubscriptionListener, "SourceInitiatedSubscriptionListener TODO")
 
 } /* namespace processors */
 } /* namespace minifi */

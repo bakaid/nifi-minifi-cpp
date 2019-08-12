@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-#include "SourceInitiatedSubscription.h"
+#include "SourceInitiatedSubscriptionListener.h"
 
 #include <memory>
 #include <algorithm>
@@ -66,28 +66,28 @@ namespace apache {
 namespace nifi {
 namespace minifi {
 namespace processors {
-core::Property SourceInitiatedSubscription::ListenHostname(
+core::Property SourceInitiatedSubscriptionListener::ListenHostname(
     core::PropertyBuilder::createProperty("Listen Hostname")->withDescription("The hostname or IP of this machine that will be advertised to event sources to connect to. It must be contained as a Subject Alternative Name in the server certificate, otherwise source machines will refuse to connect.")
         ->isRequired(true)->build());
-core::Property SourceInitiatedSubscription::ListenPort(
+core::Property SourceInitiatedSubscriptionListener::ListenPort(
     core::PropertyBuilder::createProperty("Listen Port")->withDescription("The port to listen on.")
         ->isRequired(true)->withDefaultValue<int64_t>(5986, core::StandardValidators::LISTEN_PORT_VALIDATOR())->build());
-core::Property SourceInitiatedSubscription::SubscriptionManagerPath(
+core::Property SourceInitiatedSubscriptionListener::SubscriptionManagerPath(
     core::PropertyBuilder::createProperty("Subscription Manager Path")->withDescription("The URI path that will be used for the WEC Subscription Manager endpoint.")
         ->isRequired(true)->withDefaultValue("/wsman/SubscriptionManager/WEC")->build());
-core::Property SourceInitiatedSubscription::SubscriptionsBasePath(
+core::Property SourceInitiatedSubscriptionListener::SubscriptionsBasePath(
     core::PropertyBuilder::createProperty("Subscriptions Base Path")->withDescription("The URI path that will be used as the base for endpoints serving individual subscriptions.")
         ->isRequired(true)->withDefaultValue("/wsman/subscriptions")->build());
-core::Property SourceInitiatedSubscription::SSLCertificate(
+core::Property SourceInitiatedSubscriptionListener::SSLCertificate(
     core::PropertyBuilder::createProperty("SSL Certificate")->withDescription("File containing PEM-formatted file including TLS/SSL certificate and key. The root CA of the certificate must be the CA set in SSL Certificate Authority.")
         ->isRequired(true)->build());
-core::Property SourceInitiatedSubscription::SSLCertificateAuthority(
+core::Property SourceInitiatedSubscriptionListener::SSLCertificateAuthority(
     core::PropertyBuilder::createProperty("SSL Certificate Authority")->withDescription("File containing the PEM-formatted CA that is the root CA for both this server's certificate and the event source clients' certificates.")
         ->isRequired(true)->build());
-core::Property SourceInitiatedSubscription::SSLVerifyPeer(
+core::Property SourceInitiatedSubscriptionListener::SSLVerifyPeer(
     core::PropertyBuilder::createProperty("SSL Verify Peer")->withDescription("Whether or not to verify the client's certificate")
         ->isRequired(false)->withDefaultValue<bool>(true)->build());
-core::Property SourceInitiatedSubscription::XPathXmlQuery(
+core::Property SourceInitiatedSubscriptionListener::XPathXmlQuery(
     core::PropertyBuilder::createProperty("XPath XML Query")->withDescription("An XPath Query in structured XML format conforming to the Query Schema described in https://docs.microsoft.com/en-gb/windows/win32/wes/queryschema-schema, "
     "see an example here: https://docs.microsoft.com/en-gb/windows/win32/wes/consuming-events")
         ->isRequired(true)
@@ -96,37 +96,37 @@ core::Property SourceInitiatedSubscription::XPathXmlQuery(
                            "    <Select Path=\"Application\">*</Select>\n"
                            "  </Query>\n"
                            "</QueryList>\n")->build());
-core::Property SourceInitiatedSubscription::InitialExistingEventsStrategy(
+core::Property SourceInitiatedSubscriptionListener::InitialExistingEventsStrategy(
     core::PropertyBuilder::createProperty("Initial Existing Events Strategy")->withDescription("Defines the behaviour of the Processor when a new event source connects.\n"
     "None: will not request existing events\n"
     "All: will request all existing events matching the query")
         ->isRequired(true)->withAllowableValues<std::string>({INITIAL_EXISTING_EVENTS_STRATEGY_NONE, INITIAL_EXISTING_EVENTS_STRATEGY_ALL})->withDefaultValue(INITIAL_EXISTING_EVENTS_STRATEGY_NONE)->build());
-core::Property SourceInitiatedSubscription::SubscriptionExpirationInterval(
+core::Property SourceInitiatedSubscriptionListener::SubscriptionExpirationInterval(
     core::PropertyBuilder::createProperty("Subscription Expiration Interval")->withDescription("The interval while a subscription is valid without renewal. "
     "Because in a source-initiated subscription, the collector can not cancel the subscription, "
     "setting this too large could cause unecessary load on the source machine. "
     "Setting this too small causes frequent reenumeration and resubscription which is ineffective.")
         ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("10 min")->build());
-core::Property SourceInitiatedSubscription::HeartbeatInterval(
+core::Property SourceInitiatedSubscriptionListener::HeartbeatInterval(
     core::PropertyBuilder::createProperty("Heartbeat Interval")->withDescription("The processor will ask the sources to send heartbeats with this interval.")
         ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("30 sec")->build());
-core::Property SourceInitiatedSubscription::MaxElements(
+core::Property SourceInitiatedSubscriptionListener::MaxElements(
     core::PropertyBuilder::createProperty("Max Elements")->withDescription("The maximum number of events a source will batch together and send at once.")
         ->isRequired(true)->withDefaultValue<uint32_t>(20U)->build());
-core::Property SourceInitiatedSubscription::MaxLatency(
+core::Property SourceInitiatedSubscriptionListener::MaxLatency(
     core::PropertyBuilder::createProperty("Max Latency")->withDescription("The maximum time a source will wait to send new events.")
         ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("10 sec")->build());
-core::Property SourceInitiatedSubscription::StateFile(
+core::Property SourceInitiatedSubscriptionListener::StateFile(
     core::PropertyBuilder::createProperty("State File")->withDescription("The file the Processor will use to store the current bookmark for each event source. "
     "This will be used after restart to continue event ingestion from the point the Processor left off.")
         ->isRequired(true)->build());
 
-core::Relationship SourceInitiatedSubscription::Success("success", "All Events are routed to success");
+core::Relationship SourceInitiatedSubscriptionListener::Success("success", "All Events are routed to success");
 
 
-SourceInitiatedSubscription::SourceInitiatedSubscription(std::string name, utils::Identifier uuid)
+SourceInitiatedSubscriptionListener::SourceInitiatedSubscriptionListener(std::string name, utils::Identifier uuid)
     : Processor(name, uuid)
-    , logger_(logging::LoggerFactory<SourceInitiatedSubscription>::getLogger())
+    , logger_(logging::LoggerFactory<SourceInitiatedSubscriptionListener>::getLogger())
     , id_generator_(utils::IdGenerator::getIdGenerator())
     , session_factory_(nullptr)
     , listen_port_(0U)
@@ -136,24 +136,24 @@ SourceInitiatedSubscription::SourceInitiatedSubscription(std::string name, utils
     , max_latency_(0) {
 }
 
-SourceInitiatedSubscription::~SourceInitiatedSubscription() {
+SourceInitiatedSubscriptionListener::~SourceInitiatedSubscriptionListener() {
 }
 
-SourceInitiatedSubscription::Handler::Handler(SourceInitiatedSubscription& processor)
+SourceInitiatedSubscriptionListener::Handler::Handler(SourceInitiatedSubscriptionListener& processor)
     : processor_(processor) {
 }
 
-SourceInitiatedSubscription::SubscriberData::SubscriberData()
+SourceInitiatedSubscriptionListener::SubscriberData::SubscriberData()
     : bookmark_(nullptr)
     , subscription_(nullptr) {
 }
 
-SourceInitiatedSubscription::SubscriberData::~SubscriberData() {
+SourceInitiatedSubscriptionListener::SubscriberData::~SubscriberData() {
   clearSubscription();
   clearBookmark();
 }
 
-void SourceInitiatedSubscription::SubscriberData::setSubscription(const std::string& subscription_version,
+void SourceInitiatedSubscriptionListener::SubscriberData::setSubscription(const std::string& subscription_version,
     WsXmlDocH subscription,
     const std::string& subscription_endpoint,
     const std::string& subscription_identifier) {
@@ -164,7 +164,7 @@ void SourceInitiatedSubscription::SubscriberData::setSubscription(const std::str
   subscription_identifier_ = subscription_identifier;
 }
 
-void SourceInitiatedSubscription::SubscriberData::clearSubscription() {
+void SourceInitiatedSubscriptionListener::SubscriberData::clearSubscription() {
   subscription_version_.clear();
   if (subscription_ != nullptr) {
     ws_xml_destroy_doc(subscription_);
@@ -172,25 +172,25 @@ void SourceInitiatedSubscription::SubscriberData::clearSubscription() {
   subscription_ = nullptr;
 }
 
-void SourceInitiatedSubscription::SubscriberData::setBookmark(WsXmlDocH bookmark) {
+void SourceInitiatedSubscriptionListener::SubscriberData::setBookmark(WsXmlDocH bookmark) {
   clearBookmark();
   bookmark_ = bookmark;
 }
 
-void SourceInitiatedSubscription::SubscriberData::clearBookmark() {
+void SourceInitiatedSubscriptionListener::SubscriberData::clearBookmark() {
   if (bookmark_ != nullptr) {
     ws_xml_destroy_doc(bookmark_);
   }
   bookmark_ = nullptr;
 }
 
-std::string SourceInitiatedSubscription::Handler::millisecondsToXsdDuration(int64_t milliseconds) {
+std::string SourceInitiatedSubscriptionListener::Handler::millisecondsToXsdDuration(int64_t milliseconds) {
   char buf[1024];
   snprintf(buf, sizeof(buf), "PT%lld.%03lldS", milliseconds / 1000, milliseconds % 1000);
   return buf;
 }
 
-bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struct mg_connection* conn) {
+bool SourceInitiatedSubscriptionListener::Handler::handlePost(CivetServer* server, struct mg_connection* conn) {
   const struct mg_request_info* req_info = mg_get_request_info(conn);
   if (req_info == nullptr) {
     processor_.logger_->log_error("Failed to get request info");
@@ -274,7 +274,7 @@ bool SourceInitiatedSubscription::Handler::handlePost(CivetServer* server, struc
   }
 }
 
-std::string SourceInitiatedSubscription::Handler::getSoapAction(WsXmlDocH doc) {
+std::string SourceInitiatedSubscriptionListener::Handler::getSoapAction(WsXmlDocH doc) {
   WsXmlNodeH header = ws_xml_get_soap_header(doc);
   if (header == nullptr) {
     return "";
@@ -291,7 +291,7 @@ std::string SourceInitiatedSubscription::Handler::getSoapAction(WsXmlDocH doc) {
   return text;
 }
 
-std::string SourceInitiatedSubscription::Handler::getMachineId(WsXmlDocH doc) {
+std::string SourceInitiatedSubscriptionListener::Handler::getMachineId(WsXmlDocH doc) {
   WsXmlNodeH header = ws_xml_get_soap_header(doc);
   if (header == nullptr) {
     return "";
@@ -308,7 +308,7 @@ std::string SourceInitiatedSubscription::Handler::getMachineId(WsXmlDocH doc) {
   return text;
 }
 
-bool SourceInitiatedSubscription::Handler::isAckRequested(WsXmlDocH doc) {
+bool SourceInitiatedSubscriptionListener::Handler::isAckRequested(WsXmlDocH doc) {
   WsXmlNodeH header = ws_xml_get_soap_header(doc);
   if (header == nullptr) {
     return false;
@@ -317,7 +317,7 @@ bool SourceInitiatedSubscription::Handler::isAckRequested(WsXmlDocH doc) {
   return ack_requested_node != nullptr;
 }
 
-void SourceInitiatedSubscription::Handler::sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size) {
+void SourceInitiatedSubscriptionListener::Handler::sendResponse(struct mg_connection* conn, const std::string& machineId, const std::string& remoteIp, char* xml_buf, size_t xml_buf_size) {
   logging::LOG_TRACE(processor_.logger_) << "Sending response to " << machineId << " (" << remoteIp << "): \"" << std::string(xml_buf, xml_buf_size) << "\"";
 
   mg_printf(conn, "HTTP/1.1 200 OK\r\n");
@@ -328,7 +328,7 @@ void SourceInitiatedSubscription::Handler::sendResponse(struct mg_connection* co
   mg_printf(conn, "%.*s", static_cast<int>(xml_buf_size), xml_buf);
 }
 
-bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
+bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
   utils::ScopeGuard guard([&]() {
       ws_xml_destroy_doc(request);
   });
@@ -527,23 +527,23 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptionManager(struct mg_c
   return true;
 }
 
-SourceInitiatedSubscription::Handler::WriteCallback::WriteCallback(char* text)
+SourceInitiatedSubscriptionListener::Handler::WriteCallback::WriteCallback(char* text)
     : text_(text) {
 }
 
-int64_t SourceInitiatedSubscription::Handler::WriteCallback::process(std::shared_ptr<io::BaseStream> stream) {
+int64_t SourceInitiatedSubscriptionListener::Handler::WriteCallback::process(std::shared_ptr<io::BaseStream> stream) {
   return stream->write(reinterpret_cast<uint8_t*>(text_), strlen(text_));
 }
 
-int SourceInitiatedSubscription::Handler::enumerateEventCallback(WsXmlNodeH node, void* data) {
+int SourceInitiatedSubscriptionListener::Handler::enumerateEventCallback(WsXmlNodeH node, void* data) {
   if (data == nullptr) {
     return 1; // TODO
   }
 
-  SourceInitiatedSubscription::Handler* self = nullptr;
+  SourceInitiatedSubscriptionListener::Handler* self = nullptr;
   std::string machine_id;
   std::string remote_ip;
-  std::tie(self, machine_id, remote_ip) = *static_cast<std::tuple<SourceInitiatedSubscription::Handler*, std::string, std::string>*>(data);
+  std::tie(self, machine_id, remote_ip) = *static_cast<std::tuple<SourceInitiatedSubscriptionListener::Handler*, std::string, std::string>*>(data);
 
   char* text = ws_xml_get_node_text(node);
   if (text == nullptr) {
@@ -564,13 +564,13 @@ int SourceInitiatedSubscription::Handler::enumerateEventCallback(WsXmlNodeH node
   flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_MACHINEID, machine_id);
   flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_IP, remote_ip);
 
-  session->transfer(flow_file, SourceInitiatedSubscription::Success);
+  session->transfer(flow_file, SourceInitiatedSubscriptionListener::Success);
   session->commit();
 
   return 0;
 }
 
-bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
+bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptions(struct mg_connection* conn, const std::string& endpoint, WsXmlDocH request) {
   utils::ScopeGuard guard([&]() {
       ws_xml_destroy_doc(request);
   });
@@ -602,9 +602,9 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
       return false;
     }
     const struct mg_request_info* req_info = mg_get_request_info(conn);
-    std::tuple<SourceInitiatedSubscription::Handler*, std::string, std::string> callback_args = std::forward_as_tuple(this, machine_id, remote_ip);
+    std::tuple<SourceInitiatedSubscriptionListener::Handler*, std::string, std::string> callback_args = std::forward_as_tuple(this, machine_id, remote_ip);
     // Enumare Body/Events/Event nodes
-    int ret = ws_xml_enum_children(events_node, &SourceInitiatedSubscription::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
+    int ret = ws_xml_enum_children(events_node, &SourceInitiatedSubscriptionListener::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
     if (ret != 0) {
       processor_.logger_->log_error("Failed to parse events on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
       // TODO
@@ -661,12 +661,12 @@ bool SourceInitiatedSubscription::Handler::handleSubscriptions(struct mg_connect
   return true;
 }
 
-void SourceInitiatedSubscription::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-  logger_->log_trace("SourceInitiatedSubscription onTrigger called");
+void SourceInitiatedSubscriptionListener::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
+  logger_->log_trace("SourceInitiatedSubscriptionListener onTrigger called");
 }
 
-void SourceInitiatedSubscription::initialize() {
-  logger_->log_trace("Initializing SourceInitiatedSubscription");
+void SourceInitiatedSubscriptionListener::initialize() {
+  logger_->log_trace("Initializing SourceInitiatedSubscriptionListener");
 
   // Set the supported properties
   std::set<core::Property> properties;
@@ -692,7 +692,7 @@ void SourceInitiatedSubscription::initialize() {
   setSupportedRelationships(relationships);
 }
 
-void SourceInitiatedSubscription::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
+void SourceInitiatedSubscriptionListener::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
   std::string ssl_certificate_file;
   std::string ssl_ca_file;
   bool verify_peer = true;
@@ -813,7 +813,7 @@ void SourceInitiatedSubscription::onSchedule(const std::shared_ptr<core::Process
   server_->addHandler("**", *handler_);
 }
 
-void SourceInitiatedSubscription::notifyStop() {
+void SourceInitiatedSubscriptionListener::notifyStop() {
 }
 
 } /* namespace processors */
