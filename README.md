@@ -138,10 +138,8 @@ and rebuild.
 #### Libraries / Development Headers
 * libboost and boost-devel
   * 1.48.0 or greater
-* libcurl-openssl (If not available or desired, NSS will be used by applying -DUSE_CURL_NSS)
 * librocksdb4.1 and librocksdb-dev
 * libuuid and uuid-dev
-* openssl
 * Python 3 and development headers -- Required, unless Python support is disabled
 * Lua and development headers -- Optional, unless Lua support is enabled
 * libgps-dev -- Required if building libGPS support
@@ -200,8 +198,6 @@ On all distributions please use -DUSE_SHARED_LIBS=OFF to statically link zlib, l
 #### Libraries
 * libuuid
 * librocksdb *** IF NOT INSTALLED, WILL BE BUILT FROM THIRD PARTY DIRECTORY ***
-* libcurl-openssl (If not available or desired, NSS will be used by applying -DUSE_CURL_NSS)
-* libssl and libcrypto from openssl 
 * libarchive
 * librdkafka
 * Python 3 -- Required, unless Python support is disabled
@@ -248,8 +244,6 @@ $ yum install docker python-virtualenv
 $ yum install gpsd-devel
 $ # (Optional) for PacketCapture Processor
 $ yum install libpcap-devel
-$ #depending on your yum repo you may need to manually build libcurl-openssl if you do not wish to use
-  libcurl with NSS support. By default we will use NSS when libcurl-openssl is not available.
 ```
 
 ##### Aptitude based Linux Distributions
@@ -263,10 +257,9 @@ $ apt-get install cmake \
   autoconf \
   automake \
   libtool \
-  libcurl4-openssl-dev \
   librocksdb-dev librocksdb4.1 \
   uuid-dev uuid \
-  libboost-all-dev libssl-dev \
+  libboost-all-dev \
   libbz2-dev liblzma-dev \
   doxygen
 $ # (Optional) for building Python support
@@ -297,14 +290,11 @@ $ brew install cmake \
   rocksdb \
   ossp-uuid \
   boost \
-  openssl \
   python \
   lua \
   xz \
   bzip2 \
   doxygen
-$ brew install curl
-$ brew link curl --force
 $ # (Optional) for building USB Camera support
 $ brew install libusb libpng
 $ # (Optional) for building docker image/running system integration tests

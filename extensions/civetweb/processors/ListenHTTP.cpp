@@ -30,6 +30,7 @@ core::Property ListenHTTP::BasePath(
     core::PropertyBuilder::createProperty("Base Path")
         ->withDescription("Base path for incoming connections")
         ->isRequired(false)
+
         ->withDefaultValue<std::string>("contentListener")->build());
 
 core::Property ListenHTTP::Port(

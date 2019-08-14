@@ -537,35 +537,45 @@ int64_t SourceInitiatedSubscriptionListener::Handler::WriteCallback::process(std
 
 int SourceInitiatedSubscriptionListener::Handler::enumerateEventCallback(WsXmlNodeH node, void* data) {
   if (data == nullptr) {
-    return 1; // TODO
+    return 1;
   }
 
-  SourceInitiatedSubscriptionListener::Handler* self = nullptr;
+  std::shared_ptr<core::ProcessSession> session;
+  std::shared_ptr<logging::Logger> logger;
   std::string machine_id;
   std::string remote_ip;
-  std::tie(self, machine_id, remote_ip) = *static_cast<std::tuple<SourceInitiatedSubscriptionListener::Handler*, std::string, std::string>*>(data);
+  std::tie(session, logger, machine_id, remote_ip) = *static_cast<std::tuple<std::shared_ptr<core::ProcessSession>, std::shared_ptr<logging::Logger>, std::string, std::string>*>(data);
 
   char* text = ws_xml_get_node_text(node);
   if (text == nullptr) {
-      return 1; // TODO
+      logger->log_error("Failed to get text for node");
+      return 1;
   }
 
-  self->processor_.logger_->log_trace("Found Event");
-  auto session = self->processor_.session_factory_->createSession();
-  auto flow_file = std::static_pointer_cast<FlowFileRecord>(session->create());
-  if (flow_file == nullptr) {
-    return 1; // TODO
+  try {
+    logger->log_trace("Found Event");
+    auto flow_file = std::static_pointer_cast<FlowFileRecord>(session->create());
+    if (flow_file == nullptr) {
+      logger->log_error("Failed to create FlowFile");
+      return 1;
+    }
+
+    WriteCallback callback(text);
+    session->write(flow_file, &callback);
+
+    session->putAttribute(flow_file, FlowAttributeKey(MIME_TYPE), "application/xml");
+    flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_MACHINEID, machine_id);
+    flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_IP, remote_ip);
+
+    session->transfer(flow_file, SourceInitiatedSubscriptionListener::Success);
+    session->commit();
+  } catch (const std::exception& e) {
+    logger->log_error("Caught exception while processing Events: %s", e.what());
+    return 1;
+  } catch (...) {
+    logger->log_error("Caught exception while processing Events");
+    return 1;
   }
-
-  WriteCallback callback(text);
-  session->write(flow_file, &callback);
-
-  session->putAttribute(flow_file, FlowAttributeKey(MIME_TYPE), "application/xml");
-  flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_MACHINEID, machine_id);
-  flow_file->addAttribute(ATTRIBUTE_WEF_REMOTE_IP, remote_ip);
-
-  session->transfer(flow_file, SourceInitiatedSubscriptionListener::Success);
-  session->commit();
 
   return 0;
 }
@@ -602,18 +612,19 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptions(struct mg
       return false;
     }
     const struct mg_request_info* req_info = mg_get_request_info(conn);
-    std::tuple<SourceInitiatedSubscriptionListener::Handler*, std::string, std::string> callback_args = std::forward_as_tuple(this, machine_id, remote_ip);
     // Enumare Body/Events/Event nodes
+    auto session = processor_.session_factory_->createSession();
+    std::tuple<std::shared_ptr<core::ProcessSession>, std::shared_ptr<logging::Logger>, std::string, std::string> callback_args = std::forward_as_tuple(session, processor_.logger_, machine_id, remote_ip);
     int ret = ws_xml_enum_children(events_node, &SourceInitiatedSubscriptionListener::Handler::enumerateEventCallback, &callback_args, 0 /*bRecursive*/);
     if (ret != 0) {
-      processor_.logger_->log_error("Failed to parse events on %s from %s (%s)", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
-      // TODO
+      processor_.logger_->log_error("Failed to parse events on %s from %s (%s), rolling back session", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str());
+      session->rollback();
     }
     // Header
     WsXmlNodeH header = ws_xml_get_soap_header(request);
     // Header/Bookmark
     WsXmlNodeH bookmark_node = ws_xml_get_child(header, 0 /*index*/, XML_NS_WS_MAN, WSM_BOOKMARK);
-    if (bookmark_node != nullptr) {
+    if (ret == 0 && bookmark_node != nullptr) {
       WsXmlDocH bookmark_doc = ws_xml_create_doc(XML_NS_WS_MAN, WSM_BOOKMARK);
       WsXmlNodeH temp = ws_xml_get_doc_root(bookmark_doc);
       ws_xml_duplicate_children(temp, bookmark_node);
