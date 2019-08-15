@@ -294,6 +294,10 @@ add_dependency SFTP_ENABLED "libssh2"
 add_dependency SFTP_ENABLED "libcurl"
 add_dependency SFTP_ENABLED "openssl"
 
+add_disabled_option OPENWSMAN_ENABLED ${FALSE} "ENABLE_OPENWSMAN"
+add_dependency OPENWSMAN_ENABLED "openssl"
+add_dependency OPENWSMAN_ENABLED "libxml2"
+
 TESTS_DISABLED=${FALSE}
 
 add_disabled_option SQLITE_ENABLED ${FALSE} "ENABLE_SQLITE"
