@@ -155,6 +155,9 @@ class SourceInitiatedSubscriptionListener : public core::Processor {
 
   std::mutex mutex_;
   std::map<std::string /*machineId*/, SubscriberData> subscribers_;
+
+  bool persistState() const;
+  bool loadState();
 };
 
 REGISTER_RESOURCE(SourceInitiatedSubscriptionListener, "SourceInitiatedSubscriptionListener TODO")

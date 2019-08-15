@@ -52,6 +52,7 @@ extern "C" {
 #include "ResourceClaim.h"
 #include "utils/StringUtils.h"
 #include "utils/ScopeGuard.h"
+#include "utils/file/FileUtils.h"
 
 #define XML_NS_CUSTOM_SUBSCRIPTION "http://schemas.microsoft.com/wbem/wsman/1/subscription"
 #define XML_NS_CUSTOM_AUTHENTICATION "http://schemas.microsoft.com/wbem/wsman/1/authentication"
@@ -165,6 +166,7 @@ void SourceInitiatedSubscriptionListener::SubscriberData::setSubscription(const 
 }
 
 void SourceInitiatedSubscriptionListener::SubscriberData::clearSubscription() {
+  std::cerr << "clearSubscription, subscription_: " << reinterpret_cast<void*>(subscription_) << ", bookmark_: " << reinterpret_cast<void*>(bookmark_) << std::endl;
   subscription_version_.clear();
   if (subscription_ != nullptr) {
     ws_xml_destroy_doc(subscription_);
@@ -178,10 +180,47 @@ void SourceInitiatedSubscriptionListener::SubscriberData::setBookmark(WsXmlDocH 
 }
 
 void SourceInitiatedSubscriptionListener::SubscriberData::clearBookmark() {
+  std::cerr << "clearBookmark, subscription_: " << reinterpret_cast<void*>(subscription_) << ", bookmark_: " << reinterpret_cast<void*>(bookmark_) << std::endl;
   if (bookmark_ != nullptr) {
     ws_xml_destroy_doc(bookmark_);
   }
   bookmark_ = nullptr;
+}
+
+bool SourceInitiatedSubscriptionListener::persistState() const {
+  utils::file::FileUtils::create_dir(state_file_path_);
+  for (const auto& subscriber : subscribers_) {
+    std::ofstream bookmark_file(utils::file::FileUtils::concat_path(state_file_path_, subscriber.first));
+    char* xml_buf = nullptr;
+    int xml_buf_size = 0;
+    ws_xml_dump_memory_enc(subscriber.second.bookmark_, &xml_buf, &xml_buf_size, "UTF-8");
+    bookmark_file.write(xml_buf, xml_buf_size);
+    ws_xml_free_memory(xml_buf);
+  }
+  return true;
+}
+
+bool SourceInitiatedSubscriptionListener::loadState() {
+  std::map<std::string /*machineId*/, WsXmlDocH /*bookmark*/> bookmarks;
+  utils::file::FileUtils::list_dir(state_file_path_, [&](const std::string& directory, const std::string& filename) -> bool {
+    WsXmlDocH bookmark = ws_xml_read_file(utils::file::FileUtils::concat_path(directory, filename).c_str(), "UTF-8", 0);
+
+    // Unless we duplicate this doc here, it causes weird errors later, much like the later ws_xml_copy_node
+    // could not make a perfect deep copy. TODO: investigate
+    WsXmlNodeH bookmark_node = ws_xml_get_doc_root(bookmark);
+    WsXmlDocH bookmark_doc = ws_xml_create_doc(XML_NS_WS_MAN, WSM_BOOKMARK);
+    WsXmlNodeH temp = ws_xml_get_doc_root(bookmark_doc);
+    ws_xml_duplicate_children(temp, bookmark_node);
+    ws_xml_destroy_doc(bookmark);
+
+    bookmarks[filename] = bookmark_doc;
+    return true;
+  }, logger_);
+
+  for (const auto& bookmark : bookmarks) {
+    subscribers_[bookmark.first].setBookmark(bookmark.second);
+  }
+  return true;
 }
 
 std::string SourceInitiatedSubscriptionListener::Handler::millisecondsToXsdDuration(int64_t milliseconds) {
@@ -638,6 +677,9 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptions(struct mg
       // Bookmark changed, invalidate stored subscription
       it->second.clearSubscription();
 
+      // Persist state
+      processor_.persistState();
+
       char* xml_buf = nullptr;
       int xml_buf_size = 0;
       ws_xml_dump_memory_enc(bookmark_doc, &xml_buf, &xml_buf_size, "UTF-8");
@@ -803,6 +845,10 @@ void SourceInitiatedSubscriptionListener::onSchedule(const std::shared_ptr<core:
 
   session_factory_ = sessionFactory;
 
+  // Load state
+  loadState();
+
+  // Start server
   std::vector<std::string> options;
   options.emplace_back("enable_keep_alive");
   options.emplace_back("yes");
