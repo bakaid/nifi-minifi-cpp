@@ -325,6 +325,7 @@ show_supported_features() {
   echo "S. SFTP Support ................$(print_feature_status SFTP_ENABLED)"
   echo "V. AWS Support .................$(print_feature_status AWS_ENABLED)"
   echo "T. OpenCV Support ..............$(print_feature_status OPENCV_ENABLED)"
+  echo "U. Openwsman Support ...........$(print_feature_status OPENWSMAN_ENABLED)"
   echo "****************************************"
   echo "            Build Options."
   echo "****************************************"
@@ -370,6 +371,7 @@ read_feature_options(){
     o) ToggleFeature COAP_ENABLED ;;
 	s) ToggleFeature SFTP_ENABLED ;;
     t) ToggleFeature OPENCV_ENABLED ;;
+    u) ToggleFeature OPENWSMAN_ENABLED ;;
     1) ToggleFeature TESTS_DISABLED ;;
     2) EnableAllFeatures ;;
     3) ToggleFeature JNI_ENABLED;;
