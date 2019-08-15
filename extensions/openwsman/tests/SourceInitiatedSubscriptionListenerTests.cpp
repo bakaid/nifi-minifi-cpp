@@ -16,6 +16,12 @@
  * limitations under the License.
  */
 
+/**
+ * !!! NOTICE !!!!
+ * This test will not work without a properly configured Windows machine.
+ * It is just provided as an example to easily test one, it will not work out of the box.
+ */
+
 #include <sys/stat.h>
 #undef NDEBUG
 #include <cassert>
@@ -75,26 +81,20 @@ TEST_CASE("SourceInitiatedSubscriptionListenerTest", "[basic]") {
                                      "PutFile",
                                      core::Relationship("success", "d"),
                                      true);
-//   auto log_attribute = plan->addProcessor("LogAttribute",
-//                                           "LogAttribute",
-//                                           core::Relationship("success", "d"),
-//                                           true);
 
   plan->setProperty(source_initiated_subscription, "Listen Hostname", "23.96.27.78");
   plan->setProperty(source_initiated_subscription, "Listen Port", "5986");
-  plan->setProperty(source_initiated_subscription, "SSL Certificate", "/Users/danielbakai/certs/server.pem");
-  plan->setProperty(source_initiated_subscription, "SSL Certificate Authority", "/Users/danielbakai/certs/ca.crt");
+  plan->setProperty(source_initiated_subscription, "SSL Certificate", "~/certs/server.pem");
+  plan->setProperty(source_initiated_subscription, "SSL Certificate Authority", "~/certs/ca.crt");
   plan->setProperty(source_initiated_subscription, "Initial Existing Events Strategy", processors::SourceInitiatedSubscriptionListener::INITIAL_EXISTING_EVENTS_STRATEGY_ALL);
-  plan->setProperty(source_initiated_subscription, "State File", "/tmp/wef.state");
+  plan->setProperty(source_initiated_subscription, "State Directory", "/tmp/wef.state");
   plan->setProperty(source_initiated_subscription, "XPath XML Query",
     "<QueryList>\n"
     "  <Query Id=\"0\">\n"
     "    <Select Path=\"Application\">*[System[Level=1 or Level=2]]</Select>\n"
     "  </Query>\n"
     "</QueryList>\n");
-  
-//   plan->setProperty(log_attribute, "FlowFiles To Log", "0");
-  
+
   plan->setProperty(put_file, "Directory", "/tmp/wef");
 
   plan->runNextProcessor();

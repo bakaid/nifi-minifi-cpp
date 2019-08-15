@@ -71,7 +71,7 @@ class SourceInitiatedSubscriptionListener : public core::Processor {
   static core::Property HeartbeatInterval;
   static core::Property MaxElements;
   static core::Property MaxLatency;
-  static core::Property StateFile;
+  static core::Property StateDirectory;
 
   // Supported Relationships
   static core::Relationship Success;
@@ -132,7 +132,7 @@ class SourceInitiatedSubscriptionListener : public core::Processor {
   int64_t heartbeat_interval_;
   uint32_t max_elements_;
   int64_t max_latency_;
-  std::string state_file_path_;
+  std::string state_directory_path_;
 
   std::unique_ptr<CivetServer> server_;
   std::unique_ptr<Handler> handler_;
@@ -160,7 +160,8 @@ class SourceInitiatedSubscriptionListener : public core::Processor {
   bool loadState();
 };
 
-REGISTER_RESOURCE(SourceInitiatedSubscriptionListener, "SourceInitiatedSubscriptionListener TODO")
+REGISTER_RESOURCE(SourceInitiatedSubscriptionListener, "This processor implements a Windows Event Forwarding Source Initiated Subscription server with the help of OpenWSMAN. "
+                                                       "Windows hosts can be set up to connect and forward Event Logs to this processor.")
 
 } /* namespace processors */
 } /* namespace minifi */

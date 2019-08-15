@@ -117,8 +117,8 @@ core::Property SourceInitiatedSubscriptionListener::MaxElements(
 core::Property SourceInitiatedSubscriptionListener::MaxLatency(
     core::PropertyBuilder::createProperty("Max Latency")->withDescription("The maximum time a source will wait to send new events.")
         ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("10 sec")->build());
-core::Property SourceInitiatedSubscriptionListener::StateFile(
-    core::PropertyBuilder::createProperty("State File")->withDescription("The file the Processor will use to store the current bookmark for each event source. "
+core::Property SourceInitiatedSubscriptionListener::StateDirectory(
+    core::PropertyBuilder::createProperty("State Directory")->withDescription("The directory the Processor will use to store the current bookmark for each event source. "
     "This will be used after restart to continue event ingestion from the point the Processor left off.")
         ->isRequired(true)->build());
 
@@ -166,7 +166,6 @@ void SourceInitiatedSubscriptionListener::SubscriberData::setSubscription(const 
 }
 
 void SourceInitiatedSubscriptionListener::SubscriberData::clearSubscription() {
-  std::cerr << "clearSubscription, subscription_: " << reinterpret_cast<void*>(subscription_) << ", bookmark_: " << reinterpret_cast<void*>(bookmark_) << std::endl;
   subscription_version_.clear();
   if (subscription_ != nullptr) {
     ws_xml_destroy_doc(subscription_);
@@ -180,17 +179,21 @@ void SourceInitiatedSubscriptionListener::SubscriberData::setBookmark(WsXmlDocH 
 }
 
 void SourceInitiatedSubscriptionListener::SubscriberData::clearBookmark() {
-  std::cerr << "clearBookmark, subscription_: " << reinterpret_cast<void*>(subscription_) << ", bookmark_: " << reinterpret_cast<void*>(bookmark_) << std::endl;
   if (bookmark_ != nullptr) {
     ws_xml_destroy_doc(bookmark_);
   }
   bookmark_ = nullptr;
 }
 
+/*
+ * This is very basic state storage. We will have to ensure that the configurations match before we use a bookmark,
+ * and we also have to remove serialized bookmarks when needed. Once the proper centralized state storage is merged back,
+ * it will be much easier to implement a proper state storage with that, so for the time being I will leave it like this.
+ */
 bool SourceInitiatedSubscriptionListener::persistState() const {
-  utils::file::FileUtils::create_dir(state_file_path_);
+  utils::file::FileUtils::create_dir(state_directory_path_);
   for (const auto& subscriber : subscribers_) {
-    std::ofstream bookmark_file(utils::file::FileUtils::concat_path(state_file_path_, subscriber.first));
+    std::ofstream bookmark_file(utils::file::FileUtils::concat_path(state_directory_path_, subscriber.first));
     char* xml_buf = nullptr;
     int xml_buf_size = 0;
     ws_xml_dump_memory_enc(subscriber.second.bookmark_, &xml_buf, &xml_buf_size, "UTF-8");
@@ -202,11 +205,13 @@ bool SourceInitiatedSubscriptionListener::persistState() const {
 
 bool SourceInitiatedSubscriptionListener::loadState() {
   std::map<std::string /*machineId*/, WsXmlDocH /*bookmark*/> bookmarks;
-  utils::file::FileUtils::list_dir(state_file_path_, [&](const std::string& directory, const std::string& filename) -> bool {
+  utils::file::FileUtils::list_dir(state_directory_path_, [&](const std::string& directory, const std::string& filename) -> bool {
     WsXmlDocH bookmark = ws_xml_read_file(utils::file::FileUtils::concat_path(directory, filename).c_str(), "UTF-8", 0);
 
-    // Unless we duplicate this doc here, it causes weird errors later, much like the later ws_xml_copy_node
-    // could not make a perfect deep copy. TODO: investigate
+    /*
+     * Unless we duplicate this doc here, it causes weird errors later, much like the later ws_xml_copy_node
+     * could not make a perfect deep copy. TODO: investigate
+     */
     WsXmlNodeH bookmark_node = ws_xml_get_doc_root(bookmark);
     WsXmlDocH bookmark_doc = ws_xml_create_doc(XML_NS_WS_MAN, WSM_BOOKMARK);
     WsXmlNodeH temp = ws_xml_get_doc_root(bookmark_doc);
@@ -378,7 +383,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
   std::string remote_ip = req_info->remote_addr;
   if (action != ENUM_ACTION_ENUMERATE) {
     processor_.logger_->log_error("%s called by %s (%s) with unknown Action \"%s\"", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str(), action.c_str());
-    return false; // TODO
+    return false; // TODO: generate fault if possible
   }
 
   // Create reponse envelope from request
@@ -486,39 +491,42 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
     // Body/Delivery/Heartbeats
     ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_HEARTBEATS, millisecondsToXsdDuration(processor_.heartbeat_interval_).c_str());
 
-    // Body/Delivery/NotifyTo
-    WsXmlNodeH notify_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
-    {
-      // Body/Delivery/NotifyTo/Address
-      ws_xml_add_child_format(notify_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s",
+    // Body/Delivery/NotifyTo and Body/EndTo are the same, so we will use this lambda to recreate the same tree
+    auto apply_endpoint_nodes = [&](WsXmlNodeH target_node) {
+      // ${target_node}/NotifyTo/Address
+      ws_xml_add_child_format(target_node, XML_NS_ADDRESSING, WSA_ADDRESS, "https://%s:%hu%s",
                               processor_.listen_hostname_.c_str(),
                               processor_.listen_port_,
                               subscription_endpoint.c_str());
-      // Body/Delivery/NotifyTo/ReferenceProperties
-      node = ws_xml_add_child(notify_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
-      // Body/Delivery/NotifyTo/ReferenceProperties/Identifier
+      // ${target_node}/ReferenceProperties
+      node = ws_xml_add_child(target_node, XML_NS_ADDRESSING, WSA_REFERENCE_PROPERTIES, nullptr);
+      // ${target_node}/ReferenceProperties/Identifier
       ws_xml_add_child_format(node, XML_NS_EVENTING, WSEVENT_IDENTIFIER, "%s", subscription_identifier.c_str());
-      // Body/Delivery/NotifyTo/Policy
-      WsXmlNodeH policy = ws_xml_add_child(notify_node, nullptr, "Policy", nullptr);
+      // ${target_node}/Policy
+      WsXmlNodeH policy = ws_xml_add_child(target_node, nullptr, "Policy", nullptr);
       ws_xml_set_ns(policy, XML_NS_CUSTOM_POLICY, "c");
       ws_xml_ns_add(policy, XML_NS_CUSTOM_AUTHENTICATION, "auth");
-      // Body/Delivery/NotifyTo/Policy/ExactlyOne
+      // ${target_node}/Policy/ExactlyOne
       WsXmlNodeH exactly_one = ws_xml_add_child(policy, XML_NS_CUSTOM_POLICY, "ExactlyOne", nullptr);
-      // Body/Delivery/NotifyTo/Policy/ExactlyOne/All
+      // ${target_node}/Policy/ExactlyOne/All
       WsXmlNodeH all = ws_xml_add_child(exactly_one, XML_NS_CUSTOM_POLICY, "All", nullptr);
-      // Body/Delivery/NotifyTo/Policy/ExactlyOne/All/Authentication
+      // ${target_node}/Policy/ExactlyOne/All/Authentication
       WsXmlNodeH authentication = ws_xml_add_child(all, XML_NS_CUSTOM_AUTHENTICATION, "Authentication", nullptr);
       ws_xml_add_node_attr(authentication, nullptr, "Profile", WSMAN_SECURITY_PROFILE_HTTPS_MUTUAL);
-      // Body/Delivery/NotifyTo/Policy/ExactlyOne/All/Authentication/ClientCertificate
+      // ${target_node}/Policy/ExactlyOne/All/Authentication/ClientCertificate
       WsXmlNodeH client_certificate = ws_xml_add_child(authentication, XML_NS_CUSTOM_AUTHENTICATION, "ClientCertificate", nullptr);
-      // Body/Delivery/NotifyTo/Policy/ExactlyOne/All/Authentication/ClientCertificate/Thumbprint
+      // ${target_node}/Policy/ExactlyOne/All/Authentication/ClientCertificate/Thumbprint
       WsXmlNodeH thumbprint = ws_xml_add_child_format(client_certificate, XML_NS_CUSTOM_AUTHENTICATION, "Thumbprint", "%s", processor_.ssl_ca_cert_thumbprint_.c_str());
       ws_xml_add_node_attr(thumbprint, nullptr, "Role", "issuer");
-    }
+    };
+
+    // Body/Delivery/NotifyTo
+    WsXmlNodeH notifyto_node = ws_xml_add_child(delivery_node, XML_NS_EVENTING, WSEVENT_NOTIFY_TO, nullptr);
+    apply_endpoint_nodes(notifyto_node);
 
     // Body/EndTo
     WsXmlNodeH endto_node = ws_xml_add_child(subscribe_node, XML_NS_EVENTING, WSEVENT_ENDTO, nullptr);
-    ws_xml_duplicate_children(endto_node, notify_node); // It is the same as the Delivery/NotifyTo, so we will just copy that
+    apply_endpoint_nodes(endto_node);
 
     // Body/MaxElements
     ws_xml_add_child(delivery_node, XML_NS_WS_MAN, WSM_MAX_ELEMENTS, std::to_string(processor_.max_elements_).c_str());
@@ -689,7 +697,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptions(struct mg
     }
   } else {
     processor_.logger_->log_error("%s called by %s (%s) with unknown Action \"%s\"", endpoint.c_str(), machine_id.c_str(), remote_ip.c_str(), action.c_str());
-    return false; // TODO
+    return false; // TODO: generate fault if possible
   }
 
   if (isAckRequested(request)) {
@@ -738,7 +746,7 @@ void SourceInitiatedSubscriptionListener::initialize() {
   properties.insert(HeartbeatInterval);
   properties.insert(MaxElements);
   properties.insert(MaxLatency);
-  properties.insert(StateFile);
+  properties.insert(StateDirectory);
   setSupportedProperties(properties);
 
   // Set the supported relationships
@@ -781,8 +789,8 @@ void SourceInitiatedSubscriptionListener::onSchedule(const std::shared_ptr<core:
     logger_->log_error("Initial Existing Events Strategy attribute is missing or invalid");
     return;
   }
-  if (!context->getProperty(StateFile.getName(), state_file_path_)) {
-    logger_->log_error("State File attribute is missing or invalid");
+  if (!context->getProperty(StateDirectory.getName(), state_directory_path_)) {
+    logger_->log_error("State Directory attribute is missing or invalid");
     return;
   }
   if (!context->getProperty(SubscriptionExpirationInterval.getName(), value)) {
