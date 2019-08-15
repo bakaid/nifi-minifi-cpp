@@ -62,9 +62,6 @@ option(DISABLE_CURL "Disables libCurl Properties." OFF)
 
 option(USE_GOLD_LINKER "Use Gold Linker" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -fno-omit-frame-pointer -fsanitize=address")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -fno-omit-frame-pointer -fsanitize=address")
-
 if(NOT WIN32)
 	if (ENABLE_JNI)
 	if (NOT DISABLE_JEMALLOC)
