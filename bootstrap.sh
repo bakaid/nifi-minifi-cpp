@@ -305,6 +305,10 @@ add_disabled_option SQLITE_ENABLED ${FALSE} "ENABLE_SQLITE"
 add_disabled_option SQL_ENABLED ${FALSE} "ENABLE_SQL"
 set_incompatible_with SQL_ENABLED SQLITE_ENABLED
 
+add_disabled_option OPENWSMAN_ENABLED ${FALSE} "ENABLE_OPENWSMAN"
+add_dependency OPENWSMAN_ENABLED "openssl"
+add_dependency OPENWSMAN_ENABLED "libxml2"
+
 # Since the following extensions have limitations on
 add_disabled_option BUSTACHE_ENABLED ${FALSE} "ENABLE_BUSTACHE" "2.6" ${TRUE}
 add_dependency BUSTACHE_ENABLED "boost"

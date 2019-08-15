@@ -80,6 +80,8 @@ build_deps(){
                         INSTALLED+=("xz-devel")
                     elif [ "$FOUND_VALUE" = "libssh2" ]; then
                         INSTALLED+=("libssh2-devel")
+                    elif [ "$FOUND_VALUE" = "libxml2" ]; then
+                        INSTALLED+=("libxml2-devel")
                     fi
                 fi
             done
