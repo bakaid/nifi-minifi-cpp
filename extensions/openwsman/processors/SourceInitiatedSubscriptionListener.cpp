@@ -562,6 +562,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
   sendResponse(conn, machine_id, req_info->remote_addr, xml_buf, xml_buf_size);
 
   ws_xml_free_memory(xml_buf);
+  ws_xml_destroy_doc(response);
 
   return true;
 }
@@ -709,6 +710,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptions(struct mg
     sendResponse(conn, machine_id, remote_ip, xml_buf, xml_buf_size);
 
     ws_xml_free_memory(xml_buf);
+    ws_xml_destroy_doc(ack);
   }
 
   return true;
@@ -871,6 +873,7 @@ void SourceInitiatedSubscriptionListener::onSchedule(const std::shared_ptr<core:
 }
 
 void SourceInitiatedSubscriptionListener::notifyStop() {
+  server_.release();
 }
 
 } /* namespace processors */
