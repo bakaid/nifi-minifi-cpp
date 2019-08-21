@@ -27,6 +27,7 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #include <Windows.h>
+#include "MiNiFiWindowsService.h"
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "legacy_stdio_definitions.lib")
 #ifdef ENABLE_JNI
@@ -51,8 +52,10 @@
 #include "core/FlowConfiguration.h"
 #include "core/ConfigurationFactory.h"
 #include "core/RepositoryFactory.h"
+#include "utils/file/PathUtils.h"
 #include "FlowController.h"
 #include "Main.h"
+
  // Variables that allow us to avoid a timed wait.
 sem_t *running;
 //! Flow Controller
@@ -79,7 +82,12 @@ BOOL WINAPI consoleSignalHandler(DWORD signal) {
 
 	return TRUE;
 }
+
+void SignalExitProcess() {
+  sem_post(running);
+}
 #endif
+
 void sigHandler(int signal) {
 	if (signal == SIGINT || signal == SIGTERM) {
 		// avoid stopping the controller here.
@@ -88,7 +96,17 @@ void sigHandler(int signal) {
 }
 
 int main(int argc, char **argv) {
+#ifdef WIN32
+  CheckRunAsService();
+#endif
+
 	std::shared_ptr<logging::Logger> logger = logging::LoggerConfiguration::getConfiguration().getLogger("main");
+
+#ifdef WIN32
+  if (!CreateServiceTerminationThread(logger)) {
+    return -1;
+  }
+#endif
 
 	uint16_t stop_wait_time = STOP_WAIT_TIME_MS;
 
@@ -160,10 +178,23 @@ int main(int argc, char **argv) {
 			char cwd[PATH_MAX];
 #ifdef WIN32
 			_getcwd(cwd, PATH_MAX);
+			auto handle = GetModuleHandle(0);
+			GetModuleFileNameA(NULL, cwd, sizeof(cwd));
+			std::string fullPath = cwd;
+			std::string minifiFileName, minifiPath;
+			minifi::utils::file::PathUtils::getFileNameAndPath(fullPath, minifiPath, minifiFileName);
+			if (utils::StringUtils::endsWith(minifiPath, "bin")) {
+				minifiHome = minifiPath.substr(0, minifiPath.size()-3);
+			}
+			else {
+				minifiHome = minifiPath;
+			}
+		
 #else
 			getcwd(cwd, PATH_MAX);
-#endif
 			minifiHome = cwd;
+#endif
+			
 		}
 
 
@@ -191,7 +222,7 @@ int main(int argc, char **argv) {
 	log_properties->loadConfigureFile(DEFAULT_LOG_PROPERTIES_FILE);
 	logging::LoggerConfiguration::getConfiguration().initialize(log_properties);
 
-	std::shared_ptr<minifi::Properties> uid_properties = std::make_shared<minifi::Properties>();
+	std::shared_ptr<minifi::Properties> uid_properties = std::make_shared<minifi::Properties>("UID properties");
 	uid_properties->setHome(minifiHome);
 	uid_properties->loadConfigureFile(DEFAULT_UID_PROPERTIES_FILE);
 	utils::IdGenerator::getIdGenerator()->initialize(uid_properties);

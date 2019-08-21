@@ -49,8 +49,8 @@ class CoapIntegrationBase : public IntegrationBase {
 
   std::string getWebPort() {
     std::string ret_val = port;
-    if(ret_val.back() == 's') {
-      ret_val = ret_val.substr(0, ret_val.size()-1);
+    if (ret_val.back() == 's') {
+      ret_val = ret_val.substr(0, ret_val.size() - 1);
     }
     return ret_val;
   }
@@ -67,31 +67,28 @@ void CoapIntegrationBase::setUrl(std::string url, CivetHandler *handler) {
 
   parse_http_components(url, port, scheme, path);
   struct mg_callbacks callback;
-  if (url.find("localhost") != std::string::npos) {
-    if (server != nullptr) {
-      server->addHandler(path, handler);
-      return;
-    }
-    if (scheme == "https" && !key_dir.empty()) {
-      std::string cert = "";
-      cert = key_dir + "nifi-cert.pem";
-      memset(&callback, 0, sizeof(callback));
-      callback.init_ssl = ssl_enable;
-      port += "s";
-      callback.log_message = log_message;
-      server = start_webserver(port, path, handler, &callback, cert, cert);
-    } else {
-      server = start_webserver(port, path, handler);
-    }
+  if (server != nullptr) {
+    server->addHandler(path, handler);
+    return;
   }
-  if(port == "0" || port == "0s") {
+  if (scheme == "https" && !key_dir.empty()) {
+    std::string cert = "";
+    cert = key_dir + "nifi-cert.pem";
+    memset(&callback, 0, sizeof(callback));
+    callback.init_ssl = ssl_enable;
+    port += "s";
+    callback.log_message = log_message;
+    server = start_webserver(port, path, handler, &callback, cert, cert);
+  } else {
+    server = start_webserver(port, path, handler);
+  }
+  if (port == "0" || port == "0s") {
     bool secure = (port == "0s");
     port = std::to_string(server->getListeningPorts()[0]);
-    if(secure) {
+    if (secure) {
       port += "s";
     }
   }
-
 }
 
 #endif /* LIBMINIFI_TEST_INTEGRATION_HTTPINTEGRATIONBASE_H_ */

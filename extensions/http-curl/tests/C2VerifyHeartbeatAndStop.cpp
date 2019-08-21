@@ -63,7 +63,7 @@ class Responder : public CivetHandler {
     std::string response;
     int blockSize = 1024 * sizeof(char), readBytes;
 
-    char buffer[blockSize];
+    char buffer[1024];
     while ((readBytes = mg_read(conn, buffer, blockSize)) > 0) {
       response.append(buffer, 0, (readBytes / sizeof(char)));
     }
@@ -162,7 +162,7 @@ class VerifyC2Heartbeat : public CoapIntegrationBase {
     std::string url = "";
     inv->getProperty(minifi::processors::InvokeHTTP::URL.getName(), url);
 
-    std::string c2_url = std::string("http") + (isSecure ? "s" : "") + "://localhost:" + getWebPort() + "/api/heartbeat" ;
+    std::string c2_url = std::string("http") + (isSecure ? "s" : "") + "://localhost:" + getWebPort() + "/api/heartbeat";
 
     configuration->set("nifi.c2.agent.protocol.class", "RESTSender");
     configuration->set("nifi.c2.enable", "true");
@@ -175,7 +175,7 @@ class VerifyC2Heartbeat : public CoapIntegrationBase {
 
  protected:
   bool isSecure;
-  char *dir;
+  std::string dir;
   std::stringstream ss;
   TestController testController;
 };
@@ -185,7 +185,10 @@ int main(int argc, char **argv) {
   url = "http://localhost:0/api/heartbeat";
   if (argc > 1) {
     test_file_location = argv[1];
-    key_dir = argv[2];
+    if (argc > 2) {
+      url = "https://localhost:0/api/heartbeat";
+      key_dir = argv[2];
+    }
   }
 
   bool isSecure = false;

@@ -48,10 +48,10 @@ class TailFileTestHarness : public IntegrationBase {
     char format[] = "/tmp/ssth.XXXXXX";
     dir = testController.createTempDirectory(format);
 
-    statefile = dir;
-    statefile += "/statefile";
+    statefile = dir + utils::file::FileUtils::get_separator();
+    statefile += "statefile";
     std::fstream file;
-    ss << dir << "/" << "tstFile.ext";
+    ss << dir << utils::file::FileUtils::get_separator() << "tstFile.ext";
     file.open(ss.str(), std::ios::out);
     file << "Lin\\e1\nli\\nen\nli\\ne3\nli\\ne4\nli\\ne5\n";
     file.close();
@@ -60,8 +60,7 @@ class TailFileTestHarness : public IntegrationBase {
   void testSetup() {
     LogTestController::getInstance().setInfo<minifi::processors::LogAttribute>();
     LogTestController::getInstance().setTrace<minifi::processors::TailFile>();
-    LogTestController::getInstance().setInfo<minifi::FlowController>();
-    LogTestController::getInstance().setTrace<core::ProcessSession>();
+    LogTestController::getInstance().setTrace<minifi::FlowController>();
     LogTestController::getInstance().setDebug<core::ConfigurableComponent>();
   }
 
@@ -73,7 +72,7 @@ class TailFileTestHarness : public IntegrationBase {
   virtual void runAssertions() {
     assert(LogTestController::getInstance().contains("5 flowfiles were received from TailFile input") == true);
     assert(LogTestController::getInstance().contains("Looking for delimiter 0xA") == true);
-    assert(LogTestController::getInstance().contains(utils::StringUtils::to_hex("li\\ne5")) == true);
+    assert(LogTestController::getInstance().contains("li\\ne5") == true);
   }
 
  protected:
@@ -88,7 +87,7 @@ class TailFileTestHarness : public IntegrationBase {
   }
 
   std::string statefile;
-  char *dir;
+  std::string dir;
   std::stringstream ss;
   TestController testController;
 };
