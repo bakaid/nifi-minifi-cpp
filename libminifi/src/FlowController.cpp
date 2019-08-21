@@ -286,6 +286,9 @@ void FlowController::unload() {
     name_ = "";
   }
 
+  // This is needed to break the StandardControllerServiceProvider <-> EventDrivenSchedulingAgent shared_ptr cycle
+  std::static_pointer_cast<core::controller::StandardControllerServiceProvider>(controller_service_provider_)->setSchedulingAgent(nullptr);
+
   return;
 }
 
