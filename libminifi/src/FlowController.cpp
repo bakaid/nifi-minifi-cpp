@@ -285,6 +285,18 @@ void FlowController::unload() {
     initialized_ = false;
     name_ = "";
   }
+  // This is needed to break the Connection <-> Connection shared_ptr cycle
+  if (root_) {
+    std::map<std::string, std::shared_ptr<Connection>> connections;
+    root_->getConnections(connections);
+    for (auto& connection : connections) {
+      connection.second->setSource(nullptr);
+      connection.second->setDestination(nullptr);
+    }
+  }
+  // This is needed to break the FlowFileRepo <-> Connection shared_ptr cycle
+  std::map<std::string, std::shared_ptr<core::Connectable>> connectionMap;
+  flow_file_repo_->setConnectionMap(connectionMap);
 
   // This is needed to break the StandardControllerServiceProvider <-> EventDrivenSchedulingAgent shared_ptr cycle
   std::static_pointer_cast<core::controller::StandardControllerServiceProvider>(controller_service_provider_)->setSchedulingAgent(nullptr);
