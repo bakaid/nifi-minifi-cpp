@@ -1,0 +1,37 @@
+diff -rupN orig/src/civetweb.c new/src/civetweb.c
+--- orig/src/civetweb.c	2017-09-26 20:04:10.000000000 +0200
++++ new/src/civetweb.c	2019-09-02 16:58:00.000000000 +0200
+@@ -14202,7 +14202,7 @@ ssl_get_protocol(int version_id)
+  * https://www.openssl.org/docs/man1.1.0/ssl/SSL_set_info_callback.html
+  * https://linux.die.net/man/3/ssl_set_info_callback */
+ static void
+-ssl_info_callback(SSL *ssl, int what, int ret)
++ssl_info_callback(const SSL *ssl, int what, int ret)
+ {
+ 	(void)ret;
+ 
+@@ -16237,10 +16237,13 @@ worker_thread_run(struct worker_thread_a
+ 					mg_free(conn->request_info.client_cert);
+ 					conn->request_info.client_cert = 0;
+ 				}
+-			}
++			} else {
++        /* make sure the connection is cleaned up on SSL failure */
++        close_connection(conn);
++      }
+ #endif
+-		} else {
+-			/* process HTTP connection */
++    } else {
++      /* process HTTP connection */
+ 			process_new_connection(conn);
+ 		}
+ 
+@@ -17249,7 +17252,6 @@ mg_get_system_info_impl(char *buffer, in
+ #pragma GCC diagnostic push
+ /* Disable bogus compiler warning -Wdate-time */
+ #pragma GCC diagnostic ignored "-Wall"
+-#pragma GCC diagnostic ignored "-Werror"
+ #endif
+ 		mg_snprintf(NULL,
+ 		            NULL,

@@ -357,16 +357,6 @@ file(GLOB SPD_SOURCES "thirdparty/spdlog-20170710/include/spdlog/*")
 
 include(ExternalProject)
 
-set(CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING OFF CACHE BOOL "Disable dynamic SSL library loading")
-set(CIVETWEB_ENABLE_CXX ON CACHE BOOL "Enable civet C++ library")
-set(CIVETWEB_SSL_SSL_LIB "${OPENSSL_SSL_LIBRARY}" CACHE STRING "Enable civet C++ library")
-set(CIVETWEB_SSL_CRYPTO_LIB "${OPENSSL_CRYPTO_LIBRARY}" CACHE STRING "Enable civet C++ library")
-set(CIVETWEB_ENABLE_CXX ON CACHE BOOL "Enable civet C++ library")
-if (NOT OPENSSL_FOUND)
-	message("SSL support disabled, ListenHTTP will not have HTTPS support")
-	set(CIVETWEB_ENABLE_SSL OFF CACHE BOOL "DISABLE SSL")
-endif()
-
 SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
 if ( NOT APPLE)
 if (ENABLE_PYTHON)
@@ -376,8 +366,6 @@ else()
 endif()
 endif()
 SET(WITH_TESTS OFF CACHE BOOL "Build RocksDB library (not repo) tests")
-set(CIVET_THIRDPARTY_ROOT "${CMAKE_SOURCE_DIR}/thirdparty/civetweb-1.10/" CACHE STRING "Path to CivetWeb root")
-set(CIVET_BINARY_ROOT "${CMAKE_BINARY_DIR}/thirdparty/civetweb-1.10/" CACHE STRING "Path to CivetWeb binary output")
 set(ROCKSDB_THIRDPARTY_ROOT "${CMAKE_SOURCE_DIR}/thirdparty/rocksdb/" CACHE STRING "Path to RocksDB root")
 add_subdirectory(thirdparty/yaml-cpp-yaml-cpp-20171024)
 
@@ -423,7 +411,12 @@ endif()
 
 option(DISABLE_CIVET "Disables CivetWeb components." OFF)
 if (NOT DISABLE_CIVET)
+	include(CivetWeb)
+	use_bundled_civetweb(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/civetweb/dummy")
+
 	createExtension(CIVETWEB CIVETWEB "This enables ListenHTTP" "extensions/civetweb" "extensions/civetweb/tests")
+	add_dependencies(minifi-civet-extensions civetweb-external)
 endif()
 
 ## Add the rocks DB extension

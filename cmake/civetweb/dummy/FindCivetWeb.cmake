@@ -1,5 +1,4 @@
 # Licensed to the Apache Software Foundation (ASF) under one
-#
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
 # regarding copyright ownership.  The ASF licenses this file
@@ -15,10 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
 
-message(STATUS "Expression language is disabled; using NoOp implementation")
-file(GLOB SOURCES "*.cpp")
-include_directories(../../../libminifi/include  ../../../libminifi/include/core  ../../../thirdparty/spdlog-20170710/include ../../../thirdparty/concurrentqueue ../../../thirdparty/yaml-cpp-yaml-cpp-0.5.3/include ../../../thirdparty/)
-add_library(minifi-expression-language-extensions STATIC ${SOURCES})
-set_property(TARGET minifi-expression-language-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
+set(CIVETWEB_FOUND "YES" CACHE STRING "" FORCE)
+set(CIVETWEB_INCLUDE_DIR "${CIVETWEB_SRC_DIR}/include" CACHE STRING "" FORCE)
+set(CIVETWEB_LIBRARY "${CIVETWEB_BIN_DIR}${CIVETWEB_BYPRODUCT_DIR}" CACHE STRING "" FORCE)
+set(CIVETWEB_LIBRARIES "${CIVETWEB_BIN_DIR}${CIVETWEB_BYPRODUCT_DIR}" CACHE STRING "" FORCE)
+
+message("CIVETWEB LIB is located at is ${CIVETWEB_LIBRARIES}")

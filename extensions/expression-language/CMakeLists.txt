@@ -96,7 +96,7 @@ flex_target(
 
 add_flex_bison_dependency(el-scanner el-parser)
 endif()
-include_directories(./ ../../libminifi/include  ../../libminifi/include/core ../../thirdparty/cron ../../thirdparty/spdlog-20170710/include ../../thirdparty/concurrentqueue ../../thirdparty/yaml-cpp-yaml-cpp-0.5.3/include ${CIVET_THIRDPARTY_ROOT}/include ../../thirdparty/)
+include_directories(./ ../../libminifi/include  ../../libminifi/include/core ../../thirdparty/cron ../../thirdparty/spdlog-20170710/include ../../thirdparty/concurrentqueue ../../thirdparty/yaml-cpp-yaml-cpp-0.5.3/include ../../thirdparty/)
 include_directories(common)
 include_directories(impl)
 include_directories(../../thirdparty/date/include)

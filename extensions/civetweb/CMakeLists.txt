@@ -24,15 +24,10 @@ include_directories(${CMAKE_SOURCE_DIR}/libminifi/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/spdlog-20170710/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/concurrentqueue
                     ${CMAKE_SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-0.5.3/include
-                    ${CIVET_THIRDPARTY_ROOT}/include
+                    ${CIVETWEB_INCLUDE_DIR}
                     ${CMAKE_SOURCE_DIR}/thirdparty/jsoncpp/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/
                     ./include)
-
-set(BUILD_CIVET_TESTING OFF)
-add_subdirectory(${CIVET_THIRDPARTY_ROOT}
-                 ${CIVET_BINARY_ROOT}
-                 EXCLUDE_FROM_ALL)
 
 file(GLOB SOURCES  "processors/*.cpp")
 
