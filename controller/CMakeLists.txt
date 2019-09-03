@@ -57,12 +57,6 @@ endif()
 # Include UUID
 find_package(UUID REQUIRED)
 
-# Include OpenSSL
-find_package(OpenSSL )
-if (OPENSSL_FOUND)
-include_directories(${OPENSSL_INCLUDE_DIR})
-endif(OPENSSL_FOUND)
-
 # Link against minifi, yaml-cpp, civetweb-cpp, uuid, openssl, jsoncpp and rocksdb
 target_link_libraries(minificontroller minifi ${DL})
 
@@ -80,7 +74,7 @@ if (WIN32)
   	target_link_libraries(minificontroller semaphore)
 endif()
 
-target_link_libraries(minificontroller yaml-cpp c-library civetweb-cpp ${JSON_CPP_LIB} ${UUID_LIBRARIES} cxxopts)
+target_link_libraries(minificontroller yaml-cpp ${JSON_CPP_LIB} ${UUID_LIBRARIES} cxxopts)
 
 
 if (APPLE)

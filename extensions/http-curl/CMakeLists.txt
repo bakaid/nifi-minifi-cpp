@@ -37,10 +37,6 @@ if (CURL_FOUND)
   target_link_libraries(minifi-http-curl CURL::libcurl)
 endif ()
 
-# Include OpenSSL
-set(OPENSSL_USE_STATIC_LIBS TRUE)
-find_package(OpenSSL REQUIRED)
-target_link_libraries(minifi-http-curl OpenSSL::SSL)
 target_link_libraries(minifi-http-curl ${CMAKE_DL_LIBS})
 target_link_libraries(minifi-http-curl minifi-civet-extensions)
 

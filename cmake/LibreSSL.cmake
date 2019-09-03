@@ -16,49 +16,60 @@
 # under the License.
 
 function(use_libre_ssl SOURCE_DIR BINARY_DIR)
-	message("Using bundled LibreSSL from release")
-	
-	set(BYPRODUCT_PREFIX "lib" CACHE STRING "" FORCE)
-	set(BYPRODUCT_SUFFIX ".a" CACHE STRING "" FORCE)
-	
-	set(BUILD_ARGS "")
-	if (WIN32)
-		set(BYPRODUCT_SUFFIX ".lib" CACHE STRING "" FORCE)
-		set(BYPRODUCT_PREFIX "" CACHE STRING "" FORCE)
-	set(BUILD_ARGS " -GVisual Studio 15 2017")
-	endif(WIN32)
-	ExternalProject_Add(
-	libressl-portable
-	### default is openbsd.org -- cloudflare is a reliable mirror
-	#URL "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.8.3.tar.gz"
-	URL "https://cloudflare.cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.8.3.tar.gz"
-	SOURCE_DIR "${BINARY_DIR}/thirdparty/libressl-src"
-	CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-				"-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libressl-install"
-				"-DLIBRESSL_APPS=OFF"
-				"-DLIBRESSL_TESTS=OFF"
-				"${BUILD_ARGS}"
-	)
+    message("Using bundled LibreSSL from release")
+    
+    set(BYPRODUCT_PREFIX "lib" CACHE STRING "" FORCE)
+    set(BYPRODUCT_SUFFIX ".a" CACHE STRING "" FORCE)
+    
+    set(BUILD_ARGS "")
+    if (WIN32)
+        set(BYPRODUCT_SUFFIX ".lib" CACHE STRING "" FORCE)
+        set(BYPRODUCT_PREFIX "" CACHE STRING "" FORCE)
+    set(BUILD_ARGS " -GVisual Studio 15 2017")
+    endif(WIN32)
+    ExternalProject_Add(
+    libressl-portable
+    ### default is openbsd.org -- cloudflare is a reliable mirror
+    #URL "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.8.3.tar.gz"
+    URL "https://cloudflare.cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.8.3.tar.gz"
+    SOURCE_DIR "${BINARY_DIR}/thirdparty/libressl-src"
+    CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
+                "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libressl-install"
+                "-DLIBRESSL_APPS=OFF"
+                "-DLIBRESSL_TESTS=OFF"
+                "${BUILD_ARGS}"
+    )
 
-	add_library(crypto STATIC IMPORTED)
-	set_target_properties(crypto PROPERTIES IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}")
-	add_dependencies(crypto libressl-portable)
-					
-	add_library(ssl STATIC IMPORTED)
-	set_target_properties(ssl PROPERTIES IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}")
-	set_target_properties(ssl PROPERTIES INTERFACE_LINK_LIBRARIES crypto)
-	add_dependencies(ssl libressl-portable)
-	
-	add_library(tls STATIC IMPORTED)
-	set_target_properties(tls PROPERTIES IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}")
-	set_target_properties(tls PROPERTIES INTERFACE_LINK_LIBRARIES crypto)
-	add_dependencies(tls libressl-portable)
-	
-	set(LIBRESSL_SRC_DIR "${SOURCE_DIR}/thirdparty/libressl/" CACHE STRING "" FORCE)
-	set(LIBRESSL_BIN_DIR "${BINARY_DIR}/thirdparty/libressl-install/" CACHE STRING "" FORCE)
+    set(LIBRESSL_SRC_DIR "${SOURCE_DIR}/thirdparty/libressl/" CACHE STRING "" FORCE)
+    set(LIBRESSL_BIN_DIR "${BINARY_DIR}/thirdparty/libressl-install/" CACHE STRING "" FORCE)
 
-	set(OPENSSL_FOUND "YES" CACHE STRING "" FORCE)
-	set(OPENSSL_INCLUDE_DIR "${SOURCE_DIR}/thirdparty/libressl/include" CACHE STRING "" FORCE)
-	set(OPENSSL_LIBRARIES "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}" "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}" "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}" CACHE STRING "" FORCE)
-	
+    set(OPENSSL_FOUND "YES" CACHE STRING "" FORCE)
+    set(OPENSSL_INCLUDE_DIR "${SOURCE_DIR}/thirdparty/libressl/include" CACHE STRING "" FORCE)
+    set(OPENSSL_LIBRARIES "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}" "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}" "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}" CACHE STRING "" FORCE)
+
+    add_library(OpenSSL::Crypto STATIC IMPORTED)
+    set_target_properties(OpenSSL::Crypto PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+    set_target_properties(OpenSSL::Crypto PROPERTIES
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+            IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}")
+    add_dependencies(OpenSSL::Crypto libressl-portable)
+
+
+    add_library(libressl-ssl STATIC IMPORTED)
+    set_target_properties(libressl-ssl PROPERTIES
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+            IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}")
+    set_property(TARGET libressl-ssl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
+    add_library(libressl-tls STATIC IMPORTED)
+    set_target_properties(libressl-tls PROPERTIES
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+            IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}")
+    set_property(TARGET libressl-tls APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
+    add_library(libressl-ssltls INTERFACE)
+    set_target_properties(libressl-ssltls PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+    set_property(TARGET libressl-ssltls APPEND PROPERTY INTERFACE_LINK_LIBRARIES libressl-ssl libressl-tls)
+    add_dependencies(libressl-ssltls libressl-portable)
+    add_library(OpenSSL::SSL ALIAS libressl-ssltls)
 endfunction(use_libre_ssl) 
