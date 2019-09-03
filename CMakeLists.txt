@@ -238,7 +238,7 @@ include(Compression)
 
 if(WIN32 OR NOT USE_SYSTEM_ZLIB)
 	use_bundled_zlib(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-	find_package (OpenSSL REQUIRED)
+	find_package(OpenSSL REQUIRED)
 	list(APPEND CMAKE_MODULE_PATH "${SOURCE_DIR}/cmake/zlib/dummy")
 endif()
 
@@ -269,88 +269,10 @@ if (DISABLE_CURL)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DDISABLE_CURL")
 endif(DISABLE_CURL)
 if(NOT DISABLE_CURL)
-  message("Using bundled cURL")
-
-  set(CURL_C_FLAGS "${CMAKE_C_FLAGS}")
-  set(CURL_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-
-
-get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
-
-if ("${LIB64}" STREQUAL "TRUE" AND (NOT WIN32 AND NOT APPLE))
-    set(LIBSUFFIX 64)
-else()
-    set(LIBSUFFIX "")
-endif()
-
-  if (WIN32)
-	set(BYPRODUCT "lib/libcurl.lib")
-  else()
-  	set(BYPRODUCT "lib${LIBSUFFIX}/libcurl.a")
-  endif()
-
-  if (WIN32)
-  set (PC "PATCH_COMMAND ./buildconf.bat")
-  else()
-  endif()
-
-  ExternalProject_Add(
-    curl-external
-    GIT_REPOSITORY "https://github.com/curl/curl.git"
-    GIT_TAG "f3294d9d86e6a7915a967efff2842089b8b0d071"  # Version 7.64.0
-    SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-src"
-    CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-               "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install"
-                -DBUILD_CURL_EXE=OFF
-                -DBUILD_TESTING=OFF
-                -DBUILD_SHARED_LIBS=OFF
-                -DHTTP_ONLY=ON
-                -DCMAKE_USE_OPENSSL=ON
-                "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
-                "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
-                -DCURL_DISABLE_CRYPTO_AUTH=ON
-                -DCMAKE_USE_LIBSSH2=OFF
-                "-DCMAKE_DEBUG_POSTFIX="
-                -DHAVE_GLIBC_STRERROR_R=1
-                -DHAVE_GLIBC_STRERROR_R__TRYRUN_OUTPUT=""
-                -DHAVE_POSIX_STRERROR_R=0
-                -DHAVE_POSIX_STRERROR_R__TRYRUN_OUTPUT=""
-                -DHAVE_POLL_FINE_EXITCODE=0
-                -DHAVE_FSETXATTR_5=0
-                -DHAVE_FSETXATTR_5__TRYRUN_OUTPUT=""
-               "-DCMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake/ssl"
-               "-DCMAKE_C_FLAGS=${CURL_C_FLAGS}"
-               "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-               "-DCMAKE_CXX_FLAGS=${CURL_CXX_FLAGS}"
-	${PC}
-    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install/${BYPRODUCT}"
-  )
-
-  add_dependencies(curl-external libressl-portable)
-
-  set(CURL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl/" CACHE STRING "" FORCE)
-  set(CURL_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install/" CACHE STRING "" FORCE)
-  set(CURL_BYPRODUCT_DIR "${BYPRODUCT}" CACHE STRING "" FORCE)
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/curl/dummy")
-  add_library(curl STATIC IMPORTED)
-  set_target_properties(curl PROPERTIES IMPORTED_LOCATION "${CURL_BIN_DIR}${BYPRODUCT}")
-    
-  if (OPENSSL_FOUND) 
-     if (NOT WIN32)
-       set_target_properties(curl PROPERTIES INTERFACE_LINK_LIBRARIES ${OPENSSL_LIBRARIES})
-	 endif()
-  endif(OPENSSL_FOUND)
-  add_dependencies(curl curl-external)
-  set(CURL_FOUND "YES")
-  set(CURL_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl/include")
-  set(CURL_LIBRARY "${CURL_BIN_DIR}${BYPRODUCT}" CACHE STRING "" FORCE)
-  set(CURL_LIBRARIES "${CURL_LIBRARY}" CACHE STRING "" FORCE)
- else()
-  message("Using System cURL")
-endif()
-
-if (CURL_FOUND)
-  include_directories("${CURL_INCLUDE_DIRS}")
+	include(libcURL)
+	use_bundled_curl(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/curl/dummy")
+	find_package(CURL REQUIRED)
 endif()
 
 file(GLOB SPD_SOURCES "thirdparty/spdlog-20170710/include/spdlog/*")

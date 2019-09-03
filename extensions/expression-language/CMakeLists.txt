@@ -119,13 +119,8 @@ set_property(TARGET minifi-expression-language-extensions PROPERTY POSITION_INDE
 
 target_link_libraries(minifi-expression-language-extensions minifi tz)
 
-if (NOT DISABLE_CURL)
-	if (NOT CURL_FOUND)
-		find_package(CURL REQUIRED)
-	endif(NOT CURL_FOUND)
-	include_directories(${CURL_INCLUDE_DIRS})
-	target_link_libraries(minifi-expression-language-extensions ${CURL_LIBRARIES})
-endif()
+find_package(CURL REQUIRED)
+target_link_libraries(minifi-expression-language-extensions CURL::libcurl)
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 target_link_libraries(minifi-expression-language-extensions ${CMAKE_DL_LIBS})
@@ -133,11 +128,19 @@ find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
 target_link_libraries (minifi-expression-language-extensions ${ZLIB_LIBRARIES})
 
-if (WIN32 AND NOT DISABLE_CURL)
-    set_target_properties(minifi-expression-language-extensions PROPERTIES
-        LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:${CURL_LIBRARIES}"
-    )
-endif()
+if (WIN32)
+	set_target_properties(minifi-expression-language-extensions PROPERTIES
+			LINK_FLAGS "/WHOLEARCHIVE"
+			)
+elseif (APPLE)
+	set_target_properties(minifi-expression-language-extensions PROPERTIES
+			LINK_FLAGS "-Wl,-all_load"
+			)
+else ()
+	set_target_properties(minifi-expression-language-extensions PROPERTIES
+			LINK_FLAGS "-Wl,--whole-archive"
+			)
+endif ()
 
 SET (EXPRESSION-LANGUAGE-EXTENSIONS minifi-expression-language-extensions PARENT_SCOPE)
 

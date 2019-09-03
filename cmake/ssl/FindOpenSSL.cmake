@@ -24,24 +24,22 @@ set(OPENSSL_SSL_LIBRARY "${LIBRESSL_BIN_DIR}/lib/${BYPRODUCT_PREFIX}ssl${BYPRODU
 set(OPENSSL_LIBRARIES "${LIBRESSL_BIN_DIR}/lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}" ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY} CACHE STRING "" FORCE)
 set(OPENSSL_VERSION "1.0.2" CACHE STRING "" FORCE)
 
- if(NOT TARGET OpenSSL::Crypto )
+ if(NOT TARGET OpenSSL::Crypto)
     add_library(OpenSSL::Crypto UNKNOWN IMPORTED)
     set_target_properties(OpenSSL::Crypto PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
-    
-      set_target_properties(OpenSSL::Crypto PROPERTIES
-        IMPORTED_LINK_INTERFACE_LANGUAGES "C"
-        IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}")
-    
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+    set_target_properties(OpenSSL::Crypto PROPERTIES
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+            IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}")
+    add_dependencies(OpenSSL::Crypto libressl-portable)
   endif()
 
-  if(NOT TARGET OpenSSL::SSL
-      )
+  if(NOT TARGET OpenSSL::SSL)
     add_library(OpenSSL::SSL UNKNOWN IMPORTED)
     set_target_properties(OpenSSL::SSL PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
-          set_target_properties(OpenSSL::SSL PROPERTIES
-        IMPORTED_LINK_INTERFACE_LANGUAGES "C"
-        IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}")
-    
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+    set_target_properties(OpenSSL::SSL PROPERTIES
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+            IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}")
+    add_dependencies(OpenSSL::SSL libressl-portable)
   endif()

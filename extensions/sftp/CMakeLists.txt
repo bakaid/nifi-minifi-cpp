@@ -33,16 +33,8 @@ if(CMAKE_THREAD_LIBS_INIT)
 	target_link_libraries(minifi-sftp "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-if (CURL_FOUND)
-	include_directories(${CURL_INCLUDE_DIRS})
-	if (WIN32)
-		message("Including ${CURL_LIBRARY}")
-		target_link_libraries (minifi-sftp ${CURL_LIBRARY})
-		set_target_properties(minifi-sftp PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:${CURL_LIBRARY}")
-	else()
-		target_link_libraries(minifi-sftp ${CURL_LIBRARIES})
-	endif()
-endif ()
+# Include cURL
+target_link_libraries(minifi-sftp CURL::libcurl)
 
 # Include UUID
 find_package(UUID REQUIRED)
@@ -51,7 +43,7 @@ target_link_libraries(minifi-sftp ${LIBMINIFI} ${UUID_LIBRARIES})
 # Include OpenSSL
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
-include_directories(${OPENSSL_INCLUDE_DIR})
+target_link_libraries(minifi-sftp OpenSSL::SSL)
 
 target_link_libraries(minifi-sftp ${CMAKE_DL_LIBS})
 
@@ -69,27 +61,17 @@ target_link_libraries(minifi-sftp ${ZLIB_LIBRARIES})
 include_directories(thirdparty/rapidjson-1.1.0/include)
 
 if (WIN32)
-message("${OPENSSL_LIBRARIES}")
-	set (WIN32_ARCHIVES "")
-		foreach(OPENSSL_LIB ${OPENSSL_LIBRARIES})
-		if (WIN32)
-		if (OPENSSL_LIB MATCHES "\\.lib$" OR OPENSSL_LIB MATCHES "\\.dll$" )
-				message( FATAL "Including ${OPENSSL_LIB}")
-		set_target_properties(minifi-sftp PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:${OPENSSL_LIB}")
-		endif()
-	endif()
-	endforeach()
-
+	set_target_properties(minifi-sftp PROPERTIES
+			LINK_FLAGS "/WHOLEARCHIVE"
+			)
 elseif (APPLE)
-	target_link_libraries(minifi-sftp ${OPENSSL_LIBRARIES})
-    set_target_properties(minifi-sftp PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
+	set_target_properties(minifi-sftp PROPERTIES
+			LINK_FLAGS "-Wl,-all_load"
+			)
 else ()
-	message("${OPENSSL_LIBRARIES}")
-	foreach(OPENSSL_LIB ${OPENSSL_LIBRARIES})
-		target_link_libraries (minifi-sftp ${OPENSSL_LIB})
-	endforeach()
+	set_target_properties(minifi-sftp PROPERTIES
+			LINK_FLAGS "-Wl,--whole-archive"
+			)
 endif ()
 
 SET (SFTP minifi-sftp PARENT_SCOPE)

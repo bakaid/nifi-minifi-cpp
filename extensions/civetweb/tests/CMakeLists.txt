@@ -28,7 +28,6 @@ if(NOT DISABLE_CURL)
         target_include_directories(${testfilename} PRIVATE BEFORE "${CMAKE_SOURCE_DIR}/extensions/standard-processors")
         target_include_directories(${testfilename} PRIVATE BEFORE "${CMAKE_SOURCE_DIR}/extensions/http-curl")
         target_include_directories(${testfilename} PRIVATE BEFORE "${CMAKE_SOURCE_DIR}/thirdparty/civetweb-1.10/include")
-        target_include_directories(${testfilename} PRIVATE BEFORE ${CURL_INCLUDE_DIRS})
 
         if (APPLE)
             target_link_libraries (${testfilename} -Wl,-all_load ${ZLIB_LIBRARIES} ${OPENSSL_LIBRARIES} minifi-civet-extensions minifi-http-curl minifi-standard-processors)
