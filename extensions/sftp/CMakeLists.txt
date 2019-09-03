@@ -60,19 +60,5 @@ target_link_libraries(minifi-sftp ${ZLIB_LIBRARIES})
 # Include RapidJSON
 include_directories(thirdparty/rapidjson-1.1.0/include)
 
-if (WIN32)
-	set_target_properties(minifi-sftp PROPERTIES
-			LINK_FLAGS "/WHOLEARCHIVE"
-			)
-elseif (APPLE)
-	set_target_properties(minifi-sftp PROPERTIES
-			LINK_FLAGS "-Wl,-all_load"
-			)
-else ()
-	set_target_properties(minifi-sftp PROPERTIES
-			LINK_FLAGS "-Wl,--whole-archive"
-			)
-endif ()
-
 SET (SFTP minifi-sftp PARENT_SCOPE)
 register_extension(minifi-sftp)

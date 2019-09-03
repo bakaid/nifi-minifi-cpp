@@ -71,47 +71,9 @@ endif()
 
 # Include UUID
 
-set (WIN32_ARCHIVES "")
+target_wholearchive_library(minifiexe core-minifi)
 
-
-
-# Link against minifi, yaml-cpp, civetweb-cpp, uuid, openssl, and rocksdb
-#target_link_libraries(minifiexe core-minifi)
-
-if (APPLE)
-	target_link_libraries (minifiexe -Wl,-all_load core-minifi)
-elseif(NOT WIN32)
-	target_link_libraries (minifiexe -Wl,--whole-archive core-minifi -Wl,--no-whole-archive)
-else()
-	#target_link_libraries (minifiexe core-minifi)
-	set(WIN32_ARCHIVES "${WIN32_ARCHIVES} /WHOLEARCHIVE:core-minifi")
-#	set_target_properties(minifiexe PROPERTIES LINK_FLAGS "/WHOLEARCHIVE:core-minifi")
-endif ()
-
-# Include OpenSSL
-if (OPENSSL_FOUND)
-	if (APPLE)
-		target_link_libraries(minifiexe -Wl,-all_load ${OPENSSL_LIBRARIES})
-	elseif(NOT WIN32)
-		target_link_libraries(minifiexe -Wl,--whole-archive ${OPENSSL_LIBRARIES} -Wl,--no-whole-archive)
-	else()
-	target_link_libraries(minifiexe ${OPENSSL_LIBRARIES})
-	endif()
-	include_directories(${OPENSSL_INCLUDE_DIR})
-endif(OPENSSL_FOUND)
-
-add_dependencies(minifiexe minifi)
-
-
-if (APPLE)
-	target_link_libraries (minifiexe -Wl,-all_load minifi)
-elseif(NOT WIN32)
-	target_link_libraries (minifiexe -Wl,--whole-archive minifi -Wl,--no-whole-archive)
-else()
-	target_link_libraries (minifiexe minifi)
-	set(WIN32_ARCHIVES "${WIN32_ARCHIVES} /WHOLEARCHIVE:minifi")
-	#set_target_properties(minifiexe PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:minifi")
-endif ()
+target_wholearchive_library(minifiexe minifi)
 
 target_link_libraries(minifiexe yaml-cpp ${UUID_LIBRARIES} ${JEMALLOC_LIBRARIES}) #
 
@@ -127,34 +89,13 @@ if (NOT USE_SHARED_LIBS)
 	endif(LIBC_STATIC)
 endif(NOT USE_SHARED_LIBS)
 
-if (APPLE)
-	get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
-	foreach(EXTENSION ${extensions})
-		message("Linking MiNiFiMain against ${EXTENSION}")
-		target_link_libraries (minifiexe -Wl,-all_load ${EXTENSION})
-		add_dependencies(minifiexe ${EXTENSION})
-	endforeach()    
-else ()
-	get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
-	foreach(EXTENSION ${extensions})
-	if (WIN32)
-	target_link_libraries (minifiexe ${EXTENSION})
-	  set(WIN32_ARCHIVES "${WIN32_ARCHIVES} /WHOLEARCHIVE:${EXTENSION}")
-	  add_dependencies(minifiexe ${EXTENSION})
-    else()
-	  target_link_libraries (minifiexe -Wl,--whole-archive ${EXTENSION} -Wl,--no-whole-archive)
-	  add_dependencies(minifiexe ${EXTENSION})
-	  endif()
-	endforeach()
-endif ()
+get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
+foreach(EXTENSION ${extensions})
+	message("Linking MiNiFiMain against ${EXTENSION}")
+	target_wholearchive_library(minifiexe ${EXTENSION})
+endforeach()
 
-if(WIN32)
-	set_target_properties(minifiexe PROPERTIES LINK_FLAGS "${LINK_FLAGS} ${WIN32_ARCHIVES}")
-endif()
-set_target_properties(minifiexe
-        PROPERTIES OUTPUT_NAME minifi)
-
-               
+set_target_properties(minifiexe PROPERTIES OUTPUT_NAME minifi)
 
 if (NOT WIN32)
 add_custom_command(TARGET minifiexe POST_BUILD

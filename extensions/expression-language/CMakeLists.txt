@@ -128,20 +128,6 @@ find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
 target_link_libraries (minifi-expression-language-extensions ${ZLIB_LIBRARIES})
 
-if (WIN32)
-	set_target_properties(minifi-expression-language-extensions PROPERTIES
-			LINK_FLAGS "/WHOLEARCHIVE"
-			)
-elseif (APPLE)
-	set_target_properties(minifi-expression-language-extensions PROPERTIES
-			LINK_FLAGS "-Wl,-all_load"
-			)
-else ()
-	set_target_properties(minifi-expression-language-extensions PROPERTIES
-			LINK_FLAGS "-Wl,--whole-archive"
-			)
-endif ()
-
 SET (EXPRESSION-LANGUAGE-EXTENSIONS minifi-expression-language-extensions PARENT_SCOPE)
 
 register_extension(minifi-expression-language-extensions)

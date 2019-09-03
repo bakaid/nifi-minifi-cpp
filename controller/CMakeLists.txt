@@ -57,43 +57,20 @@ endif()
 # Include UUID
 find_package(UUID REQUIRED)
 
-# Link against minifi, yaml-cpp, civetweb-cpp, uuid, openssl, jsoncpp and rocksdb
-target_link_libraries(minificontroller minifi ${DL})
+# Link
+target_link_libraries(minificontroller ${DL})
 
 
-add_dependencies(minificontroller minifi)
-
-if (APPLE)
-	target_link_libraries (minificontroller -Wl,-all_load minifi)
-else ()
-	target_link_libraries (minificontroller -Wl,--whole-archive minifi -Wl,--no-whole-archive)
-endif ()
-
-if (WIN32)
-	include_directories("../thirdparty/Simple-Windows-Posix-Semaphore")
-  	target_link_libraries(minificontroller semaphore)
-endif()
+target_wholearchive_library(minificontroller minifi)
 
 target_link_libraries(minificontroller yaml-cpp ${JSON_CPP_LIB} ${UUID_LIBRARIES} cxxopts)
 
+get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
+foreach(EXTENSION ${extensions})
+	target_wholearchive_library(minificontroller ${EXTENSION})
+endforeach()
 
-if (APPLE)
-	get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
-	foreach(EXTENSION ${extensions})
-		message("Linking against ${EXTENSION}")
-		add_dependencies(minificontroller ${EXTENSION})
-		target_link_libraries (minificontroller -Wl,-all_load ${EXTENSION})
-	endforeach()    
-else ()
-	get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
-	foreach(EXTENSION ${extensions})
-	add_dependencies(minificontroller ${EXTENSION})
-	  target_link_libraries (minificontroller -Wl,--whole-archive ${EXTENSION} -Wl,--no-whole-archive)
-	endforeach()
-endif ()
-
-set_target_properties(minificontroller
-        PROPERTIES OUTPUT_NAME minificontroller)
+set_target_properties(minificontroller PROPERTIES OUTPUT_NAME minificontroller)
 
 install(TARGETS minificontroller
         RUNTIME
