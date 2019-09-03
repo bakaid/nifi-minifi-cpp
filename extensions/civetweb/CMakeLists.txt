@@ -24,7 +24,6 @@ include_directories(${CMAKE_SOURCE_DIR}/libminifi/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/spdlog-20170710/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/concurrentqueue
                     ${CMAKE_SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-0.5.3/include
-                    ${CIVETWEB_INCLUDE_DIR}
                     ${CMAKE_SOURCE_DIR}/thirdparty/jsoncpp/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/
                     ./include)
