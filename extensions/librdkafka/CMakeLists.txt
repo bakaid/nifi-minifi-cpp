@@ -65,7 +65,7 @@ set(KAFKA_LIBRARY "${BYPRODUCT}")
 add_dependencies(minifi-rdkafka-extensions kafka-external)
 include_directories(${ZLIB_INCLUDE_DIRS})
 include_directories(${KAFKA_INCLUDE})
-target_link_libraries(${KAFKA_LIBRARY})
+target_link_libraries(minifi-rdkafka-extensions ${KAFKA_LIBRARY})
 
 SET (RDKAFKA-EXTENSIONS minifi-rdkafka-extensions PARENT_SCOPE)
 
