@@ -41,16 +41,12 @@ if (NOT SKIP_TESTS AND Java_FOUND AND Maven_FOUND AND NOT DISABLE_EXPRESSION_LAN
 		target_include_directories(${testfilename} BEFORE PRIVATE ./include)
 		target_include_directories(${testfilename} BEFORE PRIVATE ./tools)
 
-		# need to add reference to minifi to get EL support for these tests.
-		# these tests aren't valid without EL
-		if (APPLE)
-			target_link_libraries (${testfilename} -Wl,-all_load ${LIBSSH2_LIBRARY} ${ZLIB_LIBRARY} ${OPENSSL_LIBRARIES}  minifi-expression-language-extensions minifi-sftp minifi-standard-processors sftp-test-tools)
-		else ()
-			target_link_libraries (${testfilename} -Wl,--whole-archive ${LIBSSH2_LIBRARY} ${ZLIB_LIBRARY} ${OPENSSL_LIBRARIES}  minifi-expression-language-extensions minifi-sftp minifi-standard-processors sftp-test-tools -Wl,--no-whole-archive)
-		endif ()
-
 		createTests("${testfilename}")
-		target_link_libraries(${testfilename} ${CATCH_MAIN_LIB})
+		target_link_libraries(${testfilename} ${CATCH_MAIN_LIB} minifi sftp-test-tools)
+		target_wholearchive_library(${testfilename} minifi-sftp)
+		target_wholearchive_library(${testfilename} minifi-expression-language-extensions)
+		target_wholearchive_library(${testfilename} minifi-standard-processors)
+
 		MATH(EXPR SFTP-EXTENSIONS_TEST_COUNT "${SFTP-EXTENSIONS_TEST_COUNT}+1")
 		add_test(NAME "${testfilename}" COMMAND "${testfilename}" WORKING_DIRECTORY ${TEST_DIR})
 	ENDFOREACH()

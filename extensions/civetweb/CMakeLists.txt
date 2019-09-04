@@ -42,21 +42,6 @@ if(CMAKE_THREAD_LIBS_INIT)
 endif()
 
 
-if (WIN32)
-    set_target_properties(minifi-civet-extensions PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-civet-extensions PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-civet-extensions PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
-
-
 SET (civet-EXTENSIONS minifi-civet-extensions PARENT_SCOPE)
 
 register_extension(minifi-civet-extensions)

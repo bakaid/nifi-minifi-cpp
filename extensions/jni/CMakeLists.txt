@@ -99,18 +99,14 @@ endif()
 
 
 
-
-
 if (APPLE)
-	target_link_libraries (minifi-jni  -Wl,-all_load ${JAVA_JVM_LIBRARY})
-else ()
-	if (WIN32)
-		target_link_libraries (minifi-jni  ${JAVA_JVM_LIBRARY})
-		target_link_libraries (minifi-jni  ${Java_LIBRARIES})
-	else()
-		target_link_libraries (minifi-jni  ${JAVA_JVM_LIBRARY})
-	endif()
-endif ()
+	target_link_libraries (minifi-jni ${JAVA_JVM_LIBRARY})
+elseif (WIN32)
+	target_link_libraries (minifi-jni ${JAVA_JVM_LIBRARY})
+	target_link_libraries (minifi-jni ${Java_LIBRARIES})
+else()
+	target_link_libraries (minifi-jni ${JAVA_JVM_LIBRARY})
+endif()
 
 
 

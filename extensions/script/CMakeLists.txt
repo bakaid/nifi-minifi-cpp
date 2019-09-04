@@ -93,20 +93,6 @@ if (ENABLE_LUA_SCRIPTING)
     target_link_libraries(minifi-script-extensions minifi-lua-extensions)
 endif()
 
-if (WIN32)
-    set_target_properties(minifi-script-extensions PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-script-extensions PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-script-extensions PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
-
 SET (SCRIPTING-EXTENSIONS minifi-script-extensions PARENT_SCOPE)
 
 register_extension(minifi-script-extensions)

@@ -38,13 +38,4 @@ else()
 	target_link_libraries(python-lib nanofi-shared core-minifi-shared minifi-shared)
 endif(APPLE)
 
-if (WIN32)
-target_link_libraries(python-lib ${CURL_LIBRARY}  minifi-http-curl)
-    set_target_properties(python-lib PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE:minifi-http-curl"
-    )
-elseif (APPLE)
-	target_link_libraries(python-lib ${CURL_LIBRARY}  -Wl,-all_load minifi-http-curl)
-else ()
-	target_link_libraries(python-lib -Wl,--whole-archive minifi-http-curl -Wl,--no-whole-archive ${CURL_LIBRARY} )
-endif ()
+target_wholearchive_library(python-lib minifi-http-curl)

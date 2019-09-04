@@ -68,20 +68,6 @@ target_link_libraries(minifi-usb-camera-extensions ${LIBUSB_LIBRARIES})
 find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
 target_link_libraries (minifi-usb-camera-extensions ${ZLIB_LIBRARIES})
-if (WIN32)
-    set_target_properties(minifi-usb-camera-extensions PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-usb-camera-extensions PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-usb-camera-extensions PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
-
 
 SET (USB-CAMERA-EXTENSIONS minifi-usb-camera-extensions PARENT_SCOPE)
 

@@ -37,20 +37,7 @@ endif()
 
 # Include UUID
 target_link_libraries(minifi-archive-extensions ${LIBMINIFI})
-target_link_libraries(minifi-archive-extensions archive_static )
-if (WIN32)
-    set_target_properties(minifi-archive-extensions PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-archive-extensions PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-archive-extensions PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
+target_link_libraries(minifi-archive-extensions archive_static)
 
 
 SET (ARCHIVE-EXTENSIONS minifi-archive-extensions PARENT_SCOPE)

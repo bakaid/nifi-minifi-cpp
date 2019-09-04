@@ -33,20 +33,6 @@ set_property(TARGET minifi-mqtt-extensions PROPERTY POSITION_INDEPENDENT_CODE ON
 target_link_libraries(minifi-mqtt-extensions ${CMAKE_DL_LIBS} )
 target_link_libraries(minifi-mqtt-extensions paho-mqtt3cs-static )
 
-if (WIN32)
-    set_target_properties(minifi-mqtt-extensions PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-mqtt-extensions PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-mqtt-extensions PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
-
 
 SET (MQTT-EXTENSIONS minifi-mqtt-extensions PARENT_SCOPE)
 

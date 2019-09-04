@@ -52,20 +52,6 @@ endif()
 find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
 target_link_libraries (minifi-rocksdb-repos ${ZLIB_LIBRARIES})
-if (WIN32)
-    set_target_properties(minifi-rocksdb-repos PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-rocksdb-repos PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-rocksdb-repos PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
-
 
 SET (ROCKSDB-REPOS minifi-rocksdb-repos PARENT_SCOPE)
 
