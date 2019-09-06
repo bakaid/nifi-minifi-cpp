@@ -36,10 +36,8 @@ find_package(UUID REQUIRED)
 target_link_libraries(minifi-wel ${LIBMINIFI} ${UUID_LIBRARIES})
 target_link_libraries(minifi-wel ${CMAKE_DL_LIBS} )
 find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries (minifi-wel ${ZLIB_LIBRARIES})
+target_link_libraries(minifi-wel ZLIB::ZLIB)
 
-
-SET (WEL-EXTENSION minifi-wel PARENT_SCOPE)
+SET(WEL-EXTENSION minifi-wel PARENT_SCOPE)
 
 register_extension(minifi-wel)

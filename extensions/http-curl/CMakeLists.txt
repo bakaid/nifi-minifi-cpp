@@ -17,8 +17,6 @@
 # under the License.
 #
 
-find_package(CURL REQUIRED)
-
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 include_directories(protocols client processors sitetosite)
 
@@ -33,16 +31,11 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-http-curl "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-if (CURL_FOUND)
-  target_link_libraries(minifi-http-curl CURL::libcurl)
-endif ()
+find_package(CURL REQUIRED)
+target_link_libraries(minifi-http-curl CURL::libcurl)
 
 target_link_libraries(minifi-http-curl ${CMAKE_DL_LIBS})
 target_link_libraries(minifi-http-curl minifi-civet-extensions)
-
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries (minifi-http-curl ${ZLIB_LIBRARIES})
 
 SET (HTTP-CURL minifi-http-curl PARENT_SCOPE)
 register_extension(minifi-http-curl)

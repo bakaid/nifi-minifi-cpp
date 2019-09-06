@@ -66,10 +66,8 @@ target_link_libraries(minifi-usb-camera-extensions ${PNG_LINK_FLAGS})
 target_link_libraries(minifi-usb-camera-extensions uvc_static )
 target_link_libraries(minifi-usb-camera-extensions ${LIBUSB_LIBRARIES})
 find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries (minifi-usb-camera-extensions ${ZLIB_LIBRARIES})
+target_link_libraries (minifi-usb-camera-extensions ZLIB::ZLIB)
 
 SET (USB-CAMERA-EXTENSIONS minifi-usb-camera-extensions PARENT_SCOPE)
 
 register_extension(minifi-usb-camera-extensions)
-

@@ -17,8 +17,6 @@
 # under the License.
 #
 
-find_package(CURL REQUIRED)
-
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 include_directories(client processors)
 
@@ -34,6 +32,7 @@ if(CMAKE_THREAD_LIBS_INIT)
 endif()
 
 # Include cURL
+find_package(CURL REQUIRED)
 target_link_libraries(minifi-sftp CURL::libcurl)
 
 # Include UUID
@@ -49,13 +48,7 @@ target_link_libraries(minifi-sftp ${CMAKE_DL_LIBS})
 
 # Include LibSSH2
 find_package(LibSSH2 REQUIRED)
-include_directories(${LIBSSH2_INCLUDE_DIR})
-target_link_libraries(minifi-sftp ${LIBSSH2_LIBRARY})
-
-# Include zlib
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries(minifi-sftp ${ZLIB_LIBRARIES})
+target_link_libraries(minifi-sftp libssh2)
 
 # Include RapidJSON
 include_directories(thirdparty/rapidjson-1.1.0/include)

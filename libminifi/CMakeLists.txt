@@ -113,11 +113,7 @@ target_link_libraries(core-minifi ${CMAKE_DL_LIBS} ${UUID_LIBRARIES} yaml-cpp)
 
 #target_link_libraries(core-minifi  PRIVATE bsdiff )
 
-
-include_directories(${ZLIB_INCLUDE_DIRS})
-
-target_link_libraries (core-minifi ${ZLIB_LIBRARIES})
-
+target_link_libraries (core-minifi ZLIB::ZLIB)
 
 # Include OpenSSL
 if (OPENSSL_FOUND)
@@ -158,9 +154,7 @@ else()
 	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid-shared yaml-cpp)
 endif()
 
-include_directories(${ZLIB_INCLUDE_DIRS})
-
-target_link_libraries (core-minifi-shared ${ZLIB_LIBRARIES})
+target_link_libraries (core-minifi-shared ZLIB::ZLIB)
 
 # Include OpenSSL
 

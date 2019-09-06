@@ -259,10 +259,6 @@ endif()
 
 find_package (ZLIB REQUIRED)
 
-if (ZLIB_FOUND)
-  include_directories(${ZLIB_INCLUDE_DIRS})
-endif()
-
 SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)
 
 include(Extensions)

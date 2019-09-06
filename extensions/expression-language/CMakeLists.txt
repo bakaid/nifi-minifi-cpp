@@ -121,12 +121,6 @@ target_link_libraries(minifi-expression-language-extensions minifi tz)
 
 find_package(CURL REQUIRED)
 target_link_libraries(minifi-expression-language-extensions CURL::libcurl)
-find_package(OpenSSL REQUIRED)
-include_directories(${OPENSSL_INCLUDE_DIR})
-target_link_libraries(minifi-expression-language-extensions ${CMAKE_DL_LIBS})
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries (minifi-expression-language-extensions ${ZLIB_LIBRARIES})
 
 SET (EXPRESSION-LANGUAGE-EXTENSIONS minifi-expression-language-extensions PARENT_SCOPE)
 

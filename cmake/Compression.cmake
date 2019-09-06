@@ -29,7 +29,7 @@ function(use_bundled_zlib SOURCE_DIR BINARY_DIR)
   ExternalProject_Add(
     zlib-external
     GIT_REPOSITORY "https://github.com/madler/zlib.git"
-    GIT_TAG "cacf7f1d4e3d44d871b605da3b647f07d718623f"  # Version 1.2.11
+    GIT_TAG "v1.2.11"
     SOURCE_DIR "${BINARY_DIR}/thirdparty/zlib-src"
     CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
                "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/zlib-install"
@@ -52,6 +52,12 @@ function(use_bundled_zlib SOURCE_DIR BINARY_DIR)
   set(ZLIB_LIBRARY "${BINARY_DIR}/${BYPRODUCT}" CACHE STRING "" FORCE)
   set(ZLIB_LIBRARIES "${ZLIB_LIBRARY}" CACHE STRING "" FORCE)
   set(ZLIB_LIBRARY_RELEASE "${BINARY_DIR}/${BYPRODUCT}" CACHE STRING "" FORCE)
-  set(ZLIB_LIBRARY_DEBUG "${BINARY_DIR}/${BYPRODUCT}" CACHE STRING "" FORCE)  
-  
+  set(ZLIB_LIBRARY_DEBUG "${BINARY_DIR}/${BYPRODUCT}" CACHE STRING "" FORCE)
+
+  add_library(ZLIB::ZLIB STATIC IMPORTED)
+  set_target_properties(ZLIB::ZLIB PROPERTIES IMPORTED_LOCATION "${BINARY_DIR}/${BYPRODUCT}")
+  add_dependencies(ZLIB::ZLIB zlib-external)
+  file(MAKE_DIRECTORY ${ZLIB_INCLUDE_DIRS})
+  set_property(TARGET ZLIB::ZLIB APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ZLIB_INCLUDE_DIRS})
+
 endfunction(use_bundled_zlib)

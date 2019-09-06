@@ -63,7 +63,6 @@ add_dependencies(kafka-external libressl-portable)
 set(KAFKA_INCLUDE "${BASE_DIR}/install/include/librdkafka/")
 set(KAFKA_LIBRARY "${BYPRODUCT}")
 add_dependencies(minifi-rdkafka-extensions kafka-external)
-include_directories(${ZLIB_INCLUDE_DIRS})
 include_directories(${KAFKA_INCLUDE})
 target_link_libraries(minifi-rdkafka-extensions ${KAFKA_LIBRARY})
 

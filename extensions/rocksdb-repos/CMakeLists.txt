@@ -49,9 +49,6 @@ if (ROCKSDB_FOUND AND NOT BUILD_ROCKSDB)
 else()
 	target_link_libraries(minifi-rocksdb-repos rocksdb )
 endif()
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries (minifi-rocksdb-repos ${ZLIB_LIBRARIES})
 
 SET (ROCKSDB-REPOS minifi-rocksdb-repos PARENT_SCOPE)
 
