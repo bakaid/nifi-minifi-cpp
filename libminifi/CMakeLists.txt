@@ -109,70 +109,41 @@ file(GLOB SPD_SOURCES "../thirdparty/spdlog-20170710/include/spdlog/*")
 # header only library
 add_library(spdlog STATIC ${SPD_SOURCES})
 add_library(core-minifi STATIC ${SOURCES})
-target_link_libraries(core-minifi ${CMAKE_DL_LIBS} ${UUID_LIBRARIES} yaml-cpp)
-
-#target_link_libraries(core-minifi  PRIVATE bsdiff )
-
-target_link_libraries (core-minifi ZLIB::ZLIB)
-
-# Include OpenSSL
-if (OPENSSL_FOUND)
-	include_directories(${OPENSSL_INCLUDE_DIR})
-	if (WIN32)
-		foreach(OPENSSL_LIB ${OPENSSL_LIBRARIES})
-			if (OPENSSL_LIB MATCHES "\\.lib$" OR OPENSSL_LIB MATCHES "\\.dll$" )
-			message( "Including ${OPENSSL_LIB}")
-			target_link_libraries (core-minifi ${OPENSSL_LIB})	
-			set_target_properties(core-minifi PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:${OPENSSL_LIB}")
-			endif()
-		endforeach()
-	else()
-		target_link_libraries (core-minifi ${OPENSSL_LIBRARIES})
-	endif()
-
-endif (OPENSSL_FOUND)
+target_link_libraries(core-minifi ${CMAKE_DL_LIBS} ${UUID_LIBRARIES} yaml-cpp ZLIB::ZLIB OpenSSL::SSL)
 
 add_library(minifi STATIC ${PROCESSOR_SOURCES})
 
 
 target_link_libraries(minifi core-minifi)
 if (WIN32)
-set_target_properties(minifi PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-set_target_properties(minifi PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi")
+	set_target_properties(minifi PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+	set_target_properties(minifi PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi")
 endif()
 
 
 SET (LIBMINIFI core-minifi PARENT_SCOPE)
 
 if (ENABLE_PYTHON AND NOT STATIC_BUILD)
+
 #### shared
+	add_library(core-minifi-shared SHARED ${SOURCES})
+	if (APPLE)
+		target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} yaml-cpp)
+	else()
+		target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid-shared yaml-cpp)
+	endif()
 
-add_library(core-minifi-shared SHARED ${SOURCES})
-if (APPLE)
-	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} yaml-cpp)
-else()
-	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid-shared yaml-cpp)
-endif()
+	target_link_libraries (core-minifi-shared ZLIB::ZLIB OpenSSL::SSL)
 
-target_link_libraries (core-minifi-shared ZLIB::ZLIB)
+	add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
 
-# Include OpenSSL
-
-if (OPENSSL_FOUND)
-	include_directories(${OPENSSL_INCLUDE_DIR})
-	target_link_libraries (core-minifi-shared ${OPENSSL_LIBRARIES})
-endif (OPENSSL_FOUND)
-
-add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
-
-target_link_libraries(minifi-shared core-minifi-shared)
-if (WIN32)
-set_target_properties(minifi-shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-set_target_properties(minifi-shared PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi-shared")
-endif()
+	target_link_libraries(minifi-shared core-minifi-shared)
+	if (WIN32)
+		set_target_properties(minifi-shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+		set_target_properties(minifi-shared PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi-shared")
+	endif()
 
 
-set_property(TARGET core-minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
-#endif()
+	set_property(TARGET core-minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
+	set_property(TARGET minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif(ENABLE_PYTHON AND NOT STATIC_BUILD)

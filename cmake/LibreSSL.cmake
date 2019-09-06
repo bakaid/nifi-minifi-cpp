@@ -32,6 +32,7 @@ function(use_libre_ssl SOURCE_DIR BINARY_DIR)
     ### default is openbsd.org -- cloudflare is a reliable mirror
     #URL "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.8.3.tar.gz"
     URL "https://cloudflare.cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.8.3.tar.gz"
+    URL_HASH "SHA256=9b640b13047182761a99ce3e4f000be9687566e0828b4a72709e9e6a3ef98477"
     SOURCE_DIR "${BINARY_DIR}/thirdparty/libressl-src"
     CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
                 "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libressl-install"
@@ -55,21 +56,21 @@ function(use_libre_ssl SOURCE_DIR BINARY_DIR)
             IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}")
     add_dependencies(OpenSSL::Crypto libressl-portable)
 
-
-    add_library(libressl-ssl STATIC IMPORTED)
-    set_target_properties(libressl-ssl PROPERTIES
+    add_library(OpenSSL::SSL STATIC IMPORTED)
+    set_target_properties(OpenSSL::SSL PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+    set_target_properties(OpenSSL::SSL PROPERTIES
             IMPORTED_LINK_INTERFACE_LANGUAGES "C"
             IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}")
-    set_property(TARGET libressl-ssl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
-    add_library(libressl-tls STATIC IMPORTED)
-    set_target_properties(libressl-tls PROPERTIES
+    add_dependencies(OpenSSL::SSL libressl-portable)
+    set_property(TARGET OpenSSL::SSL APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
+
+    add_library(OpenSSL::TLS STATIC IMPORTED)
+    set_target_properties(OpenSSL::TLS PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+    set_target_properties(OpenSSL::TLS PROPERTIES
             IMPORTED_LINK_INTERFACE_LANGUAGES "C"
             IMPORTED_LOCATION "${BINARY_DIR}/thirdparty/libressl-install/lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}")
-    set_property(TARGET libressl-tls APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
-    add_library(libressl-ssltls INTERFACE)
-    set_target_properties(libressl-ssltls PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
-    set_property(TARGET libressl-ssltls APPEND PROPERTY INTERFACE_LINK_LIBRARIES libressl-ssl libressl-tls)
-    add_dependencies(libressl-ssltls libressl-portable)
-    add_library(OpenSSL::SSL ALIAS libressl-ssltls)
+    add_dependencies(OpenSSL::TLS libressl-portable)
+    set_property(TARGET OpenSSL::TLS APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
 endfunction(use_libre_ssl) 

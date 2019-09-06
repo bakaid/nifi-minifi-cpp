@@ -37,12 +37,7 @@ target_link_libraries(minifi-sftp CURL::libcurl)
 
 # Include UUID
 find_package(UUID REQUIRED)
-target_link_libraries(minifi-sftp ${LIBMINIFI} ${UUID_LIBRARIES})
-
-# Include OpenSSL
-set(OPENSSL_USE_STATIC_LIBS TRUE)
-find_package(OpenSSL REQUIRED)
-target_link_libraries(minifi-sftp OpenSSL::SSL)
+target_link_libraries(minifi-sftp minifi ${UUID_LIBRARIES})
 
 target_link_libraries(minifi-sftp ${CMAKE_DL_LIBS})
 
