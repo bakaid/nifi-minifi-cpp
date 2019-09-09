@@ -20,7 +20,7 @@
 cmake_minimum_required(VERSION 2.6)
 
 
-include_directories(../../libminifi/include ../../libminifi/include/core/yaml ../../libminifi/include/core)
+include_directories(../../libminifi/include ../../libminifi/include/core)
 
 if(WIN32)
 	include_directories(../../libminifi/opsys/win)
