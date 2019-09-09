@@ -18,6 +18,9 @@
 
 #!/bin/bash
 
+# Fail on errors
+set -e
+
 # Set env vars.
 UID_ARG=$1
 GID_ARG=$2
@@ -34,6 +37,7 @@ echo "CMake Source Directory: $CMAKE_SOURCE_DIR"
 echo "MiNiFi Package: $MINIFI_SOURCE_CODE"
 
 # Copy the MiNiFi source tree to the Docker working directory before building
+rm -rf $CMAKE_SOURCE_DIR/docker/${DISTRO_NAME}/minificppsource/
 mkdir -p $CMAKE_SOURCE_DIR/docker/${DISTRO_NAME}/minificppsource
 rsync -avr \
       --exclude '/*build*' \
@@ -60,6 +64,6 @@ DOCKER_COMMAND="docker build --build-arg UID=$UID_ARG \
 echo "Docker Command: '$DOCKER_COMMAND'"
 ${DOCKER_COMMAND}
 
-docker run --rm --entrypoint cat apacheminificpp:${DISTRO_NAME}-$MINIFI_VERSION /opt/minifi/build/minifi-agent-$MINIFI_VERSION-bin.tar.gz > ${DUMP_LOCATION}/nifi-minifi-cpp-${DISTRO_NAME}-$MINIFI_VERSION-bin.tar.gz
+docker run --rm --entrypoint cat apacheminificpp:${DISTRO_NAME}-$MINIFI_VERSION /opt/minifi/build/nifi-minifi-cpp-$MINIFI_VERSION-bin.tar.gz > ${DUMP_LOCATION}/nifi-minifi-cpp-${DISTRO_NAME}-$MINIFI_VERSION-bin.tar.gz
 
 rm -rf $CMAKE_SOURCE_DIR/docker/${DISTRO_NAME}/minificppsource/
