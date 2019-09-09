@@ -34,9 +34,8 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-archive-extensions "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-
-# Include UUID
 target_link_libraries(minifi-archive-extensions ${LIBMINIFI})
+target_link_libraries(minifi-archive-extensions RapidJSON)
 target_link_libraries(minifi-archive-extensions archive_static)
 
 

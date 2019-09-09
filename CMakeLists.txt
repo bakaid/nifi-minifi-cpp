@@ -187,23 +187,23 @@ endif()
 if(WIN32 OR NOT USE_SYSTEM_ZLIB)
 	include(BundledZLIB)
 	use_bundled_zlib(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-	list(APPEND CMAKE_MODULE_PATH "${SOURCE_DIR}/cmake/zlib/dummy")
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/zlib/dummy")
 endif()
 find_package (ZLIB REQUIRED)
 
 # UUID
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/uuid/dummy")
-if (WIN32)
-	include_directories("thirdparty/uuid/include/win32/")
+if (WIN32 OR NOT USE_SYSTEM_UUID)
+	include(BundledUUID)
+	use_bundled_uuid(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/uuid/dummy")
 else()
-	include_directories("thirdparty/uuid/include/posix")
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/uuid/sys")
 endif()
-add_subdirectory("thirdparty/uuid")
-set(UUID_FOUND "YES" CACHE STRING "" FORCE)
-set(UUID_LIBRARIES "uuid" CACHE STRING "" FORCE)
+find_package(UUID REQUIRED)
 
 # uthash
-include_directories(thirdparty/ut)
+add_library(ut INTERFACE)
+target_include_directories(ut INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ut")
 
 # cURL
 if(NOT DISABLE_CURL)
@@ -217,24 +217,20 @@ else()
 endif()
 
 # spdlog
-file(GLOB SPD_SOURCES "thirdparty/spdlog-20170710/include/spdlog/*")
+add_library(spdlog INTERFACE)
+target_include_directories(spdlog INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/spdlog-20170710/include")
 
 # yaml-cpp
-if (NOT APPLE)
-	if (ENABLE_PYTHON)
-		SET(BUILD_SHARED_LIBS ON CACHE BOOL "Build yaml cpp shared lib" FORCE)
-	else()
-		SET(BUILD_SHARED_LIBS OFF CACHE BOOL "Build yaml cpp shared lib" FORCE)
-	endif()
-endif()
-add_subdirectory(thirdparty/yaml-cpp-yaml-cpp-20171024)
-include_directories(thirdparty/yaml-cpp-yaml-cpp-20171024/include)
+include(BundledYamlCpp)
+use_bundled_yamlcpp(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 # concurrentqueue
-include_directories(thirdparty/concurrentqueue)
+add_library(concurrentqueue INTERFACE)
+target_include_directories(concurrentqueue INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/concurrentqueue")
 
 # RapidJSON
-include_directories(thirdparty/rapidjson-1.1.0/include)
+add_library(RapidJSON INTERFACE)
+target_include_directories(RapidJSON INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rapidjson-1.1.0/include")
 
 
 #### Extensions ####
@@ -333,11 +329,12 @@ if(ENABLE_ALL OR ENABLE_MQTT)
         createExtension(MQTT-EXTENSIONS "MQTT EXTENSIONS" "This Enables MQTT functionality including PublishMQTT/ConsumeMQTT" "extensions/mqtt" "${TEST_DIR}/mqtt-tests" "TRUE" "thirdparty/paho.mqtt.c")
 endif()
 
+# Create JNI Extension
 if(ENABLE_ALL OR ENABLE_JNI)
 	createExtension(JNI-EXTENSION "JNI EXTENSIONS" "Enables JNI capabilities to support loading Java Classes." "extensions/jni" "${TEST_DIR}/jni-tests")
 endif()
 
-
+# Create PCAP Extension
 option(ENABLE_PCAP "Enables the PCAP extension." OFF)
 if(ENABLE_ALL OR ENABLE_PCAP)
 	createExtension(PCAP-EXTENSION "PCAP EXTENSIONS" "Enables libPCAP Functionality and the PacketCapture processor." "extensions/pcap" "${TEST_DIR}/pcap-tests")
@@ -355,6 +352,7 @@ if (NOT DISABLE_SCRIPTING)
     createExtension(SCRIPTING-EXTENSIONS "SCRIPTING EXTENSIONS" "This enables scripting" "extensions/script" "${TEST_DIR}/script-tests")
 endif()
 
+# Sensors extensions
 option(ENABLE_SENSORS "Enables the Sensors package." OFF)
 if(ENABLE_ALL OR ENABLE_SENSORS)
 	add_subdirectory(thirdparty/RTIMULib/RTIMULib)

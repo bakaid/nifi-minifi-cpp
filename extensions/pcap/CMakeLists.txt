@@ -69,8 +69,7 @@ if (APPLE)
 	set_target_properties(minifi-pcap PROPERTIES LINK_FLAGS "-Wl,-F/Library/Frameworks")
 endif ()
 
-target_link_libraries(minifi-pcap ${LIBMINIFI} )
-target_link_libraries(minifi-pcap ${CMAKE_DL_LIBS} )
+target_link_libraries(minifi-pcap ${LIBMINIFI})
 
 SET (PCAP-EXTENSION minifi-pcap PARENT_SCOPE)
 register_extension(minifi-pcap)

@@ -32,15 +32,8 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-rocksdb-repos "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-
-# Include UUID
-find_package(UUID REQUIRED)
-target_link_libraries(minifi-rocksdb-repos ${LIBMINIFI} ${UUID_LIBRARIES})
-target_link_libraries(minifi-rocksdb-repos ${CMAKE_DL_LIBS} )
-
+target_link_libraries(minifi-rocksdb-repos ${LIBMINIFI})
 target_link_libraries(minifi-rocksdb-repos RocksDB::RocksDB)
 
-
 SET (ROCKSDB-REPOS minifi-rocksdb-repos PARENT_SCOPE)
-
 register_extension(minifi-rocksdb-repos)

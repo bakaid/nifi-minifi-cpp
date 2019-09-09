@@ -33,8 +33,6 @@ set_property(TARGET minifi-gps PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(minifi-gps ${LIBMINIFI} )
 target_link_libraries(minifi-gps ${LIBGPS_LIBRARIES})
 
-target_link_libraries(minifi-gps ${CMAKE_DL_LIBS} )
-
 
 SET (GPS-EXTENSION minifi-gps PARENT_SCOPE)
 

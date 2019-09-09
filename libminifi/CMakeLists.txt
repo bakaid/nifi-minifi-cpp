@@ -33,9 +33,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (WIN32)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
-	include_directories("thirdparty/uuid/include/win32/")
-else()
-	include_directories("thirdparty/uuid/include/posix")
 endif()
 IF (IOS)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fobjc-abi-version=2 -fobjc-arc -std=gnu++11 -stdlib=libc++ -isysroot ${CMAKE_OSX_SYSROOT} -DIOS")
@@ -77,11 +74,7 @@ else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-reorder")
 endif()
 
-include_directories(../thirdparty/spdlog-20170710/include)
-include_directories(../thirdparty/yaml-cpp-yaml-cpp-20171024/include)
 include_directories(../thirdparty/cron)
-include_directories(../thirdparty/rapidjson-1.1.0/include)
-include_directories(../thirdparty/concurrentqueue/)
 include_directories(include)
 
 
@@ -103,13 +96,8 @@ file(GLOB SOURCES  "src/utils/file/*.cpp" "src/sitetosite/*.cpp"  "src/core/logg
 file(GLOB PROCESSOR_SOURCES  "src/processors/*.cpp" )
 
 
-file(GLOB SPD_SOURCES "../thirdparty/spdlog-20170710/include/spdlog/*")
-
-# Workaround the limitations of having a
-# header only library
-add_library(spdlog STATIC ${SPD_SOURCES})
 add_library(core-minifi STATIC ${SOURCES})
-target_link_libraries(core-minifi ${CMAKE_DL_LIBS} ${UUID_LIBRARIES} yaml-cpp ZLIB::ZLIB OpenSSL::SSL)
+target_link_libraries(core-minifi ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog)
 
 add_library(minifi STATIC ${PROCESSOR_SOURCES})
 
@@ -124,16 +112,9 @@ endif()
 SET (LIBMINIFI core-minifi PARENT_SCOPE)
 
 if (ENABLE_PYTHON AND NOT STATIC_BUILD)
-
 #### shared
 	add_library(core-minifi-shared SHARED ${SOURCES})
-	if (APPLE)
-		target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} yaml-cpp)
-	else()
-		target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid-shared yaml-cpp)
-	endif()
-
-	target_link_libraries (core-minifi-shared ZLIB::ZLIB OpenSSL::SSL)
+	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog)
 
 	add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
 

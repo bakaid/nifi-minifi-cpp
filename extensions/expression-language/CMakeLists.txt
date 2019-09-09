@@ -96,7 +96,7 @@ flex_target(
 
 add_flex_bison_dependency(el-scanner el-parser)
 endif()
-include_directories(./ ../../libminifi/include  ../../libminifi/include/core ../../thirdparty/cron ../../thirdparty/spdlog-20170710/include ../../thirdparty/concurrentqueue ../../thirdparty/yaml-cpp-yaml-cpp-0.5.3/include ../../thirdparty/)
+include_directories(./ ../../libminifi/include  ../../libminifi/include/core ../../thirdparty/cron ../../thirdparty/)
 include_directories(common)
 include_directories(impl)
 include_directories(../../thirdparty/date/include)
@@ -117,10 +117,8 @@ file(GLOB SOURCES  "*.cpp")
 add_library(minifi-expression-language-extensions STATIC ${SOURCES} ${BISON_el-parser_OUTPUTS} ${FLEX_el-scanner_OUTPUTS})
 set_property(TARGET minifi-expression-language-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-target_link_libraries(minifi-expression-language-extensions minifi tz)
-
-find_package(CURL REQUIRED)
-target_link_libraries(minifi-expression-language-extensions CURL::libcurl)
+target_link_libraries(minifi-expression-language-extensions ${LIBMINIFI})
+target_link_libraries(minifi-expression-language-extensions tz RapidJSON CURL::libcurl)
 
 SET (EXPRESSION-LANGUAGE-EXTENSIONS minifi-expression-language-extensions PARENT_SCOPE)
 

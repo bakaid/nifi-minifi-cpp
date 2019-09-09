@@ -38,14 +38,10 @@ if (WIN32)
   )
 
 
-  add_library(z STATIC IMPORTED)
-  set_target_properties(z PROPERTIES IMPORTED_LOCATION "${BINARY_DIR}/${BYPRODUCT}")
-
   set(ZLIB_BYPRODUCT "${BINARY_DIR}/${BYPRODUCT}" CACHE STRING "" FORCE)
   set(ZLIB_BYPRODUCT_INCLUDE "${SOURCE_DIR}/thirdparty/zlib/include" CACHE STRING "" FORCE)
   set(ZLIB_BIN_DIR "${BINARY_DIR}/thirdparty/libressl-install/" CACHE STRING "" FORCE)
 
-  add_dependencies(z zlib-external)
   set(ZLIB_FOUND "YES" CACHE STRING "" FORCE)
   set(ZLIB_INCLUDE_DIR "${SOURCE_DIR}/thirdparty/zlib/include" CACHE STRING "" FORCE)
   set(ZLIB_INCLUDE_DIRS "${SOURCE_DIR}/thirdparty/zlib/include" CACHE STRING "" FORCE)

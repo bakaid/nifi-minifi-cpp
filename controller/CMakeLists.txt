@@ -25,7 +25,7 @@ ENDIF(POLICY CMP0048)
 
 
 
-include_directories(../main/ ../libminifi/include  ../libminifi/include/c2  ../libminifi/include/c2/protocols/  ../libminifi/include/core/state ./libminifi/include/core/statemanagement/metrics  ../libminifi/include/core/yaml  ../libminifi/include/core  ../thirdparty/cron ../thirdparty/spdlog-20170710/include ../thirdparty/concurrentqueue ../thirdparty/yaml-cpp-yaml-cpp-20171024/include ../thirdparty/cxxopts/include  ../thirdparty/)
+include_directories(../main/ ../libminifi/include  ../libminifi/include/c2  ../libminifi/include/c2/protocols/  ../libminifi/include/core/state ./libminifi/include/core/statemanagement/metrics  ../libminifi/include/core/yaml  ../libminifi/include/core  ../thirdparty/cron ../thirdparty/cxxopts/include  ../thirdparty/)
 
 
 if(WIN32)
@@ -54,16 +54,9 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minificontroller "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-# Include UUID
-find_package(UUID REQUIRED)
-
-# Link
-target_link_libraries(minificontroller ${DL})
-
-
 target_wholearchive_library(minificontroller minifi)
 
-target_link_libraries(minificontroller yaml-cpp ${JSON_CPP_LIB} ${UUID_LIBRARIES} cxxopts)
+target_link_libraries(minificontroller cxxopts)
 
 get_property(extensions GLOBAL PROPERTY EXTENSION-OPTIONS)
 foreach(EXTENSION ${extensions})

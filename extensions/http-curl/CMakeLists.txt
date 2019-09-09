@@ -31,10 +31,8 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-http-curl "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-find_package(CURL REQUIRED)
-target_link_libraries(minifi-http-curl CURL::libcurl)
-
-target_link_libraries(minifi-http-curl ${CMAKE_DL_LIBS})
+target_link_libraries(minifi-http-curl ${LIBMINIFI})
+target_link_libraries(minifi-http-curl CURL::libcurl RapidJSON)
 target_link_libraries(minifi-http-curl minifi-civet-extensions)
 
 SET (HTTP-CURL minifi-http-curl PARENT_SCOPE)

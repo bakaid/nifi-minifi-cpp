@@ -23,8 +23,7 @@ else()
 	include_directories("include/posix/uuid")
 endif()
 
-add_library(
-    uuid
+add_library(uuid STATIC
     clear.c
     compare.c
     copy.c
@@ -37,19 +36,4 @@ add_library(
     uuid_time.c
 )
 
-
-add_library(
-    uuid-shared
-    clear.c
-    compare.c
-    copy.c
-    gen_uuid.c
-    isnull.c
-    pack.c
-    parse.c
-    unpack.c
-    unparse.c
-    uuid_time.c
-)
-
-set_property(TARGET uuid-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET uuid PROPERTY POSITION_INDEPENDENT_CODE ON)

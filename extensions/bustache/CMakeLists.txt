@@ -36,7 +36,6 @@ if(CMAKE_THREAD_LIBS_INIT)
 endif()
 
 target_link_libraries(minifi-bustache-extensions ${LIBMINIFI} ${Boost_IOSTREAMS_LIBRARY})
-target_link_libraries(minifi-bustache-extensions ${CMAKE_DL_LIBS})
 target_link_libraries(minifi-bustache-extensions bustache)
 
 

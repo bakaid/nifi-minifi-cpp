@@ -21,10 +21,6 @@ include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 
 include_directories(${CMAKE_SOURCE_DIR}/libminifi/include
                     ${CMAKE_SOURCE_DIR}/libminifi/include/core
-                    ${CMAKE_SOURCE_DIR}/thirdparty/spdlog-20170710/include
-                    ${CMAKE_SOURCE_DIR}/thirdparty/concurrentqueue
-                    ${CMAKE_SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-0.5.3/include
-                    ${CMAKE_SOURCE_DIR}/thirdparty/jsoncpp/include
                     ${CMAKE_SOURCE_DIR}/thirdparty/
                     ./include)
 
@@ -32,6 +28,7 @@ file(GLOB SOURCES  "processors/*.cpp")
 
 add_library(minifi-civet-extensions STATIC ${SOURCES})
 set_property(TARGET minifi-civet-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(minifi-civet-extensions ${LIBMINIFI})
 target_link_libraries(minifi-civet-extensions c-library civetweb-cpp)
 
 if(THREADS_HAVE_PTHREAD_ARG)

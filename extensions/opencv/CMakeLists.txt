@@ -56,9 +56,11 @@ build_git_project(opencv-external "${BASE_DIR}" "https://github.com/opencv/openc
 
 add_library(minifi-opencv STATIC ${SOURCES})
 
+target_link_libraries(minifi-opencv ${LIBMINIFI})
+
 set(OpenCV_DIR ${BASE_DIR})
 find_package( OpenCV REQUIRED PATHS "${BASE_DIR}/opencv-external/src/opencv-external-build/")
-target_link_libraries( minifi-opencv ${OpenCV_LIBS} )
+target_link_libraries(minifi-opencv ${OpenCV_LIBS})
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 SET (OPENCV-EXTENSION minifi-opencv PARENT_SCOPE)

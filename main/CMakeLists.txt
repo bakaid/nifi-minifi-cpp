@@ -23,7 +23,7 @@ IF(POLICY CMP0048)
   CMAKE_POLICY(SET CMP0048 OLD)
 ENDIF(POLICY CMP0048)
 
-include_directories(../libminifi/include ../thirdparty/cron ../thirdparty/spdlog-20170710/include ../thirdparty/concurrentqueue ../thirdparty/yaml-cpp-yaml-cpp-20171024/include ../thirdparty/rapidjson-1.1.0/include ../thirdparty/)
+include_directories(../libminifi/include ../thirdparty/cron ../thirdparty/)
 
 if(WIN32)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
@@ -68,13 +68,10 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifiexe "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-# Include UUID
-
 target_wholearchive_library(minifiexe core-minifi)
-
 target_wholearchive_library(minifiexe minifi)
 
-target_link_libraries(minifiexe yaml-cpp ${UUID_LIBRARIES} JeMalloc::JeMalloc)
+target_link_libraries(minifiexe yaml-cpp JeMalloc::JeMalloc)
 
 if (WIN32)
 	include_directories("../thirdparty/Simple-Windows-Posix-Semaphore")

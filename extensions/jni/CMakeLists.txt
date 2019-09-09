@@ -97,7 +97,7 @@ else()
 	message("Maven could not be invoked to build the framework jar")
 endif()
 
-target_link_libraries (minifi-jni minifi)
+target_link_libraries (minifi-jni ${LIBMINIFI})
 
 if (APPLE)
 	target_link_libraries (minifi-jni ${JAVA_JVM_LIBRARY})

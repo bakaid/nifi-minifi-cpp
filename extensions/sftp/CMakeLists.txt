@@ -31,22 +31,18 @@ if(CMAKE_THREAD_LIBS_INIT)
 	target_link_libraries(minifi-sftp "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
+target_link_libraries(minifi-sftp ${LIBMINIFI})
+
 # Include cURL
 find_package(CURL REQUIRED)
 target_link_libraries(minifi-sftp CURL::libcurl)
-
-# Include UUID
-find_package(UUID REQUIRED)
-target_link_libraries(minifi-sftp minifi ${UUID_LIBRARIES})
-
-target_link_libraries(minifi-sftp ${CMAKE_DL_LIBS})
 
 # Include LibSSH2
 find_package(LibSSH2 REQUIRED)
 target_link_libraries(minifi-sftp libssh2)
 
 # Include RapidJSON
-include_directories(thirdparty/rapidjson-1.1.0/include)
+target_link_libraries(minifi-sftp RapidJSON)
 
 SET (SFTP minifi-sftp PARENT_SCOPE)
 register_extension(minifi-sftp)
