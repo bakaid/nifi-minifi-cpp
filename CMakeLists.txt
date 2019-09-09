@@ -232,6 +232,9 @@ target_include_directories(concurrentqueue INTERFACE "${CMAKE_CURRENT_SOURCE_DIR
 add_library(RapidJSON INTERFACE)
 target_include_directories(RapidJSON INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rapidjson-1.1.0/include")
 
+# Cron
+add_library(cron INTERFACE)
+target_include_directories(cron INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cron")
 
 #### Extensions ####
 SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)

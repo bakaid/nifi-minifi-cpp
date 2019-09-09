@@ -17,9 +17,9 @@
 
 function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
     if (WIN32)
-        set(BYPRODUCT "libyaml-cpp.lib")
+        set(BYPRODUCT "lib/libyaml-cpp.lib")
     else()
-        set(BYPRODUCT "libyaml-cpp.a")
+        set(BYPRODUCT "lib/libyaml-cpp.a")
     endif()
 
     set(YAMLCPP_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}

@@ -23,7 +23,7 @@ IF(POLICY CMP0048)
   CMAKE_POLICY(SET CMP0048 OLD)
 ENDIF(POLICY CMP0048)
 
-include_directories(../libminifi/include ../thirdparty/cron ../thirdparty/)
+include_directories(../libminifi/include)
 
 if(WIN32)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)

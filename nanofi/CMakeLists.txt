@@ -24,7 +24,7 @@ IF(POLICY CMP0048)
 ENDIF(POLICY CMP0048)
 
 include_directories(include)
-include_directories(../libminifi/include ../thirdparty/cron)
+include_directories(../libminifi/include)
 
 if(WIN32)
 include_directories(../libminifi/opsys/win)

@@ -74,7 +74,6 @@ else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-reorder")
 endif()
 
-include_directories(../thirdparty/cron)
 include_directories(include)
 
 
@@ -97,7 +96,7 @@ file(GLOB PROCESSOR_SOURCES  "src/processors/*.cpp" )
 
 
 add_library(core-minifi STATIC ${SOURCES})
-target_link_libraries(core-minifi ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog)
+target_link_libraries(core-minifi ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog cron)
 
 add_library(minifi STATIC ${PROCESSOR_SOURCES})
 
@@ -114,7 +113,7 @@ SET (LIBMINIFI core-minifi PARENT_SCOPE)
 if (ENABLE_PYTHON AND NOT STATIC_BUILD)
 #### shared
 	add_library(core-minifi-shared SHARED ${SOURCES})
-	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog)
+	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog cron)
 
 	add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
 
