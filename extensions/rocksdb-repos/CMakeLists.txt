@@ -21,13 +21,6 @@ include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 
 find_package(RocksDB)
 
-if (NOT ROCKSDB_FOUND OR BUILD_ROCKSDB)
-	include_directories(${ROCKSDB_THIRDPARTY_ROOT}/include)
-else()
-	include_directories(${ROCKSDB_INCLUDE_DIR})
-endif()
-
-
 file(GLOB SOURCES  "*.cpp")
 
 add_library(minifi-rocksdb-repos STATIC ${SOURCES})
@@ -44,11 +37,9 @@ endif()
 find_package(UUID REQUIRED)
 target_link_libraries(minifi-rocksdb-repos ${LIBMINIFI} ${UUID_LIBRARIES})
 target_link_libraries(minifi-rocksdb-repos ${CMAKE_DL_LIBS} )
-if (ROCKSDB_FOUND AND NOT BUILD_ROCKSDB)
-	target_link_libraries(minifi-rocksdb-repos ${ROCKSDB_LIBRARIES} )
-else()
-	target_link_libraries(minifi-rocksdb-repos rocksdb )
-endif()
+
+target_link_libraries(minifi-rocksdb-repos RocksDB::RocksDB)
+
 
 SET (ROCKSDB-REPOS minifi-rocksdb-repos PARENT_SCOPE)
 

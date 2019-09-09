@@ -184,8 +184,8 @@ else()
 endif()
 
 # zlib
-include(BundledZLIB)
 if(WIN32 OR NOT USE_SYSTEM_ZLIB)
+	include(BundledZLIB)
 	use_bundled_zlib(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 	list(APPEND CMAKE_MODULE_PATH "${SOURCE_DIR}/cmake/zlib/dummy")
 endif()
@@ -219,8 +219,7 @@ endif()
 # spdlog
 file(GLOB SPD_SOURCES "thirdparty/spdlog-20170710/include/spdlog/*")
 
-# RocksDB
-SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
+# yaml-cpp
 if (NOT APPLE)
 	if (ENABLE_PYTHON)
 		SET(BUILD_SHARED_LIBS ON CACHE BOOL "Build yaml cpp shared lib" FORCE)
@@ -228,10 +227,6 @@ if (NOT APPLE)
 		SET(BUILD_SHARED_LIBS OFF CACHE BOOL "Build yaml cpp shared lib" FORCE)
 	endif()
 endif()
-SET(WITH_TESTS OFF CACHE BOOL "Build RocksDB library (not repo) tests")
-set(ROCKSDB_THIRDPARTY_ROOT "${CMAKE_SOURCE_DIR}/thirdparty/rocksdb/" CACHE STRING "Path to RocksDB root")
-
-# yaml-cpp
 add_subdirectory(thirdparty/yaml-cpp-yaml-cpp-20171024)
 include_directories(thirdparty/yaml-cpp-yaml-cpp-20171024/include)
 
@@ -290,13 +285,17 @@ if (NOT DISABLE_CIVET)
 endif()
 
 ## Add the rocks DB extension
-if (NOT ROCKSDB_FOUND OR BUILD_ROCKSDB)
-	set(BUILD_RD "TRUE")
-endif()
-
 option(DISABLE_ROCKSDB "Disables the RocksDB extension." OFF)
 if (DISABLE_ROCKSDB STREQUAL "OFF" OR NOT DISABLE_ROCKSDB)
-	createExtension(ROCKSDB-REPOS "ROCKSDB REPOS" "This Enables persistent provenance, flowfile, and content repositories using RocksDB" "extensions/rocksdb-repos" "${TEST_DIR}/rocksdb-tests" BUILD_RD "${ROCKSDB_THIRDPARTY_ROOT}")
+	if (BUILD_ROCKSDB)
+		include(BundledRocksDB)
+		use_bundled_rocksdb(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+		list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/rocksdb/dummy")
+	else()
+		list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/rocksdb/ssl")
+	endif()
+	find_package(RocksDB REQUIRED)
+	createExtension(ROCKSDB-REPOS "ROCKSDB REPOS" "This Enables persistent provenance, flowfile, and content repositories using RocksDB" "extensions/rocksdb-repos" "${TEST_DIR}/rocksdb-tests")
 endif()
 
 ## Create LibArchive Extension
