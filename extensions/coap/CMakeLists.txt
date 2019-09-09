@@ -69,7 +69,7 @@ include_directories(${COAP_INCLUDE_DIRS})
 
 target_link_libraries (nanofi-coap-c ${COAP_LIBRARIES})
 target_link_libraries (nanofi-coap-c ${HTTP-CURL})
-target_link_libraries (minifi-coap nanofi-coap-c ${COAP_LIBRARIES})
+target_link_libraries (minifi-coap nanofi-coap-c core-minifi ${COAP_LIBRARIES})
 
 SET (COAP-EXTENSION minifi-coap PARENT_SCOPE)
 register_extension(minifi-coap)

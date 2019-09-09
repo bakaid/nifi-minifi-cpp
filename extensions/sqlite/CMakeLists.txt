@@ -32,6 +32,7 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-sqlite-extensions "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
+target_link_libraries(minifi-sqlite-extensions minifi)
 target_link_libraries(minifi-sqlite-extensions ${CMAKE_DL_LIBS})
 target_link_libraries(minifi-sqlite-extensions sqlite)
 

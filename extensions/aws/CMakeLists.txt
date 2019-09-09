@@ -77,6 +77,8 @@ if (APPLE)
     endif()
 endif()
 
+target_link_libraries(minifi-aws minifi)
+
 target_link_libraries(minifi-aws ${BYPRODUCT}lib/libaws-c-common.${SUFFIX})
 target_link_libraries(minifi-aws ${BYPRODUCT}lib/libaws-checksums.${SUFFIX})
 target_link_libraries(minifi-aws ${BYPRODUCT}lib/libaws-c-event-stream.${SUFFIX})

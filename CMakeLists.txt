@@ -29,6 +29,10 @@ include(CheckIncludeFile)
 include(FeatureSummary)
 include(ExternalProject)
 
+# Provide custom modules for the project
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(WholeArchive)
+
 option(SKIP_TESTS "Skips building all tests." OFF)
 option(PORTABLE "Instructs the compiler to remove architecture specific optimizations" ON)
 option(USE_SHARED_LIBS "Builds using shared libraries" ON)
@@ -53,84 +57,6 @@ option(DISABLE_CURL "Disables libCurl Properties." OFF)
 
 option(USE_GOLD_LINKER "Use Gold Linker" OFF)
 
-function(target_wholearchive_library TARGET ITEM)
-	if (APPLE)
-		target_link_libraries(${TARGET} ${ITEM})
-		target_link_libraries(${TARGET} -Wl,-force_load,$<TARGET_FILE:${ITEM}>)
-		add_dependencies(${TARGET} ${ITEM})
-	elseif(WIN32)
-		target_link_libraries (${TARGET} ${ITEM})
-		set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:${ITEM}")
-		add_dependencies(${TARGET} ${ITEM})
-	else()
-		target_link_libraries(${TARGET} -Wl,--whole-archive ${ITEM} -Wl,--no-whole-archive)
-		add_dependencies(${TARGET} ${ITEM})
-	endif()
-endfunction()
-
-if (OPENSSL_ROOT_DIR )
-	set(OPENSSL_PASSTHROUGH "-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}")
-endif()
-
-set(PASSTHROUGH_CMAKE_ARGS -DANDROID_ABI=${ANDROID_ABI}
-                           -DANDROID_PLATFORM=${ANDROID_PLATFORM}
-                           -DANDROID_STL=${ANDROID_STL}
-                           -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
-                           -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-                           -DANDROID_NDK=${ANDROID_NDK}
-                           -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
-                           -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-                           -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
-                           -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-                           -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-                           -DCMAKE_FIND_ROOT_PATH=${CMAKE_FIND_ROOT_PATH}
-                           -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}
-                           -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=${CMAKE_FIND_ROOT_PATH_MODE_LIBRARY}
-                           -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=${CMAKE_FIND_ROOT_PATH_MODE_INCLUDE}
-                           -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-						   ${OPENSSL_PASSTHROUGH}
-                           -G${CMAKE_GENERATOR})
-
-if(NOT WIN32)
-	if (ENABLE_JNI)
-	if (NOT DISABLE_JEMALLOC)
-	  set(BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/jemalloc")
-	  
-	  set(DIR "${BASE_DIR}/extensions/jemalloc-src")
-	  set(JE_BYPRODUCT "${DIR}/lib/libjemalloc.a")
-	  ExternalProject_Add(
-	    jemalloc-external
-	    GIT_REPOSITORY "https://github.com/jemalloc/jemalloc.git"
-	    GIT_TAG "61efbda7098de6fe64c362d309824864308c36d4" 
-	    PREFIX "${BASE_DIR}/extensions/jemalloc"
-	    BUILD_IN_SOURCE true
-	    SOURCE_DIR "${DIR}"
-	    BUILD_COMMAND make
-	    CMAKE_COMMAND ""
-	    UPDATE_COMMAND ""
-	    BUILD_BYPRODUCTS ${JE_BYPRODUCT} 
-	    INSTALL_COMMAND ${CMAKE_COMMAND}  -E echo "Skipping install step."
-	    CONFIGURE_COMMAND ""
-	    PATCH_COMMAND ./autogen.sh && ./configure 
-	    STEP_TARGETS build
-	    EXCLUDE_FROM_ALL TRUE
-	  )
-	  
-	  add_library(jemalloc STATIC IMPORTED)
-	  set_target_properties(jemalloc PROPERTIES IMPORTED_LOCATION "${JE_BYPRODUCT}")
-	  add_dependencies(jemalloc jemalloc-external)
-	  set(JEMALLOC_FOUND "YES" CACHE STRING "" FORCE)
-	  set(JEMALLOC_INCLUDE_DIRS "${DIR}/include" CACHE STRING "" FORCE)
-	  set(JEMALLOC_LIBRARIES jemalloc CACHE STRING "" FORCE)
-	  set(JEMALLOC_LIBRARY jemalloc CACHE STRING "" FORCE)
-	  set(JEMALLOC_LIBRARY jemalloc CACHE STRING "" FORCE)
-
-	endif()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_JNI")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_JNI")
-
-	endif()
-endif()
 
 # Use ccache if present
 find_program(CCACHE_FOUND ccache)
@@ -140,6 +66,7 @@ if(CCACHE_FOUND)
     message("-- Found ccache: ${CCACHE_FOUND}")
 endif(CCACHE_FOUND)
 
+# Use gold linker if instructed
 if (UNIX AND USE_GOLD_LINKER AND NOT APPLE )
   execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE ld_version)
   if ("${ld_version}" MATCHES "GNU gold")
@@ -148,7 +75,7 @@ if (UNIX AND USE_GOLD_LINKER AND NOT APPLE )
   endif()
 endif()
 
-# check for exec info before we enable the backtrace features.
+# Check for exec info before we enable the backtrace features.
 CHECK_INCLUDE_FILE("execinfo.h" HAS_EXECINFO)
 if (ENABLE_OPS AND HAS_EXECINFO AND NOT WIN32)
   add_definitions("-DHAS_EXECINFO=1")
@@ -187,26 +114,89 @@ endif()
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
 if (NOT PORTABLE)
-  if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
-  else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
-  endif()
+	if(MSVC)
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /arch:AVX2")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
+	else()
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+	endif()
 endif()
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Search for threads
+#### Third party dependencies ####
+
+set(PASSTHROUGH_CMAKE_ARGS -DANDROID_ABI=${ANDROID_ABI}
+		-DANDROID_PLATFORM=${ANDROID_PLATFORM}
+		-DANDROID_STL=${ANDROID_STL}
+		-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+		-DANDROID_NDK=${ANDROID_NDK}
+		-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+		-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+		-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+		-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+		-DCMAKE_FIND_ROOT_PATH=${CMAKE_FIND_ROOT_PATH}
+		-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}
+		-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=${CMAKE_FIND_ROOT_PATH_MODE_LIBRARY}
+		-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=${CMAKE_FIND_ROOT_PATH_MODE_INCLUDE}
+		-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+		-G${CMAKE_GENERATOR})
+
+# jemalloc
+if(NOT WIN32)
+	if (ENABLE_JNI)
+		if (NOT DISABLE_JEMALLOC)
+			set(BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/jemalloc")
+
+			set(DIR "${BASE_DIR}/extensions/jemalloc-src")
+			set(JE_BYPRODUCT "${DIR}/lib/libjemalloc.a")
+			ExternalProject_Add(
+					jemalloc-external
+					GIT_REPOSITORY "https://github.com/jemalloc/jemalloc.git"
+					GIT_TAG "61efbda7098de6fe64c362d309824864308c36d4"
+					PREFIX "${BASE_DIR}/extensions/jemalloc"
+					BUILD_IN_SOURCE true
+					SOURCE_DIR "${DIR}"
+					BUILD_COMMAND make
+					CMAKE_COMMAND ""
+					UPDATE_COMMAND ""
+					BUILD_BYPRODUCTS ${JE_BYPRODUCT}
+					INSTALL_COMMAND ${CMAKE_COMMAND}  -E echo "Skipping install step."
+					CONFIGURE_COMMAND ""
+					PATCH_COMMAND ./autogen.sh && ./configure
+					STEP_TARGETS build
+					EXCLUDE_FROM_ALL TRUE
+			)
+
+			add_library(jemalloc STATIC IMPORTED)
+			set_target_properties(jemalloc PROPERTIES IMPORTED_LOCATION "${JE_BYPRODUCT}")
+			add_dependencies(jemalloc jemalloc-external)
+			set(JEMALLOC_FOUND "YES" CACHE STRING "" FORCE)
+			set(JEMALLOC_INCLUDE_DIRS "${DIR}/include" CACHE STRING "" FORCE)
+			set(JEMALLOC_LIBRARIES jemalloc CACHE STRING "" FORCE)
+			set(JEMALLOC_LIBRARY jemalloc CACHE STRING "" FORCE)
+			set(JEMALLOC_LIBRARY jemalloc CACHE STRING "" FORCE)
+
+		endif()
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_JNI")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_JNI")
+
+	endif()
+endif()
+
+# thread library
 find_package(Threads REQUIRED)
 
+# Simple-Windows-Posix-Semaphore
 if (WIN32)
   	add_subdirectory("thirdparty/Simple-Windows-Posix-Semaphore")
 endif()
 
-# Provide custom modules for the project
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-
+# OpenSSL/LibreSSL
 if (NOT OPENSSL_OFF)
 	include(LibreSSL)
 	use_libre_ssl("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
@@ -214,55 +204,22 @@ if (NOT OPENSSL_OFF)
 	
 	find_package (OpenSSL REQUIRED)
 
-	if (OPENSSL_FOUND)
-	  include_directories(${OPENSSL_INCLUDE_DIR})
-	  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOPENSSL_SUPPORT")
-	  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOPENSSL_SUPPORT")
-	  MESSAGE("OpenSSL found at ${OPENSSL_LIBRARIES}")
-	else ()
-	  message( FATAL_ERROR "OpenSSL was not found." )
-	endif (OPENSSL_FOUND)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOPENSSL_SUPPORT")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOPENSSL_SUPPORT")
+	MESSAGE("OpenSSL found at ${OPENSSL_LIBRARIES}")
 else()
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/winssl")
 endif()
 
-if (OPENSSL_ROOT_DIR )
-    set(OPENSSL_PASSTHROUGH "-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}")
-endif()
-
-set(PASSTHROUGH_CMAKE_ARGS -DANDROID_ABI=${ANDROID_ABI}
-        -DANDROID_PLATFORM=${ANDROID_PLATFORM}
-        -DANDROID_STL=${ANDROID_STL}
-        -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-        -DANDROID_NDK=${ANDROID_NDK}
-        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
-        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-        -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
-        -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-        -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-        -DCMAKE_FIND_ROOT_PATH=${CMAKE_FIND_ROOT_PATH}
-        -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}
-        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=${CMAKE_FIND_ROOT_PATH_MODE_LIBRARY}
-        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=${CMAKE_FIND_ROOT_PATH_MODE_INCLUDE}
-        -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-        ${OPENSSL_PASSTHROUGH}
-        -G${CMAKE_GENERATOR})
-
+# zlib
 include(Compression)
-
 if(WIN32 OR NOT USE_SYSTEM_ZLIB)
 	use_bundled_zlib(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-	find_package(OpenSSL REQUIRED)
 	list(APPEND CMAKE_MODULE_PATH "${SOURCE_DIR}/cmake/zlib/dummy")
 endif()
-
 find_package (ZLIB REQUIRED)
 
-SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)
-
-include(Extensions)
-
+# UUID
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/uuid/dummy")
 if (WIN32)
 	include_directories("thirdparty/uuid/include/win32/")
@@ -270,43 +227,53 @@ else()
 	include_directories("thirdparty/uuid/include/posix")
 endif()
 add_subdirectory("thirdparty/uuid")
-include_directories(thirdparty/ut)
 set(UUID_FOUND "YES" CACHE STRING "" FORCE)
 set(UUID_LIBRARIES "uuid" CACHE STRING "" FORCE)
 
+# uthash
+include_directories(thirdparty/ut)
 
-if (DISABLE_CURL)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_CURL")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DDISABLE_CURL")
-endif(DISABLE_CURL)
+# cURL
 if(NOT DISABLE_CURL)
 	include(LibcURL)
 	use_bundled_curl(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/curl/dummy")
 	find_package(CURL REQUIRED)
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_CURL")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DDISABLE_CURL")
 endif()
 
+# spdlog
 file(GLOB SPD_SOURCES "thirdparty/spdlog-20170710/include/spdlog/*")
 
-include(ExternalProject)
-
+# RocksDB
 SET(WITH_TOOLS OFF CACHE BOOL "Do not build RocksDB tools")
-if ( NOT APPLE)
-if (ENABLE_PYTHON)
-  SET(BUILD_SHARED_LIBS ON CACHE BOOL "Build yaml cpp shared lib" FORCE)
-else()
-  SET(BUILD_SHARED_LIBS OFF CACHE BOOL "Build yaml cpp shared lib" FORCE)
-endif()
+if (NOT APPLE)
+	if (ENABLE_PYTHON)
+		SET(BUILD_SHARED_LIBS ON CACHE BOOL "Build yaml cpp shared lib" FORCE)
+	else()
+		SET(BUILD_SHARED_LIBS OFF CACHE BOOL "Build yaml cpp shared lib" FORCE)
+	endif()
 endif()
 SET(WITH_TESTS OFF CACHE BOOL "Build RocksDB library (not repo) tests")
 set(ROCKSDB_THIRDPARTY_ROOT "${CMAKE_SOURCE_DIR}/thirdparty/rocksdb/" CACHE STRING "Path to RocksDB root")
-add_subdirectory(thirdparty/yaml-cpp-yaml-cpp-20171024)
 
-include_directories(thirdparty/concurrentqueue)
+# yaml-cpp
+add_subdirectory(thirdparty/yaml-cpp-yaml-cpp-20171024)
 include_directories(thirdparty/yaml-cpp-yaml-cpp-20171024/include)
+
+# concurrentqueue
+include_directories(thirdparty/concurrentqueue)
+
+# RapidJSON
 include_directories(thirdparty/rapidjson-1.1.0/include)
 
-## Expression language extensions
+
+#### Extensions ####
+SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)
+include(Extensions)
+
 if(BOOTSTRAP)
 	# display an error message for those using the bootstrap
     message(FATAL_ERROR "Bootstrapping is no longer needed within the agent")
@@ -323,8 +290,6 @@ endif(WIN32 OR NOT USE_SYSTEM_ZLIB)
 
 createExtension(STANDARD-PROCESSORS "STANDARD PROCESSORS" "Provides standard processors" "extensions/standard-processors" "extensions/standard-processors/tests/")
 
-
-#### EXTENSIONS
 if ((DISABLE_CURL STREQUAL "OFF" OR NOT DISABLE_CURL) AND NOT DISABLE_CIVET)
 	createExtension(HTTP-CURL "HTTP CURL" "This enables RESTProtocol, InvokeHTTP, and the HTTPClient for Site to Site" "extensions/http-curl" "extensions/http-curl/tests/")
 	message("minifi-http-curl will depend on curl-external")
@@ -472,26 +437,14 @@ if ((ENABLE_ALL OR ENABLE_SFTP) AND NOT DISABLE_CURL)
         list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libssh2/dummy")
     else()
         list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libssh2/sys")
-        find_package (LibSSH2 REQUIRED)
     endif()
+	find_package(LibSSH2 REQUIRED)
 
     createExtension(SFTP "SFTP EXTENSIONS" "This enables SFTP support" "extensions/sftp" "extensions/sftp/tests")
-
-    if(NOT USE_SYSTEM_LIBSSH2)
-        message("minifi-sftp will depend on libssh2-external")
-        add_dependencies(minifi-sftp libssh2-external)
-    endif()
-    message("minifi-sftp will depend on curl-external")
-    add_dependencies(minifi-sftp curl-external)
-    if(NOT USE_SYSTEM_ZLIB)
-        message("minifi-sftp will depend on zlib-external")
-        add_dependencies(minifi-sftp zlib-external)
-    endif()
 endif()
 
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN
-
 add_subdirectory(main)
 add_subdirectory(nanofi)
 
@@ -523,80 +476,76 @@ endif()
 message("BUILD_IDENTIFIER is ${BUILD_IDENTIFIER}")
 
 if (WIN32)
-
-# Get the latest abbreviated commit hash of the working branch
-execute_process(
-  COMMAND git log -1 --format=%h
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE BUILD_REV
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-	execute_process(COMMAND 
-			"${CMAKE_CURRENT_SOURCE_DIR}/generateVersion.bat" 
-			"${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" 
-			${CMAKE_CURRENT_SOURCE_DIR} 
-			${CMAKE_CURRENT_SOURCE_DIR}/libminifi/include/agent/ 
+	# Get the latest abbreviated commit hash of the working branch
+	execute_process(
+			COMMAND git log -1 --format=%h
+			WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+			OUTPUT_VARIABLE BUILD_REV
+			OUTPUT_STRIP_TRAILING_WHITESPACE)
+	execute_process(COMMAND
+			"${CMAKE_CURRENT_SOURCE_DIR}/generateVersion.bat"
+			"${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
+			${CMAKE_CURRENT_SOURCE_DIR}
+			${CMAKE_CURRENT_SOURCE_DIR}/libminifi/include/agent/
 			"${CMAKE_CXX_COMPILER}"
-			"${CMAKE_CXX_COMPILER_VERSION}" 
-			"${CMAKE_CXX_FLAGS}" 
+			"${CMAKE_CXX_COMPILER_VERSION}"
+			"${CMAKE_CXX_FLAGS}"
 			\"${selected_extensions}\"
 			"${BUILD_IDENTIFIER}"
 			"${BUILD_REV}")
 else()
 	execute_process(COMMAND 
-		"${CMAKE_CURRENT_SOURCE_DIR}/generateVersion.sh" 
-		"${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" 
-		${CMAKE_CURRENT_SOURCE_DIR} 
-		${CMAKE_CURRENT_SOURCE_DIR}/libminifi/include/agent/ 
-		"${CMAKE_CXX_COMPILER}"
-		"${CMAKE_CXX_COMPILER_VERSION}" 
-		"${CMAKE_CXX_FLAGS}" 
-		"${selected_extensions}" 
-		"${BUILD_IDENTIFIER}")
-
+			"${CMAKE_CURRENT_SOURCE_DIR}/generateVersion.sh"
+			"${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
+			${CMAKE_CURRENT_SOURCE_DIR}
+			${CMAKE_CURRENT_SOURCE_DIR}/libminifi/include/agent/
+			"${CMAKE_CXX_COMPILER}"
+			"${CMAKE_CXX_COMPILER_VERSION}"
+			"${CMAKE_CXX_FLAGS}"
+			"${selected_extensions}"
+			"${BUILD_IDENTIFIER}")
 endif()
+
 # Generate source assembly
 set(ASSEMBLY_BASE_NAME "${CMAKE_PROJECT_NAME}-${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 if(WIN32)
-set(CPACK_ALL_INSTALL_TYPES Full Developer)
-set(CPACK_COMPONENT_LIBRARIES_INSTALL_TYPES Developer Full)
-set(CPACK_COMPONENT_HEADERS_INSTALL_TYPES Developer Full)
-set(CPACK_COMPONENT_APPLICATIONS_INSTALL_TYPES Full)
-set(CPACK_WIX_UI_BANNER "${CMAKE_CURRENT_SOURCE_DIR}/msi/minifi-logo-png-banner.png")
-set(CPACK_WIX_UI_DIALOG "${CMAKE_CURRENT_SOURCE_DIR}/msi/bgr.png")
+	set(CPACK_ALL_INSTALL_TYPES Full Developer)
+	set(CPACK_COMPONENT_LIBRARIES_INSTALL_TYPES Developer Full)
+	set(CPACK_COMPONENT_HEADERS_INSTALL_TYPES Developer Full)
+	set(CPACK_COMPONENT_APPLICATIONS_INSTALL_TYPES Full)
+	set(CPACK_WIX_UI_BANNER "${CMAKE_CURRENT_SOURCE_DIR}/msi/minifi-logo-png-banner.png")
+	set(CPACK_WIX_UI_DIALOG "${CMAKE_CURRENT_SOURCE_DIR}/msi/bgr.png")
 
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/conf/" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/conf/")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/README.md" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/NOTICE" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+	file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/conf/" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/conf/")
+	file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+	file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/README.md" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+	file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/NOTICE" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/msi/x64.wsi")
-elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
-set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/msi/x86.wsi")
-endif()
-    set(CPACK_WIX_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/msi/WixWin.wsi")
-
+	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+		set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/msi/x64.wsi")
+	elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+		set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/msi/x86.wsi")
+	endif()
+	set(CPACK_WIX_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/msi/WixWin.wsi")
 else()
-set(CPACK_SOURCE_GENERATOR "TGZ")
+	set(CPACK_SOURCE_GENERATOR "TGZ")
 endif(WIN32)
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${ASSEMBLY_BASE_NAME}-source")
 set(CPACK_SOURCE_IGNORE_FILES "/docs/generated/;${CMAKE_SOURCE_DIR}/build/;~$;${CPACK_SOURCE_IGNORE_FILES};${CMAKE_SOURCE_DIR}/.git/;${CMAKE_SOURCE_DIR}/.idea/;${CMAKE_SOURCE_DIR}/cmake-build-debug/;${CMAKE_SOURCE_DIR}/extensions/expression-language/Scanner.h;${CMAKE_SOURCE_DIR}/extensions/expression-language/Scanner.cpp;${CMAKE_SOURCE_DIR}/extensions/expression-language/Parser.cpp;${CMAKE_SOURCE_DIR}/extensions/expression-language/Parser.hpp;${CMAKE_SOURCE_DIR}/extensions/expression-language/scanner.hh;${CMAKE_SOURCE_DIR}/extensions/expression-language/position.hh;${CMAKE_SOURCE_DIR}/extensions/expression-language/location.hh;${CMAKE_SOURCE_DIR}/extensions/expression-language/stack.hh")
 
 # Generate binary assembly. Exclude conf for windows since we'll be doing the work in the WiX template
 if (NOT WIN32)
-install(FILES conf/minifi.properties conf/minifi-log.properties conf/minifi-uid.properties conf/config.yml
-        DESTINATION conf
-        COMPONENT bin)
-        
-install(DIRECTORY extensions/pythonprocessors/
-        DESTINATION minifi-python
-        COMPONENT bin)
+	install(FILES conf/minifi.properties conf/minifi-log.properties conf/minifi-uid.properties conf/config.yml
+			DESTINATION conf
+			COMPONENT bin)
 
+	install(DIRECTORY extensions/pythonprocessors/
+			DESTINATION minifi-python
+			COMPONENT bin)
 
-install(PROGRAMS bin/minifi.sh
-        DESTINATION bin
-        COMPONENT bin)
+	install(PROGRAMS bin/minifi.sh
+			DESTINATION bin
+			COMPONENT bin)
 endif()
 
 install(FILES LICENSE README.md NOTICE
@@ -604,26 +553,26 @@ install(FILES LICENSE README.md NOTICE
         COMPONENT bin)
 
 if(WIN32)
-#preference is to use the exe type so that we have a solution that works well for cross compilation
-#but that leaves the onus up to the developer, so until we can automate some of that build let's enforce
-#the exe here temporarily
-#TODO: Remove this and automate this step.
-#install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/main/minifi.exe
-        #DESTINATION bin
-        #COMPONENT bin)
+	#preference is to use the exe type so that we have a solution that works well for cross compilation
+	#but that leaves the onus up to the developer, so until we can automate some of that build let's enforce
+	#the exe here temporarily
+	#TODO: Remove this and automate this step.
+	#install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/main/minifi.exe
+			#DESTINATION bin
+			#COMPONENT bin)
 else()
-install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/main/minifi
-        DESTINATION bin
-        COMPONENT bin)   
+	install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/main/minifi
+			DESTINATION bin
+			COMPONENT bin)
 endif() 
         
 			
 if (WIN32)
-set(CPACK_GENERATOR "WIX")
-set(CPACK_WIX_UPGRADE_GUID "FE29F801-3486-4E9E-AFF9-838C1A5C8D59")
-set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/msi/minifi-logo-ico.ico")
+	set(CPACK_GENERATOR "WIX")
+	set(CPACK_WIX_UPGRADE_GUID "FE29F801-3486-4E9E-AFF9-838C1A5C8D59")
+	set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/msi/minifi-logo-ico.ico")
 else()
-set(CPACK_GENERATOR "TGZ")
+	set(CPACK_GENERATOR "TGZ")
 endif()
 set(CPACK_COMPONENT_INCLUDE_TOPLEVEL_DIRECTORY 1)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Apache NiFi MiNiFi C++ version ${VERSION}")
@@ -635,11 +584,11 @@ set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/msi/LICENSE.txt")
 if(NOT WIN32)
-set(CPACK_PACKAGE_FILE_NAME "${ASSEMBLY_BASE_NAME}")
-set(CPACK_GENERATOR "TGZ")
-set(CPACK_BINARY_TGZ, "ON")
+	set(CPACK_PACKAGE_FILE_NAME "${ASSEMBLY_BASE_NAME}")
+	set(CPACK_GENERATOR "TGZ")
+	set(CPACK_BINARY_TGZ, "ON")
 else()
-set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}")
+	set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}")
 endif()
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "ApacheNiFiMiNiFi")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)

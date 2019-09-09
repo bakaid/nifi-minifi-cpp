@@ -67,6 +67,8 @@ add_dependencies(minifi-rdkafka-extensions kafka-external)
 include_directories(${KAFKA_INCLUDE})
 target_link_libraries(minifi-rdkafka-extensions ${KAFKA_LIBRARY})
 
+target_link_libraries(minifi-rdkafka-extensions minifi)
+
 SET (RDKAFKA-EXTENSIONS minifi-rdkafka-extensions PARENT_SCOPE)
 
 register_extension(minifi-rdkafka-extensions)
