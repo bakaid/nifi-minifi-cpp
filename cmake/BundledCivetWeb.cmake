@@ -93,7 +93,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     file(MAKE_DIRECTORY ${CIVETWEB_INCLUDE_DIR})
 
     if (OPENSSL_FOUND)
-        set_property(TARGET civetweb-cpp APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+        set_property(TARGET c-library APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
     endif(OPENSSL_FOUND)
     set_property(TARGET c-library APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CIVETWEB_INCLUDE_DIR})
     set_property(TARGET civetweb-cpp APPEND PROPERTY INTERFACE_LINK_LIBRARIES c-library)

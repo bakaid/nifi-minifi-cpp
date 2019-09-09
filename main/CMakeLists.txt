@@ -24,7 +24,6 @@ IF(POLICY CMP0048)
 ENDIF(POLICY CMP0048)
 
 include_directories(../libminifi/include ../thirdparty/cron ../thirdparty/spdlog-20170710/include ../thirdparty/concurrentqueue ../thirdparty/yaml-cpp-yaml-cpp-20171024/include ../thirdparty/rapidjson-1.1.0/include ../thirdparty/)
-include_directories(${JEMALLOC_INCLUDE_DIRS})
 
 if(WIN32)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
@@ -75,7 +74,7 @@ target_wholearchive_library(minifiexe core-minifi)
 
 target_wholearchive_library(minifiexe minifi)
 
-target_link_libraries(minifiexe yaml-cpp ${UUID_LIBRARIES} ${JEMALLOC_LIBRARIES}) #
+target_link_libraries(minifiexe yaml-cpp ${UUID_LIBRARIES} JeMalloc::JeMalloc)
 
 if (WIN32)
 	include_directories("../thirdparty/Simple-Windows-Posix-Semaphore")

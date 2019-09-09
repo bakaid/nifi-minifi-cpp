@@ -150,37 +150,9 @@ set(PASSTHROUGH_CMAKE_ARGS -DANDROID_ABI=${ANDROID_ABI}
 if(NOT WIN32)
 	if (ENABLE_JNI)
 		if (NOT DISABLE_JEMALLOC)
-			set(BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/jemalloc")
-
-			set(DIR "${BASE_DIR}/extensions/jemalloc-src")
-			set(JE_BYPRODUCT "${DIR}/lib/libjemalloc.a")
-			ExternalProject_Add(
-					jemalloc-external
-					GIT_REPOSITORY "https://github.com/jemalloc/jemalloc.git"
-					GIT_TAG "61efbda7098de6fe64c362d309824864308c36d4"
-					PREFIX "${BASE_DIR}/extensions/jemalloc"
-					BUILD_IN_SOURCE true
-					SOURCE_DIR "${DIR}"
-					BUILD_COMMAND make
-					CMAKE_COMMAND ""
-					UPDATE_COMMAND ""
-					BUILD_BYPRODUCTS ${JE_BYPRODUCT}
-					INSTALL_COMMAND ${CMAKE_COMMAND}  -E echo "Skipping install step."
-					CONFIGURE_COMMAND ""
-					PATCH_COMMAND ./autogen.sh && ./configure
-					STEP_TARGETS build
-					EXCLUDE_FROM_ALL TRUE
-			)
-
-			add_library(jemalloc STATIC IMPORTED)
-			set_target_properties(jemalloc PROPERTIES IMPORTED_LOCATION "${JE_BYPRODUCT}")
-			add_dependencies(jemalloc jemalloc-external)
-			set(JEMALLOC_FOUND "YES" CACHE STRING "" FORCE)
-			set(JEMALLOC_INCLUDE_DIRS "${DIR}/include" CACHE STRING "" FORCE)
-			set(JEMALLOC_LIBRARIES jemalloc CACHE STRING "" FORCE)
-			set(JEMALLOC_LIBRARY jemalloc CACHE STRING "" FORCE)
-			set(JEMALLOC_LIBRARY jemalloc CACHE STRING "" FORCE)
-
+			include(BundledJemalloc)
+			use_bundled_jemalloc(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+			message("jemalloc found at ${JEMALLOC_LIBRARIES}")
 		endif()
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_JNI")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_JNI")
@@ -198,7 +170,7 @@ endif()
 
 # OpenSSL/LibreSSL
 if (NOT OPENSSL_OFF)
-	include(LibreSSL)
+	include(BundledLibreSSL)
 	use_libre_ssl("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl")
 	
@@ -206,13 +178,13 @@ if (NOT OPENSSL_OFF)
 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOPENSSL_SUPPORT")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOPENSSL_SUPPORT")
-	MESSAGE("OpenSSL found at ${OPENSSL_LIBRARIES}")
+	message("OpenSSL found at ${OPENSSL_LIBRARIES}")
 else()
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/winssl")
 endif()
 
 # zlib
-include(Compression)
+include(BundledZLIB)
 if(WIN32 OR NOT USE_SYSTEM_ZLIB)
 	use_bundled_zlib(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 	list(APPEND CMAKE_MODULE_PATH "${SOURCE_DIR}/cmake/zlib/dummy")
@@ -235,7 +207,7 @@ include_directories(thirdparty/ut)
 
 # cURL
 if(NOT DISABLE_CURL)
-	include(LibcURL)
+	include(BundledLibcURL)
 	use_bundled_curl(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/curl/dummy")
 	find_package(CURL REQUIRED)
@@ -309,7 +281,7 @@ endif()
 
 option(DISABLE_CIVET "Disables CivetWeb components." OFF)
 if (NOT DISABLE_CIVET)
-	include(CivetWeb)
+	include(BundledCivetWeb)
 	use_bundled_civetweb(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/civetweb/dummy")
 
@@ -432,7 +404,7 @@ endif()
 option(ENABLE_SFTP "Enables SFTP support." OFF)
 if ((ENABLE_ALL OR ENABLE_SFTP) AND NOT DISABLE_CURL)
     if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
-        include(LibSSH2)
+        include(BundledLibSSH2)
         use_bundled_libssh2(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
         list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libssh2/dummy")
     else()

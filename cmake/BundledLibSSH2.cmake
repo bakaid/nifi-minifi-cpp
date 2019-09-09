@@ -81,4 +81,4 @@ function(use_bundled_libssh2 SOURCE_DIR BINARY_DIR)
 
     set_property(TARGET libssh2 APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto ZLIB::ZLIB)
     set_property(TARGET libssh2 APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBSSH2_INCLUDE_DIR})
-endfunction(use_libre_ssl)
+endfunction(use_bundled_libssh2)

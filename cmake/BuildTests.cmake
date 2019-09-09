@@ -93,6 +93,7 @@ add_library(${SPD_LIB} STATIC ${SPD_SOURCES})
 
 SET(TEST_BASE_LIB test_base)
 add_library(${TEST_BASE_LIB} STATIC "${TEST_DIR}/TestBase.cpp" "${TEST_DIR}/RandomServerSocket.cpp")
+target_link_libraries(${TEST_BASE_LIB} core-minifi)
 target_include_directories(${TEST_BASE_LIB} BEFORE PRIVATE "${CMAKE_SOURCE_DIR}/thirdparty/catch")
 target_include_directories(${TEST_BASE_LIB} BEFORE PRIVATE "${CMAKE_SOURCE_DIR}/libminifi/include/")
 target_include_directories(${TEST_BASE_LIB} BEFORE PRIVATE "${CMAKE_SOURCE_DIR}/thirdparty/cron")
