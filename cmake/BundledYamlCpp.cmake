@@ -22,16 +22,19 @@ function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
         set(BYPRODUCT "libyaml-cpp.a")
     endif()
 
+    set(YAMLCPP_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
+            "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/yaml-cpp-install")
+
     ExternalProject_Add(
             yaml-cpp-external
             SOURCE_DIR "${SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024"
-            CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-            BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024/${BYPRODUCT}"
+            CMAKE_ARGS ${YAMLCPP_CMAKE_ARGS}
+            BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/yaml-cpp-install/${BYPRODUCT}"
     )
 
     set(YAMLCPP_FOUND "YES" CACHE STRING "" FORCE)
     set(YAMLCPP_INCLUDE_DIR "${SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024/include" CACHE STRING "" FORCE)
-    set(YAMLCPP_LIBRARY "${BINARY_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024/${BYPRODUCT}" CACHE STRING "" FORCE)
+    set(YAMLCPP_LIBRARY "${BINARY_DIR}/thirdparty/yaml-cpp-install/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(YAMLCPP_LIBRARIES ${YAMLCPP_LIBRARY} CACHE STRING "" FORCE)
 
     add_library(yaml-cpp STATIC IMPORTED)
