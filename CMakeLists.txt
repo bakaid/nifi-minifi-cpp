@@ -346,6 +346,8 @@ endif()
 ## Create LibRdKafka Extension
 option(ENABLE_LIBRDKAFKA "Enables the librdkafka extension." OFF)
 if (ENABLE_ALL OR ENABLE_LIBRDKAFKA)
+	include(BundledLibRdKafka)
+	use_bundled_librdkafka(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 	createExtension(RDKAFKA-EXTENSIONS "RDKAFKA EXTENSIONS" "This Enables librdkafka functionality including PublishKafka" "extensions/librdkafka" "${TEST_DIR}/kafka-tests")
 endif()
 
