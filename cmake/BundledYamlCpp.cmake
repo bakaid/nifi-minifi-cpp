@@ -23,7 +23,8 @@ function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
     endif()
 
     set(YAMLCPP_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-            "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/yaml-cpp-install")
+            "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/yaml-cpp-install"
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON)
 
     ExternalProject_Add(
             yaml-cpp-external
