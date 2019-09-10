@@ -25,6 +25,7 @@ function(use_bundled_uuid SOURCE_DIR BINARY_DIR)
     ExternalProject_Add(
             uuid-external
             SOURCE_DIR "${SOURCE_DIR}/thirdparty/uuid"
+            BINARY_DIR "${BINARY_DIR}/thirdparty/uuid"
             CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             INSTALL_COMMAND ""
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/uuid/${BYPRODUCT}"

@@ -58,6 +58,7 @@ ExternalProject_Add(
                "-DCMAKE_C_FLAGS=${CURL_C_FLAGS}"
                "-DCMAKE_INSTALL_LIBDIR=lib"
                "-DCMAKE_CXX_FLAGS=${CURL_CXX_FLAGS}"
+    BUILD_BYPRODUCTS "${BYPRODUCT}"
     EXCLUDE_FROM_ALL TRUE
   )
 add_dependencies(kafka-external libressl-portable)
