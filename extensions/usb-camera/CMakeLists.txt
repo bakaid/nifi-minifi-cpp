@@ -19,9 +19,6 @@
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 
-find_package(PkgConfig)
-pkg_check_modules(LIBUSB libusb-1.0)
-
 find_package(png QUIET)
 if(PNG_FOUND)
     set(PNG_LINK_FLAGS ${PNG_LIBRARIES})
@@ -43,8 +40,12 @@ if (NOT PNG_FOUND)
     message(FATAL_ERROR "A compatible PNG library is required to build GetUSBCamera.")
 endif()
 
-
-include_directories(../../thirdparty/libuvc-0.0.6/include)
+if(NOT TARGET PNG::PNG)
+    add_library(PNG::PNG UNKNOWN IMPORTED)
+    set_target_properties(PNG::PNG PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${PNG_INCLUDE_DIRS}"
+            INTERFACE_LINK_LIBRARIES ${PNG_LDFLAGS})
+endif()
 
 file(GLOB SOURCES  "*.cpp")
 
@@ -59,10 +60,7 @@ endif()
 
 find_package(UUID REQUIRED)
 target_link_libraries(minifi-usb-camera-extensions ${LIBMINIFI})
-target_link_libraries(minifi-usb-camera-extensions ${PNG_LINK_FLAGS})
-target_link_libraries(minifi-usb-camera-extensions uvc_static)
-target_link_libraries(minifi-usb-camera-extensions ${LIBUSB_LIBRARIES})
-target_link_libraries (minifi-usb-camera-extensions ZLIB::ZLIB)
+target_link_libraries(minifi-usb-camera-extensions libuvc PNG::PNG)
 
 SET (USB-CAMERA-EXTENSIONS minifi-usb-camera-extensions PARENT_SCOPE)
 

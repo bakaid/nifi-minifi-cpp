@@ -376,7 +376,9 @@ endif()
 ## USB camera extensions
 option(ENABLE_USB_CAMERA "Enables USB camera support." OFF)
 if (ENABLE_ALL OR ENABLE_USB_CAMERA)
-    createExtension(USB-CAMERA-EXTENSIONS "USB CAMERA EXTENSIONS" "This enables USB camera support" "extensions/usb-camera" "${TEST_DIR}/usb-camera-tests" "TRUE" "thirdparty/libuvc-0.0.6")
+	include(BundledLibUvc)
+	use_bundled_libuvc(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+    createExtension(USB-CAMERA-EXTENSIONS "USB CAMERA EXTENSIONS" "This enables USB camera support" "extensions/usb-camera" "${TEST_DIR}/usb-camera-tests")
 endif()
 
 ## TensorFlow extensions
