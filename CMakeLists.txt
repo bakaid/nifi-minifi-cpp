@@ -368,7 +368,9 @@ endif()
 ## SQLite extensions
 option(ENABLE_SQLITE "Disables the scripting extensions." OFF)
 if (ENABLE_ALL OR ENABLE_SQLITE)
-    createExtension(SQLITE-EXTENSIONS "SQLITE EXTENSIONS" "This enables sqlite" "extensions/sqlite" "${TEST_DIR}/sqlite-tests" "TRUE" "thirdparty/sqlite")
+	include(BundledSQLite)
+	use_bundled_sqlite(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+    createExtension(SQLITE-EXTENSIONS "SQLITE EXTENSIONS" "This enables sqlite" "extensions/sqlite" "${TEST_DIR}/sqlite-tests")
 endif()
 
 ## USB camera extensions

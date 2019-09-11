@@ -19,8 +19,6 @@
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt) 
 
-include_directories("${CMAKE_SOURCE_DIR}/thirdparty/sqlite")
-
 file(GLOB SOURCES "*.cpp")
 
 add_library(minifi-sqlite-extensions STATIC ${SOURCES})
@@ -33,7 +31,7 @@ if(CMAKE_THREAD_LIBS_INIT)
 endif()
 
 target_link_libraries(minifi-sqlite-extensions ${LIBMINIFI})
-target_link_libraries(minifi-sqlite-extensions sqlite)
+target_link_libraries(minifi-sqlite-extensions SQLite::SQLite3)
 
 
 SET (SQLITE-EXTENSIONS minifi-sqlite-extensions PARENT_SCOPE)
