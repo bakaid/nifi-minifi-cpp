@@ -20,9 +20,9 @@ function(use_bundled_libuvc SOURCE_DIR BINARY_DIR)
     pkg_check_modules(LIBUSB libusb-1.0)
 
     if (WIN32)
-        set(BYPRODUCT "lib/libuvc.lib")
+        set(BYPRODUCT "lib/${CMAKE_LIBRARY_ARCHITECTURE}/libuvc.lib")
     else()
-        set(BYPRODUCT "lib/libuvc.a")
+        set(BYPRODUCT "lib/${CMAKE_LIBRARY_ARCHITECTURE}/libuvc.a")
     endif()
 
     if (WIN32)

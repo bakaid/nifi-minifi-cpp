@@ -19,7 +19,7 @@
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 
-find_package(png QUIET)
+find_package(PNG)
 if(PNG_FOUND)
     set(PNG_LINK_FLAGS ${PNG_LIBRARIES})
 else()
@@ -43,8 +43,8 @@ endif()
 if(NOT TARGET PNG::PNG)
     add_library(PNG::PNG UNKNOWN IMPORTED)
     set_target_properties(PNG::PNG PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${PNG_INCLUDE_DIRS}"
-            INTERFACE_LINK_LIBRARIES ${PNG_LDFLAGS})
+            INTERFACE_INCLUDE_DIRECTORIES "${PNG_INCLUDE_DIR}"
+            INTERFACE_LINK_LIBRARIES ${PNG_LINK_FLAGS})
 endif()
 
 file(GLOB SOURCES  "*.cpp")
