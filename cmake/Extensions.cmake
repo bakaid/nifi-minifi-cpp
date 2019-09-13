@@ -114,8 +114,13 @@ function (build_git_project target prefix repourl repotag)
 	execute_process(COMMAND ${CMAKE_COMMAND} ..
 			WORKING_DIRECTORY ${exec_dir}/build
 			)
-	execute_process(COMMAND ${CMAKE_COMMAND} --build . --parallel ${PARALLELISM}
-			WORKING_DIRECTORY ${exec_dir}/build
-			)
-
+	if(${CMAKE_VERSION} VERSION_EQUAL "3.12.0" OR ${CMAKE_VERSION} VERSION_GREATER "3.12.0")
+		execute_process(COMMAND ${CMAKE_COMMAND} --build . --parallel ${PARALLELISM}
+				WORKING_DIRECTORY ${exec_dir}/build
+				)
+	else()
+		execute_process(COMMAND ${CMAKE_COMMAND} --build .
+				WORKING_DIRECTORY ${exec_dir}/build
+				)
+	endif()
 endfunction()
