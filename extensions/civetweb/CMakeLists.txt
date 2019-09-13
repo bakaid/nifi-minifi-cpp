@@ -29,7 +29,7 @@ file(GLOB SOURCES  "processors/*.cpp")
 add_library(minifi-civet-extensions STATIC ${SOURCES})
 set_property(TARGET minifi-civet-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(minifi-civet-extensions ${LIBMINIFI})
-target_link_libraries(minifi-civet-extensions c-library civetweb-cpp)
+target_link_libraries(minifi-civet-extensions CIVETWEB::c-library CIVETWEB::civetweb-cpp)
 
 if(THREADS_HAVE_PTHREAD_ARG)
   target_compile_options(PUBLIC minifi-civet-extensions "-pthread")

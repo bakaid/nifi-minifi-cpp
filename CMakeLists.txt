@@ -174,12 +174,11 @@ if (NOT OPENSSL_OFF)
 	include(BundledLibreSSL)
 	use_libre_ssl("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl")
-	
+
 	find_package (OpenSSL REQUIRED)
 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOPENSSL_SUPPORT")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOPENSSL_SUPPORT")
-	message("OpenSSL found at ${OPENSSL_LIBRARIES}")
 else()
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/winssl")
 endif()
