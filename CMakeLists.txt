@@ -48,8 +48,6 @@ option(BUILD_SHARED_LIBS "Build yaml cpp shared lib" OFF)
 
 cmake_dependent_option(USE_SYSTEM_ZLIB "Instructs the build system to search for and use a zlib library available in the host system" ON "NOT STATIC_BUILD" OFF)
 
-cmake_dependent_option(USE_SYSTEM_LIBSSH2 "Instructs the build system to search for and use a libssh2 library available in the host system" OFF "NOT STATIC_BUILD" OFF)
-
 option(USE_SYSTEM_BZIP2 "Instructs the build system to search for and use a bzip2 library available in the host system" ON)
 option(BUILD_ROCKSDB "Instructs the build system to use RocksDB from the third party directory" ON)
 option(FORCE_WINDOWS "Instructs the build system to force Windows builds when WIN32 is specified" OFF)
@@ -413,14 +411,9 @@ endif()
 ## SFTP extensions
 option(ENABLE_SFTP "Enables SFTP support." OFF)
 if ((ENABLE_ALL OR ENABLE_SFTP) AND NOT DISABLE_CURL)
-    if(WIN32 OR NOT USE_SYSTEM_LIBSSH2)
-        include(BundledLibSSH2)
-        use_bundled_libssh2(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-        list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libssh2/dummy")
-    else()
-        list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libssh2/sys")
-    endif()
-	find_package(LibSSH2 REQUIRED)
+	include(BundledLibSSH2)
+	use_bundled_libssh2(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libssh2/dummy")
 
     createExtension(SFTP "SFTP EXTENSIONS" "This enables SFTP support" "extensions/sftp" "extensions/sftp/tests")
 endif()

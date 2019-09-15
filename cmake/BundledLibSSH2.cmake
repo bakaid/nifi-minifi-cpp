@@ -18,67 +18,63 @@
 function(use_bundled_libssh2 SOURCE_DIR BINARY_DIR)
     message("Using bundled libssh2")
 
+    # Define patch step
+    if (WIN32)
+        string(REPLACE "/" "\\" SOURCE_DIR_DIR_BACKSLASH ${SOURCE_DIR})
+        set(PC copy /Y ${SOURCE_DIR_DIR_BACKSLASH}\\thirdparty\\libssh2\\CMakeLists.txt CMakeLists.txt)
+    else()
+        set(PC patch -p1 < ${SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch)
+    endif()
+
+    # Define byproducts
     if (WIN32)
         set(BYPRODUCT "lib/libssh2.lib")
     else()
         set(BYPRODUCT "lib/libssh2.a")
     endif()
 
-    if (WIN32)
-        string(REPLACE "/" "\\" CMAKE_CURRENT_SOURCE_DIR_BACKSLASH ${CMAKE_CURRENT_SOURCE_DIR})
-        set(PC copy /Y ${CMAKE_CURRENT_SOURCE_DIR_BACKSLASH}\\thirdparty\\libssh2\\CMakeLists.txt CMakeLists.txt)
-    else()
-        set(PC patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch)
-    endif()
-
+    # Set build options
     set(LIBSSH2_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-            "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install"
+            "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libssh2-install"
             -DENABLE_ZLIB_COMPRESSION=ON
             -DCRYPTO_BACKEND=OpenSSL
             -DBUILD_TESTING=OFF
             -DBUILD_EXAMPLES=OFF)
 
-    list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl)
-    list(APPEND LIBSSH2_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
-            "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
-            "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
-            "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
-    if(NOT USE_SYSTEM_ZLIB OR USE_SYSTEM_ZLIB STREQUAL "OFF")
-        list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/zlib/dummy)
-        list(APPEND LIBSSH2_CMAKE_ARGS "-DZLIB_BYPRODUCT_INCLUDE=${ZLIB_BYPRODUCT_INCLUDE}"
-                "-DZLIB_BYPRODUCT=${ZLIB_BYPRODUCT}")
-    endif()
-    if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
-        string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
-        list(APPEND LIBSSH2_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    endif()
+    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
+    list(APPEND LIBSSH2_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
+    list(APPEND LIBSSH2_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
 
+    # Build project
     ExternalProject_Add(
             libssh2-external
             URL "https://www.libssh2.org/download/libssh2-1.8.2.tar.gz"
-            SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-src"
+            URL_HASH "SHA256=088307d9f6b6c4b8c13f34602e8ff65d21c2dc4d55284dfe15d502c4ee190d67"
+            SOURCE_DIR "${BINARY_DIR}/thirdparty/libssh2-src"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${LIBSSH2_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
-            BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install/${BYPRODUCT}"
+            BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libssh2-install/${BYPRODUCT}"
     )
 
-    add_dependencies(libssh2-external OpenSSL::Crypto)
-    add_dependencies(libssh2-external ZLIB::ZLIB)
+    # Set dependencies
+    add_dependencies(libssh2-external OpenSSL::Crypto ZLIB::ZLIB)
 
-    set(LIBSSH2_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libssh2/" CACHE STRING "" FORCE)
-    set(LIBSSH2_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libssh2-install/" CACHE STRING "" FORCE)
-    set(LIBSSH2_BYPRODUCT_DIR "${BYPRODUCT}" CACHE STRING "" FORCE)
+    # Set variables
+    set(LIBSSH2_FOUND "YES" CACHE STRING "" FORCE)
+    set(LIBSSH2_INCLUDE_DIR "${BINARY_DIR}/thirdparty/libssh2-install/include" CACHE STRING "" FORCE)
+    set(LIBSSH2_LIBRARY "${BINARY_DIR}/thirdparty/libssh2-install/${BYPRODUCT}" CACHE STRING "" FORCE)
+
+    # Set exported variables for FindPackage.cmake
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_LIBSSH2_INCLUDE_DIR=${LIBSSH2_INCLUDE_DIR}" CACHE STRING "" FORCE)
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_LIBSSH2_LIBRARY=${LIBSSH2_LIBRARY}" CACHE STRING "" FORCE)
+
+    # Create imported targets
+    file(MAKE_DIRECTORY ${LIBSSH2_INCLUDE_DIR})
 
     add_library(libssh2 STATIC IMPORTED)
-    set_target_properties(libssh2 PROPERTIES IMPORTED_LOCATION "${LIBSSH2_BIN_DIR}${BYPRODUCT}")
-
+    set_target_properties(libssh2 PROPERTIES IMPORTED_LOCATION "${LIBSSH2_LIBRARY}")
     add_dependencies(libssh2 libssh2-external)
-    set(LIBSSH2_FOUND "YES" CACHE STRING "" FORCE)
-    set(LIBSSH2_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libssh2/include" CACHE STRING "" FORCE)
-    set(LIBSSH2_LIBRARY "${LIBSSH2_BIN_DIR}${BYPRODUCT}" CACHE STRING "" FORCE)
-    set(LIBSSH2_LIBRARIES ${LIBSSH2_LIBRARY} CACHE STRING "" FORCE)
-
     set_property(TARGET libssh2 APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto ZLIB::ZLIB)
     set_property(TARGET libssh2 APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBSSH2_INCLUDE_DIR})
 endfunction(use_bundled_libssh2)

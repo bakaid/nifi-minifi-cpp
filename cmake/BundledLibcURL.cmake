@@ -16,6 +16,12 @@
 # under the License.
 
 function(use_bundled_curl SOURCE_DIR BINARY_DIR)
+    # Define patch step
+    if (WIN32)
+        set(PC "PATCH_COMMAND ./buildconf.bat")
+    endif()
+
+    # Define byproducts
     get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
 
     if ("${LIB64}" STREQUAL "TRUE" AND (NOT WIN32 AND NOT APPLE))
@@ -30,12 +36,9 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
         set(BYPRODUCT "lib${LIBSUFFIX}/libcurl.a")
     endif()
 
-    if (WIN32)
-        set (PC "PATCH_COMMAND ./buildconf.bat")
-    endif()
-
+    # Set build options
     set(CURL_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-            "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install"
+            "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/curl-install"
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
             -DBUILD_CURL_EXE=OFF
             -DBUILD_TESTING=OFF
@@ -44,7 +47,7 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             -DCMAKE_USE_OPENSSL=ON
             -DCURL_DISABLE_CRYPTO_AUTH=ON
             -DCMAKE_USE_LIBSSH2=OFF
-            "-DCMAKE_DEBUG_POSTFIX="
+            -DCMAKE_DEBUG_POSTFIX=
             -DHAVE_GLIBC_STRERROR_R=1
             -DHAVE_GLIBC_STRERROR_R__TRYRUN_OUTPUT=""
             -DHAVE_POSIX_STRERROR_R=0
@@ -52,49 +55,43 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             -DHAVE_POLL_FINE_EXITCODE=0
             -DHAVE_FSETXATTR_5=0
             -DHAVE_FSETXATTR_5__TRYRUN_OUTPUT=""
-            "-DCMAKE_C_FLAGS=${CURL_C_FLAGS}"
-            "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-            "-DCMAKE_CXX_FLAGS=${CURL_CXX_FLAGS}"
             )
 
-    list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl)
-    list(APPEND CURL_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
-            "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
-            "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
-            "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
-    if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
-        string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
-        list(APPEND CURL_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    endif()
+    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
+    list(APPEND CURL_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
+    list(APPEND CURL_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
 
+    # Build project
     ExternalProject_Add(
             curl-external
-            GIT_REPOSITORY "https://github.com/curl/curl.git"
-            GIT_TAG "curl-7_64_0"
-            SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-src"
+            URL "https://curl.haxx.se/download/curl-7.64.0.tar.gz"
+            URL_HASH "SHA256=cb90d2eb74d4e358c1ed1489f8e3af96b50ea4374ad71f143fa4595e998d81b5"
+            SOURCE_DIR "${BINARY_DIR}/thirdparty/curl-src"
+            LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${CURL_CMAKE_ARGS}
             ${PC}
-            BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install/${BYPRODUCT}"
+            BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/curl-install/${BYPRODUCT}"
     )
 
+    # Set dependencies
     add_dependencies(curl-external OpenSSL::SSL OpenSSL::Crypto)
 
-    set(CURL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl/" CACHE STRING "" FORCE)
-    set(CURL_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install/" CACHE STRING "" FORCE)
-    set(CURL_BYPRODUCT_DIR "${BYPRODUCT}" CACHE STRING "" FORCE)
-
-    add_library(curl STATIC IMPORTED)
-    set_target_properties(curl PROPERTIES IMPORTED_LOCATION "${CURL_BIN_DIR}${BYPRODUCT}")
-
+    # Set variables
     set(CURL_FOUND "YES")
     set(CURL_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl/include")
     set(CURL_LIBRARY "${CURL_BIN_DIR}${BYPRODUCT}" CACHE STRING "" FORCE)
     set(CURL_LIBRARIES "${CURL_LIBRARY}" CACHE STRING "" FORCE)
 
+    # Set exported variables for FindPackage.cmake
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CURL_INCLUDE_DIRS=${CURL_INCLUDE_DIRS}" CACHE STRING "" FORCE)
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CURL_LIBRARY=${CURL_LIBRARY}" CACHE STRING "" FORCE)
+
+    # Create imported targets
+    file(MAKE_DIRECTORY ${CURL_INCLUDE_DIRS})
+
     add_library(CURL::libcurl STATIC IMPORTED)
     set_target_properties(CURL::libcurl PROPERTIES IMPORTED_LOCATION "${CURL_LIBRARY}")
     add_dependencies(CURL::libcurl curl-external)
-    file(MAKE_DIRECTORY ${CURL_INCLUDE_DIRS})
     set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIRS})
     set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
 endfunction(use_bundled_curl SOURCE_DIR BINARY_DIR)

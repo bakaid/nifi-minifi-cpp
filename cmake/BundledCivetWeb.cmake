@@ -18,7 +18,7 @@
 function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     message("Using bundled civetweb")
 
-    # Patch source
+    # Define patch step
     if (WIN32)
     else()
         set(PC patch -p1 < ${SOURCE_DIR}/thirdparty/civetweb/civetweb.patch)
@@ -55,15 +55,9 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
         list(APPEND CIVETWEB_CMAKE_ARGS -DCIVETWEB_ENABLE_SSL=OFF)
     endif()
 
-    list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${SOURCE_DIR}/cmake/ssl)
-    list(APPEND CIVETWEB_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
-            "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
-            "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
-            "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
-    if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
-        string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
-        list(APPEND CIVETWEB_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    endif()
+    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
+    list(APPEND CIVETWEB_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
+    list(APPEND CIVETWEB_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
 
     # Build project
     ExternalProject_Add(
@@ -77,23 +71,28 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
             BUILD_BYPRODUCTS "${CIVETWEB_LIBRARIES_LIST}"
     )
 
+    # Set dependencies
+    if (NOT OPENSSL_OFF)
+        add_dependencies(civetweb-external OpenSSL::SSL OpenSSL::Crypto)
+    endif()
+
     # Set variables
     set(CIVETWEB_FOUND "YES" CACHE STRING "" FORCE)
     set(CIVETWEB_INCLUDE_DIR "${CIVETWEB_BIN_DIR}/include" CACHE STRING "" FORCE)
     set(CIVETWEB_LIBRARIES "${CIVETWEB_BIN_DIR}/lib/libcivetweb.${SUFFIX}" "${CIVETWEB_BIN_DIR}/lib/libcivetweb-cpp.${SUFFIX}" CACHE STRING "" FORCE)
 
     # Set exported variables for FindPackage.cmake
-    set(EXPORT_CIVETWEB_INCLUDE_DIR "${CIVETWEB_INCLUDE_DIR}" CACHE STRING "" FORCE)
-    set(EXPORT_CIVETWEB_LIBRARIES "${CIVETWEB_LIBRARIES}" CACHE STRING "" FORCE)
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CIVETWEB_INCLUDE_DIR=${CIVETWEB_INCLUDE_DIR}" CACHE STRING "" FORCE)
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CIVETWEB_LIBRARIES=${CIVETWEB_LIBRARIES}" CACHE STRING "" FORCE)
 
     # Create imported targets
+    file(MAKE_DIRECTORY ${CIVETWEB_INCLUDE_DIR})
+
     add_library(CIVETWEB::c-library STATIC IMPORTED)
     set_target_properties(CIVETWEB::c-library PROPERTIES IMPORTED_LOCATION "${CIVETWEB_BIN_DIR}/lib/libcivetweb.${SUFFIX}")
-    file(MAKE_DIRECTORY ${CIVETWEB_INCLUDE_DIR})
     set_property(TARGET CIVETWEB::c-library APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CIVETWEB_INCLUDE_DIR})
     add_dependencies(CIVETWEB::c-library civetweb-external)
     if (NOT OPENSSL_OFF)
-        add_dependencies(civetweb-external OpenSSL::SSL OpenSSL::Crypto)
         set_property(TARGET CIVETWEB::c-library APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
     endif()
 
