@@ -44,8 +44,8 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
 
     ExternalProject_Add(
             rocksdb-external
-            GIT_REPOSITORY "https://github.com/facebook/rocksdb.git"
-            GIT_TAG "v5.8.6"
+            URL "https://github.com/facebook/rocksdb/archive/rocksdb-5.8.6.tar.gz"
+            URL_HASH "SHA256=eb7d79572fff8ba60ccf1caa3b504dd1f4ac7fc864773ff056e1c3c30902508b"
             SOURCE_DIR "${BINARY_DIR}/thirdparty/rocksdb-src"
             CMAKE_ARGS ${ROCKSDB_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
