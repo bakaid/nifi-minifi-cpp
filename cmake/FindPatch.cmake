@@ -64,6 +64,6 @@ endif()
 unset(_patch_path)
 unset(_doc)
 
-include(${CMAKE_CURRENT_LIST_DIR}/FindPackageHandleStandardArgs.cmake)
+include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Patch
                                   REQUIRED_VARS Patch_EXECUTABLE)
