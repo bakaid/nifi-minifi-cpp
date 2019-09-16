@@ -46,6 +46,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
             -DCIVETWEB_ENABLE_SSL_DYNAMIC_LOADING=OFF
             -DCIVETWEB_ENABLE_CXX=ON
             -DBUILD_TESTING=OFF
+            -DCIVETWEB_ALLOW_WARNINGS=ON
             -DCIVETWEB_ENABLE_ASAN=OFF # TODO
             )
     if (OPENSSL_OFF)
