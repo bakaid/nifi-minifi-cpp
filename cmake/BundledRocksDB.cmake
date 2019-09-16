@@ -33,7 +33,7 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/rocksdb-install"
             -DWITH_TESTS=OFF
             -DWITH_TOOLS=OFF
-            -FAIL_ON_WARNINGS=OFF)
+            -DFAIL_ON_WARNINGS=OFF)
     if (PORTABLE)
         list(APPEND ROCKSDB_CMAKE_ARGS -DPORTABLE=ON)
     endif()
