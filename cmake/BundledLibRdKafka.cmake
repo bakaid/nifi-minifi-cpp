@@ -16,8 +16,6 @@
 # under the License.
 
 function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
-    message("Using bundled libssh2")
-
     if (WIN32)
         set(BYPRODUCT "lib/rdkafka.lib")
     else()
@@ -35,25 +33,15 @@ function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
             "-DWITH_ZSTD=OFF"
             "-DCMAKE_INSTALL_LIBDIR=lib")
 
-    list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${SOURCE_DIR}/cmake/ssl)
-    list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
-            "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
-            "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
-            "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}")
-    if(NOT USE_SYSTEM_ZLIB OR USE_SYSTEM_ZLIB STREQUAL "OFF")
-        list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST ${SOURCE_DIR}/cmake/zlib/dummy)
-        list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DZLIB_BYPRODUCT_INCLUDE=${ZLIB_BYPRODUCT_INCLUDE}"
-                "-DZLIB_BYPRODUCT=${ZLIB_BYPRODUCT}")
-    endif()
-    if(CMAKE_MODULE_PATH_PASSTHROUGH_LIST)
-        string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
-        list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    endif()
+    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
+    list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
+    list(APPEND LIBRDKAFKA_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
 
     ExternalProject_Add(
             kafka-external
             GIT_REPOSITORY "https://github.com/edenhill/librdkafka.git"
             GIT_TAG "v1.0.1"
+            LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${LIBRDKAFKA_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/librdkafka-install/${BYPRODUCT}"
             EXCLUDE_FROM_ALL TRUE

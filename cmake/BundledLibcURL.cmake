@@ -74,16 +74,17 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
     )
 
     # Set dependencies
-    add_dependencies(curl-external OpenSSL::SSL OpenSSL::Crypto)
+    add_dependencies(curl-external OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 
     # Set variables
-    set(CURL_FOUND "YES")
-    set(CURL_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl/include")
-    set(CURL_LIBRARY "${CURL_BIN_DIR}${BYPRODUCT}" CACHE STRING "" FORCE)
+    set(CURL_FOUND "YES" CACHE STRING "" FORCE)
+    set(CURL_INCLUDE_DIR "${BINARY_DIR}/thirdparty/curl-install/include" CACHE STRING "" FORCE)
+    set(CURL_INCLUDE_DIRS "${CURL_INCLUDE_DIR}" CACHE STRING "" FORCE)
+    set(CURL_LIBRARY "${BINARY_DIR}/thirdparty/curl-install/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(CURL_LIBRARIES "${CURL_LIBRARY}" CACHE STRING "" FORCE)
 
     # Set exported variables for FindPackage.cmake
-    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CURL_INCLUDE_DIRS=${CURL_INCLUDE_DIRS}" CACHE STRING "" FORCE)
+    set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CURL_INCLUDE_DIR=${CURL_INCLUDE_DIR}" CACHE STRING "" FORCE)
     set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CURL_LIBRARY=${CURL_LIBRARY}" CACHE STRING "" FORCE)
 
     # Create imported targets
@@ -93,5 +94,5 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
     set_target_properties(CURL::libcurl PROPERTIES IMPORTED_LOCATION "${CURL_LIBRARY}")
     add_dependencies(CURL::libcurl curl-external)
     set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIRS})
-    set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+    set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 endfunction(use_bundled_curl SOURCE_DIR BINARY_DIR)

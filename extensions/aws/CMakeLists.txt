@@ -26,11 +26,8 @@ add_library(minifi-aws STATIC ${SOURCES})
 
 target_link_libraries(minifi-aws ${LIBMINIFI})
 
-target_link_libraries(minifi-aws AWS::libaws-c-common)
-target_link_libraries(minifi-aws AWS::libaws-checksums)
-target_link_libraries(minifi-aws AWS::libaws-c-event-stream)
-target_link_libraries(minifi-aws AWS::libaws-cpp-sdk-core)
-target_link_libraries(minifi-aws AWS::libaws-cpp-sdk-s3)
+target_link_libraries(minifi-aws AWS::aws-cpp-sdk-core)
+target_link_libraries(minifi-aws AWS::aws-cpp-sdk-s3)
 
 SET (AWS-EXTENSION minifi-aws PARENT_SCOPE)
 register_extension(minifi-aws)
