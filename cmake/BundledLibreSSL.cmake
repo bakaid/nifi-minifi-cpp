@@ -56,6 +56,7 @@ function(use_libre_ssl SOURCE_DIR BINARY_DIR)
         SOURCE_DIR "${BINARY_DIR}/thirdparty/libressl-src"
         CMAKE_ARGS ${LIBRESSL_CMAKE_ARGS}
         BUILD_BYPRODUCTS ${LIBRESSL_LIBRARIES_LIST}
+        EXCLUDE_FROM_ALL TRUE
     )
 
     # Set variables

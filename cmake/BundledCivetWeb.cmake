@@ -67,6 +67,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${CIVETWEB_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${CIVETWEB_LIBRARIES_LIST}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     # Set dependencies

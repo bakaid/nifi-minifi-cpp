@@ -50,6 +50,7 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${ROCKSDB_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/rocksdb-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     set(ROCKSDB_FOUND "YES" CACHE STRING "" FORCE)

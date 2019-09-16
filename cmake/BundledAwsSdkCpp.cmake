@@ -77,45 +77,45 @@ function(use_bundled_libaws SOURCE_DIR BINARY_DIR)
             aws-c-common-external
             GIT_REPOSITORY "https://github.com/awslabs/aws-c-common.git"
             GIT_TAG "ac02e1728d740bb9106b6ea727cd3378f8ea438a"
-            EXCLUDE_FROM_ALL TRUE
             SOURCE_DIR "${BINARY_DIR}/thirdparty/aws-c-common-src"
             INSTALL_DIR "${BINARY_DIR}/thirdparty/libaws-install"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${AWS_C_COMMON_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libaws-install/lib/libaws-c-common.${SUFFIX}"
+            EXCLUDE_FROM_ALL TRUE
     )
     ExternalProject_Add(
             aws-checksum-external
             GIT_REPOSITORY "https://github.com/awslabs/aws-checksums.git"
             GIT_TAG "41dc36d14b0898bd34e3f91c808fcb00f5e21875"
-            EXCLUDE_FROM_ALL TRUE
             SOURCE_DIR "${BINARY_DIR}/thirdparty/aws-checksums-src"
             INSTALL_DIR "${BINARY_DIR}/thirdparty/libaws-install"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${AWS_CHECKSUM_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libaws-install/lib/libaws-checksums.${SUFFIX}"
+            EXCLUDE_FROM_ALL TRUE
     )
     ExternalProject_Add(
             aws-c-event-stream-external
             GIT_REPOSITORY "https://github.com/awslabs/aws-c-event-stream.git"
             GIT_TAG "97ab2e57e83ad114679dbee0dcfb5048640debe7"
-            EXCLUDE_FROM_ALL TRUE
             SOURCE_DIR "${BINARY_DIR}/thirdparty/aws-c-event-stream-src"
             INSTALL_DIR "${BINARY_DIR}/thirdparty/libaws-install"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${AWS_C_EVENT_STREAM_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libaws-install/lib/libaws-c-event-stream.${SUFFIX}"
+            EXCLUDE_FROM_ALL TRUE
     )
     ExternalProject_Add(
             aws-sdk-cpp-external
             GIT_REPOSITORY "https://github.com/aws/aws-sdk-cpp.git"
             GIT_TAG "1.7.109"
-            EXCLUDE_FROM_ALL TRUE
             SOURCE_DIR "${BINARY_DIR}/thirdparty/aws-sdk-cpp-src"
             INSTALL_DIR "${BINARY_DIR}/thirdparty/libaws-install"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${AWS_SDK_CPP_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${AWSSDK_LIBRARIES_LIST}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     # Set dependencies

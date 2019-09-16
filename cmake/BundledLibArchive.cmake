@@ -16,14 +16,17 @@
 # under the License.
 
 function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
+    # Define patch step
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/libarchive/libarchive.patch")
+
+    # Define byproducts
     if (WIN32)
         set(BYPRODUCT "lib/libarchive.lib")
     else()
         set(BYPRODUCT "lib/libarchive.a")
     endif()
 
-    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/libarchive/libarchive.patch")
-
+    # Set build options
     set(LIBARCHIVE_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libarchive-install"
             -DENABLE_OPENSSL=FALSE
@@ -31,6 +34,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
             -DENABLE_CPIO=FALSE
             -DENABLE_TEST=FALSE)
 
+    # Build project
     ExternalProject_Add(
             libarchive-external
             URL "https://www.libarchive.org/downloads/libarchive-3.3.2.tar.gz"
@@ -39,13 +43,16 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${LIBARCHIVE_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libarchive-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
+    # Set variables
     set(LIBARCHIVE_FOUND "YES" CACHE STRING "" FORCE)
     set(LIBARCHIVE_INCLUDE_DIR "${BINARY_DIR}/thirdparty/libarchive-install/include" CACHE STRING "" FORCE)
     set(LIBARCHIVE_LIBRARY "${BINARY_DIR}/thirdparty/libarchive-install/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(LIBARCHIVE_LIBRARIES ${LIBARCHIVE_LIBRARY} CACHE STRING "" FORCE)
 
+    # Create imported targets
     add_library(libarchive STATIC IMPORTED)
     set_target_properties(libarchive PROPERTIES IMPORTED_LOCATION "${LIBARCHIVE_LIBRARY}")
     add_dependencies(libarchive libarchive-external)

@@ -31,6 +31,7 @@ function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
             SOURCE_DIR "${SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024"
             CMAKE_ARGS ${YAMLCPP_CMAKE_ARGS}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/yaml-cpp-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     set(YAMLCPP_FOUND "YES" CACHE STRING "" FORCE)

@@ -29,6 +29,7 @@ function(use_bundled_sqlite SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             INSTALL_COMMAND ""
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/sqlite/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     set(SQLite3_FOUND "YES" CACHE STRING "" FORCE)

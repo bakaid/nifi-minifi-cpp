@@ -20,10 +20,15 @@ function(use_bundled_pahomqttc SOURCE_DIR BINARY_DIR)
     set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/paho.mqtt.c/paho.mqtt.c.patch")
 
     # Define byproducts
+    get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
+    if ("${LIB64}" STREQUAL "TRUE" AND (NOT WIN32 AND NOT APPLE))
+        set(LIBSUFFIX 64)
+    endif()
+
     if (WIN32)
         set(BYPRODUCT "lib/libpaho-mqtt3cs-static.lib")
     else()
-        set(BYPRODUCT "lib/libpaho-mqtt3cs-static.a")
+        set(BYPRODUCT "lib${LIBSUFFIX}/libpaho-mqtt3cs-static.a")
     endif()
 
     # Set build options
@@ -48,6 +53,7 @@ function(use_bundled_pahomqttc SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${PAHOMQTTC_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/paho.mqtt.c-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     # Set dependencies

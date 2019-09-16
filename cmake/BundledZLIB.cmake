@@ -43,6 +43,7 @@ function(use_bundled_zlib SOURCE_DIR BINARY_DIR)
         SOURCE_DIR "${BINARY_DIR}/thirdparty/zlib-src"
         CMAKE_ARGS ${ZLIB_CMAKE_ARGS}
         BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/zlib-install/${BYPRODUCT}"
+        EXCLUDE_FROM_ALL TRUE
     )
 
     # Set variables

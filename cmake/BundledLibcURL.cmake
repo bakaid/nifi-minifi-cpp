@@ -69,6 +69,7 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${CURL_CMAKE_ARGS}
             ${PC}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/curl-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     # Set dependencies

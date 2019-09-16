@@ -29,6 +29,7 @@ function(use_bundled_uuid SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             INSTALL_COMMAND ""
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/uuid/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     set(UUID_FOUND "YES" CACHE STRING "" FORCE)

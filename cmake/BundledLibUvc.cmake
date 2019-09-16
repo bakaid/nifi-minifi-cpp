@@ -38,6 +38,7 @@ function(use_bundled_libuvc SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${LIBUVC_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libuvc-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     set(LIBUVC_FOUND "YES" CACHE STRING "" FORCE)

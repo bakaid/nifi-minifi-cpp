@@ -50,6 +50,7 @@ function(use_bundled_libssh2 SOURCE_DIR BINARY_DIR)
             CMAKE_ARGS ${LIBSSH2_CMAKE_ARGS}
             PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${BINARY_DIR}/thirdparty/libssh2-install/${BYPRODUCT}"
+            EXCLUDE_FROM_ALL TRUE
     )
 
     # Set dependencies
