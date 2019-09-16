@@ -71,7 +71,10 @@ endif()
 target_wholearchive_library(minifiexe core-minifi)
 target_wholearchive_library(minifiexe minifi)
 
-target_link_libraries(minifiexe yaml-cpp JeMalloc::JeMalloc)
+target_link_libraries(minifiexe yaml-cpp)
+if(NOT WIN32 AND ENABLE_JNI AND NOT DISABLE_JEMALLOC)
+	target_link_libraries(minifiexe JeMalloc::JeMalloc)
+endif()
 
 if (WIN32)
 	include_directories("../thirdparty/Simple-Windows-Posix-Semaphore")
