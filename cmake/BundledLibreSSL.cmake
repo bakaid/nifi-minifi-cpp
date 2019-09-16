@@ -28,9 +28,9 @@ function(use_libre_ssl SOURCE_DIR BINARY_DIR)
     endif()
 
     set(BYPRODUCTS
-            "lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}"
-            "lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}"
             "lib/${BYPRODUCT_PREFIX}tls${BYPRODUCT_SUFFIX}"
+            "lib/${BYPRODUCT_PREFIX}ssl${BYPRODUCT_SUFFIX}"
+            "lib/${BYPRODUCT_PREFIX}crypto${BYPRODUCT_SUFFIX}"
             )
 
     set(LIBRESSL_BIN_DIR "${BINARY_DIR}/thirdparty/libressl-install" CACHE STRING "" FORCE)
