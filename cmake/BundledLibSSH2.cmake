@@ -19,12 +19,7 @@ function(use_bundled_libssh2 SOURCE_DIR BINARY_DIR)
     message("Using bundled libssh2")
 
     # Define patch step
-    if (WIN32)
-        string(REPLACE "/" "\\" SOURCE_DIR_DIR_BACKSLASH ${SOURCE_DIR})
-        set(PC copy /Y ${SOURCE_DIR_DIR_BACKSLASH}\\thirdparty\\libssh2\\CMakeLists.txt CMakeLists.txt)
-    else()
-        set(PC patch -p1 < ${SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch)
-    endif()
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/libssh2/libssh2-CMAKE_MODULE_PATH.patch")
 
     # Define byproducts
     if (WIN32)

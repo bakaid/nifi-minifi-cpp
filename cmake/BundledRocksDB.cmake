@@ -18,15 +18,19 @@
 function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
     message("Using bundled RocksDB")
 
-    if (WIN32)
-        set(BYPRODUCT "lib/librocksdb.lib")
-    else()
-        set(BYPRODUCT "lib/librocksdb.a")
+    # Define patch step
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rocksdb/rocksdb-BUILD.patch")
+
+    # Define byproducts
+    get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
+    if ("${LIB64}" STREQUAL "TRUE" AND (NOT WIN32 AND NOT APPLE))
+        set(LIBSUFFIX 64)
     endif()
 
     if (WIN32)
+        set(BYPRODUCT "lib/librocksdb.lib")
     else()
-        set(PC patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rocksdb/rocksdb-BUILD.patch)
+        set(BYPRODUCT "lib${LIBSUFFIX}/librocksdb.a")
     endif()
 
     set(ROCKSDB_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}

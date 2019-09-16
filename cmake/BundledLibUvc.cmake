@@ -25,10 +25,7 @@ function(use_bundled_libuvc SOURCE_DIR BINARY_DIR)
         set(BYPRODUCT "lib/${CMAKE_LIBRARY_ARCHITECTURE}/libuvc.a")
     endif()
 
-    if (WIN32)
-    else()
-        set(PC patch -p1 < ${SOURCE_DIR}/thirdparty/libuvc/libuvc.patch)
-    endif()
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/libuvc/libuvc.patch")
 
     set(LIBUVC_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libuvc-install")

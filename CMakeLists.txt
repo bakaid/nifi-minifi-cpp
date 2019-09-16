@@ -126,6 +126,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #### Third party dependencies ####
 
+# Find patch executable
+find_package(Patch REQUIRED)
+
 set(PASSTHROUGH_CMAKE_ARGS -DANDROID_ABI=${ANDROID_ABI}
 		-DANDROID_PLATFORM=${ANDROID_PLATFORM}
 		-DANDROID_STL=${ANDROID_STL}

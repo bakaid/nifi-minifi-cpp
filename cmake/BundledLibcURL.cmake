@@ -26,8 +26,6 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
 
     if ("${LIB64}" STREQUAL "TRUE" AND (NOT WIN32 AND NOT APPLE))
         set(LIBSUFFIX 64)
-    else()
-        set(LIBSUFFIX "")
     endif()
 
     if (WIN32)

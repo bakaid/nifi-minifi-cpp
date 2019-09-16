@@ -19,10 +19,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     message("Using bundled civetweb")
 
     # Define patch step
-    if (WIN32)
-    else()
-        set(PC patch -p1 < ${SOURCE_DIR}/thirdparty/civetweb/civetweb.patch)
-    endif()
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/civetweb/civetweb.patch")
 
     # Define byproducts
     if (WIN32)

@@ -22,10 +22,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
         set(BYPRODUCT "lib/libarchive.a")
     endif()
 
-    if (WIN32)
-    else()
-        set(PC patch -p1 < ${SOURCE_DIR}/thirdparty/libarchive/libarchive.patch)
-    endif()
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/libarchive/libarchive.patch")
 
     set(LIBARCHIVE_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libarchive-install"
