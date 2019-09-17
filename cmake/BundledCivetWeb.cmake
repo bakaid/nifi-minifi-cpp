@@ -25,12 +25,13 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     if (WIN32)
         set(SUFFIX "lib")
     else()
+		set(PREFIX "lib")
         set(SUFFIX "a")
     endif()
 
     set(BYPRODUCTS
-            "lib/libcivetweb.${SUFFIX}"
-            "lib/libcivetweb-cpp.${SUFFIX}"
+            "lib/${PREFIX}civetweb.${SUFFIX}"
+            "lib/${PREFIX}civetweb-cpp.${SUFFIX}"
             )
 
     set(CIVETWEB_BIN_DIR "${BINARY_DIR}/thirdparty/civetweb-install/" CACHE STRING "" FORCE)
@@ -78,7 +79,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     # Set variables
     set(CIVETWEB_FOUND "YES" CACHE STRING "" FORCE)
     set(CIVETWEB_INCLUDE_DIR "${CIVETWEB_BIN_DIR}/include" CACHE STRING "" FORCE)
-    set(CIVETWEB_LIBRARIES "${CIVETWEB_BIN_DIR}/lib/libcivetweb.${SUFFIX}" "${CIVETWEB_BIN_DIR}/lib/libcivetweb-cpp.${SUFFIX}" CACHE STRING "" FORCE)
+    set(CIVETWEB_LIBRARIES "${CIVETWEB_BIN_DIR}/lib/${PREFIX}civetweb.${SUFFIX}" "${CIVETWEB_BIN_DIR}/lib/${PREFIX}civetweb-cpp.${SUFFIX}" CACHE STRING "" FORCE)
 
     # Set exported variables for FindPackage.cmake
     set(PASSTHROUGH_VARIABLES ${PASSTHROUGH_VARIABLES} "-DEXPORTED_CIVETWEB_INCLUDE_DIR=${CIVETWEB_INCLUDE_DIR}" CACHE STRING "" FORCE)
@@ -88,7 +89,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     file(MAKE_DIRECTORY ${CIVETWEB_INCLUDE_DIR})
 
     add_library(CIVETWEB::c-library STATIC IMPORTED)
-    set_target_properties(CIVETWEB::c-library PROPERTIES IMPORTED_LOCATION "${CIVETWEB_BIN_DIR}/lib/libcivetweb.${SUFFIX}")
+    set_target_properties(CIVETWEB::c-library PROPERTIES IMPORTED_LOCATION "${CIVETWEB_BIN_DIR}/lib/${PREFIX}civetweb.${SUFFIX}")
     set_property(TARGET CIVETWEB::c-library APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CIVETWEB_INCLUDE_DIR})
     add_dependencies(CIVETWEB::c-library civetweb-external)
     if (NOT OPENSSL_OFF)
@@ -96,7 +97,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     endif()
 
     add_library(CIVETWEB::civetweb-cpp STATIC IMPORTED)
-    set_target_properties(CIVETWEB::civetweb-cpp PROPERTIES IMPORTED_LOCATION "${CIVETWEB_BIN_DIR}/lib/libcivetweb-cpp.${SUFFIX}")
+    set_target_properties(CIVETWEB::civetweb-cpp PROPERTIES IMPORTED_LOCATION "${CIVETWEB_BIN_DIR}/lib/${PREFIX}civetweb-cpp.${SUFFIX}")
     set_property(TARGET CIVETWEB::civetweb-cpp APPEND PROPERTY INTERFACE_LINK_LIBRARIES CIVETWEB::c-library)
     add_dependencies(CIVETWEB::civetweb-cpp civetweb-external)
 endfunction(use_bundled_civetweb)

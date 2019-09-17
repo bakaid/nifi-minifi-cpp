@@ -17,7 +17,7 @@
 
 function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
     if (WIN32)
-        set(BYPRODUCT "lib/libyaml-cpp.lib")
+        set(BYPRODUCT "lib/libyaml-cppmd.lib")
     else()
         set(BYPRODUCT "lib/libyaml-cpp.a")
     endif()

@@ -28,7 +28,7 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
     endif()
 
     if (WIN32)
-        set(BYPRODUCT "lib/librocksdb.lib")
+        set(BYPRODUCT "lib/rocksdb.lib")
     else()
         set(BYPRODUCT "lib${LIBSUFFIX}/librocksdb.a")
     endif()
