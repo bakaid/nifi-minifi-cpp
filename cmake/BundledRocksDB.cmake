@@ -38,9 +38,12 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
             -DWITH_TESTS=OFF
             -DWITH_TOOLS=OFF
             -DFAIL_ON_WARNINGS=OFF)
-    if (PORTABLE)
+    if(PORTABLE)
         list(APPEND ROCKSDB_CMAKE_ARGS -DPORTABLE=ON)
     endif()
+	if(WIN32)
+		list(APPEND ROCKSDB_CMAKE_ARGS -DROCKSDB_INSTALL_ON_WINDOWS=ON)
+	endif()
 
     ExternalProject_Add(
             rocksdb-external
