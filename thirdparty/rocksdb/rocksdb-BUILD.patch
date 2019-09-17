@@ -1,6 +1,7 @@
-diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thirdparty/rocksdb/CMakeLists.txt
---- ./CMakeLists.txt	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/CMakeLists.txt	2019-09-09 14:58:32.000000000 +0200
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 45bb105a2..187a9cc4a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
 @@ -348,10 +348,8 @@ endif()
  
  include_directories(${PROJECT_SOURCE_DIR})
@@ -23,6 +24,21 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
          util/xxhash.cc
          utilities/backupable/backupable_db.cc
          utilities/blob_db/blob_db.cc
+@@ -574,12 +570,12 @@ if(WIN32)
+     port/win/win_logger.cc
+     port/win/win_thread.cc
+     port/win/xpress_win.cc)
+-	
++
+ if(WITH_JEMALLOC)
+   list(APPEND SOURCES
+     port/win/win_jemalloc.cc)
+ endif()
+-	
++
+ else()
+   list(APPEND SOURCES
+     port/port_posix.cc
 @@ -588,24 +584,28 @@ else()
  endif()
  
@@ -65,7 +81,7 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
  endif()
  
  option(WITH_LIBRADOS "Build with librados" OFF)
-@@ -620,16 +620,15 @@ target_link_libraries(${ROCKSDB_STATIC_L
+@@ -620,16 +620,15 @@ target_link_libraries(${ROCKSDB_STATIC_LIB}
    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
  
  if(WIN32)
@@ -88,6 +104,23 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
    endif()
  endif()
  
+@@ -663,11 +662,11 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
+     INSTALL_DESTINATION ${package_config_destination}
+   )
+ 
+-  write_basic_package_version_file(
+-    RocksDBConfigVersion.cmake
+-    VERSION ${ROCKSDB_VERSION}
+-    COMPATIBILITY SameMajorVersion
+-  )
++#  write_basic_package_version_file(
++#    RocksDBConfigVersion.cmake
++#    VERSION ${ROCKSDB_VERSION}
++#    COMPATIBILITY SameMajorVersion
++#  )
+ 
+   install(DIRECTORY include/rocksdb COMPONENT devel DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+ 
 @@ -806,7 +805,6 @@ if(WITH_TESTS)
          util/file_reader_writer_test.cc
          util/filelock_test.cc
@@ -96,7 +129,7 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
          util/rate_limiter_test.cc
          util/slice_transform_test.cc
          util/timer_queue_test.cc
-@@ -845,21 +843,7 @@ if(WITH_TESTS)
+@@ -845,20 +843,6 @@ if(WITH_TESTS)
      list(APPEND TESTS utilities/env_librados_test.cc)
    endif()
  
@@ -114,18 +147,15 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
 -      $<TARGET_OBJECTS:testharness>)
 -    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${LIBS})
 -  endforeach(sourcefile ${BENCHMARKS})
--
-+ 
+ 
    # For test util library that is build only in DEBUG mode
    # and linked to tests. Add test only code that is not #ifdefed for Release here.
-   set(TESTUTIL_SOURCE
 @@ -884,23 +868,25 @@ if(WITH_TESTS)
          )
  
    # Tests are excluded from Release builds
 -  set(TEST_EXES ${TESTS})
-+  #set(TEST_EXES ${TESTS})
- 
+-
 -  foreach(sourcefile ${TEST_EXES})
 -      get_filename_component(exename ${sourcefile} NAME_WE)
 -      add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
@@ -141,6 +171,8 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
 -        add_dependencies(check ${exename}${ARTIFACT_SUFFIX})
 -      endif()
 -  endforeach(sourcefile ${TEST_EXES})
++  #set(TEST_EXES ${TESTS})
++
 +  # while tests are not built, we want to ensure that any reference to gtest is removed in case the user
 +  # builds rocksdb manually from our third party directory
 +  #foreach(sourcefile ${TEST_EXES})
@@ -170,9 +202,11 @@ diff -rupN --exclude=docs --exclude=.git ./CMakeLists.txt ../nifi-minifi-cpp/thi
 -if(WITH_TOOLS)
 -  add_subdirectory(tools)
 -endif()
-diff -rupN --exclude=docs --exclude=.git ./cmake/modules/FindJeMalloc.cmake ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/FindJeMalloc.cmake
---- ./cmake/modules/FindJeMalloc.cmake	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/FindJeMalloc.cmake	1970-01-01 01:00:00.000000000 +0100
+diff --git a/cmake/modules/FindJeMalloc.cmake b/cmake/modules/FindJeMalloc.cmake
+deleted file mode 100644
+index 7911f77c4..000000000
+--- a/cmake/modules/FindJeMalloc.cmake
++++ /dev/null
 @@ -1,21 +0,0 @@
 -# - Find JeMalloc library
 -# Find the native JeMalloc includes and library
@@ -195,9 +229,11 @@ diff -rupN --exclude=docs --exclude=.git ./cmake/modules/FindJeMalloc.cmake ../n
 -mark_as_advanced(
 -  JEMALLOC_LIBRARIES
 -  JEMALLOC_INCLUDE_DIR)
-diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findbzip2.cmake ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findbzip2.cmake
---- ./cmake/modules/Findbzip2.cmake	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findbzip2.cmake	1970-01-01 01:00:00.000000000 +0100
+diff --git a/cmake/modules/Findbzip2.cmake b/cmake/modules/Findbzip2.cmake
+deleted file mode 100644
+index 87abbe941..000000000
+--- a/cmake/modules/Findbzip2.cmake
++++ /dev/null
 @@ -1,21 +0,0 @@
 -# - Find Bzip2
 -# Find the bzip2 compression library and includes
@@ -220,9 +256,11 @@ diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findbzip2.cmake ../nifi
 -mark_as_advanced(
 -  BZIP2_LIBRARIES
 -  BZIP2_INCLUDE_DIR)
-diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findlz4.cmake ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findlz4.cmake
---- ./cmake/modules/Findlz4.cmake	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findlz4.cmake	1970-01-01 01:00:00.000000000 +0100
+diff --git a/cmake/modules/Findlz4.cmake b/cmake/modules/Findlz4.cmake
+deleted file mode 100644
+index c34acef5e..000000000
+--- a/cmake/modules/Findlz4.cmake
++++ /dev/null
 @@ -1,21 +0,0 @@
 -# - Find Lz4
 -# Find the lz4 compression library and includes
@@ -245,9 +283,11 @@ diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findlz4.cmake ../nifi-m
 -mark_as_advanced(
 -  LZ4_LIBRARIES
 -  LZ4_INCLUDE_DIR)
-diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findsnappy.cmake ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findsnappy.cmake
---- ./cmake/modules/Findsnappy.cmake	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findsnappy.cmake	1970-01-01 01:00:00.000000000 +0100
+diff --git a/cmake/modules/Findsnappy.cmake b/cmake/modules/Findsnappy.cmake
+deleted file mode 100644
+index 6ed5fda3d..000000000
+--- a/cmake/modules/Findsnappy.cmake
++++ /dev/null
 @@ -1,21 +0,0 @@
 -# - Find Snappy
 -# Find the snappy compression library and includes
@@ -270,9 +310,11 @@ diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findsnappy.cmake ../nif
 -mark_as_advanced(
 -  SNAPPY_LIBRARIES
 -  SNAPPY_INCLUDE_DIR)
-diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findzlib.cmake ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findzlib.cmake
---- ./cmake/modules/Findzlib.cmake	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findzlib.cmake	1970-01-01 01:00:00.000000000 +0100
+diff --git a/cmake/modules/Findzlib.cmake b/cmake/modules/Findzlib.cmake
+deleted file mode 100644
+index fb5aee9b5..000000000
+--- a/cmake/modules/Findzlib.cmake
++++ /dev/null
 @@ -1,21 +0,0 @@
 -# - Find zlib
 -# Find the zlib compression library and includes
@@ -295,9 +337,11 @@ diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findzlib.cmake ../nifi-
 -mark_as_advanced(
 -  ZLIB_LIBRARIES
 -  ZLIB_INCLUDE_DIR)
-diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findzstd.cmake ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findzstd.cmake
---- ./cmake/modules/Findzstd.cmake	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/cmake/modules/Findzstd.cmake	1970-01-01 01:00:00.000000000 +0100
+diff --git a/cmake/modules/Findzstd.cmake b/cmake/modules/Findzstd.cmake
+deleted file mode 100644
+index a2964aa9f..000000000
+--- a/cmake/modules/Findzstd.cmake
++++ /dev/null
 @@ -1,21 +0,0 @@
 -# - Find zstd
 -# Find the zstd compression library and includes
@@ -320,9 +364,10 @@ diff -rupN --exclude=docs --exclude=.git ./cmake/modules/Findzstd.cmake ../nifi-
 -mark_as_advanced(
 -  ZSTD_LIBRARIES
 -  ZSTD_INCLUDE_DIR)
-diff -rupN --exclude=docs --exclude=.git ./util/testharness.cc ../nifi-minifi-cpp/thirdparty/rocksdb/util/testharness.cc
---- ./util/testharness.cc	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/util/testharness.cc	2019-04-23 13:57:15.000000000 +0200
+diff --git a/util/testharness.cc b/util/testharness.cc
+index 7ec353762..4626ea085 100644
+--- a/util/testharness.cc
++++ b/util/testharness.cc
 @@ -13,14 +13,6 @@
  namespace rocksdb {
  namespace test {
@@ -338,9 +383,10 @@ diff -rupN --exclude=docs --exclude=.git ./util/testharness.cc ../nifi-minifi-cp
  
  std::string TmpDir(Env* env) {
    std::string dir;
-diff -rupN --exclude=docs --exclude=.git ./util/testharness.h ../nifi-minifi-cpp/thirdparty/rocksdb/util/testharness.h
---- ./util/testharness.h	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/util/testharness.h	2019-04-23 13:57:15.000000000 +0200
+diff --git a/util/testharness.h b/util/testharness.h
+index 8da568123..44ee76eb9 100644
+--- a/util/testharness.h
++++ b/util/testharness.h
 @@ -9,12 +9,6 @@
  
  #pragma once
@@ -354,7 +400,7 @@ diff -rupN --exclude=docs --exclude=.git ./util/testharness.h ../nifi-minifi-cpp
  #include <string>
  #include "rocksdb/env.h"
  
-@@ -29,12 +23,5 @@ std::string TmpDir(Env* env = Env::Defau
+@@ -29,12 +23,5 @@ std::string TmpDir(Env* env = Env::Default());
  // runs may be able to vary the seed.
  int RandomSeed();
  
@@ -367,9 +413,10 @@ diff -rupN --exclude=docs --exclude=.git ./util/testharness.h ../nifi-minifi-cpp
 -
  }  // namespace test
  }  // namespace rocksdb
-diff -rupN --exclude=docs --exclude=.git ./utilities/cassandra/format.h ../nifi-minifi-cpp/thirdparty/rocksdb/utilities/cassandra/format.h
---- ./utilities/cassandra/format.h	2019-09-09 11:37:41.000000000 +0200
-+++ ../nifi-minifi-cpp/thirdparty/rocksdb/utilities/cassandra/format.h	2019-04-23 13:57:15.000000000 +0200
+diff --git a/utilities/cassandra/format.h b/utilities/cassandra/format.h
+index d8f51df14..fad6df4c4 100644
+--- a/utilities/cassandra/format.h
++++ b/utilities/cassandra/format.h
 @@ -177,17 +177,6 @@ private:
    Columns columns_;
    int64_t last_modified_time_;
