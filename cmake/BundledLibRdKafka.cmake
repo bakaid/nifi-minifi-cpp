@@ -16,12 +16,14 @@
 # under the License.
 
 function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
+    # Define byproducts
     if (WIN32)
         set(BYPRODUCT "lib/rdkafka.lib")
     else()
         set(BYPRODUCT "lib/librdkafka.a")
     endif()
 
+    # Set build options
     set(LIBRDKAFKA_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/librdkafka-install"
             "-DWITH_SASL=OFF"
@@ -37,6 +39,7 @@ function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
     list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
     list(APPEND LIBRDKAFKA_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
 
+    # Build project
     ExternalProject_Add(
             kafka-external
             GIT_REPOSITORY "https://github.com/edenhill/librdkafka.git"
@@ -47,13 +50,16 @@ function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
             EXCLUDE_FROM_ALL TRUE
     )
 
+    # Set dependencies
     add_dependencies(kafka-external OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 
+    # Set variables
     set(LIBRDKAFKA_FOUND "YES" CACHE STRING "" FORCE)
     set(LIBRDKAFKA_INCLUDE_DIR "${BINARY_DIR}/thirdparty/librdkafka-install/include/librdkafka" CACHE STRING "" FORCE)
     set(LIBRDKAFKA_LIBRARY "${BINARY_DIR}/thirdparty/librdkafka-install/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(LIBRDKAFKA_LIBRARIES ${LIBRDKAFKA_LIBRARY} CACHE STRING "" FORCE)
 
+    # Create imported targets
     add_library(librdkafka STATIC IMPORTED)
     set_target_properties(librdkafka PROPERTIES IMPORTED_LOCATION "${LIBRDKAFKA_LIBRARY}")
     add_dependencies(librdkafka kafka-external)
