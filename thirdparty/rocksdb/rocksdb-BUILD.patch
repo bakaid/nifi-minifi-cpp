@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 45bb105a2..187a9cc4a 100644
+index 45bb105a2..a77bdb8bb 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -348,10 +348,8 @@ endif()
@@ -121,6 +121,27 @@ index 45bb105a2..187a9cc4a 100644
  
    install(DIRECTORY include/rocksdb COMPONENT devel DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
  
+@@ -695,13 +694,13 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
+     NAMESPACE RocksDB::
+   )
+ 
+-  install(
+-    FILES
+-    ${CMAKE_CURRENT_BINARY_DIR}/RocksDBConfig.cmake
+-    ${CMAKE_CURRENT_BINARY_DIR}/RocksDBConfigVersion.cmake
+-    COMPONENT devel
+-    DESTINATION ${package_config_destination}
+-  )
++#  install(
++#    FILES
++#    ${CMAKE_CURRENT_BINARY_DIR}/RocksDBConfig.cmake
++#    ${CMAKE_CURRENT_BINARY_DIR}/RocksDBConfigVersion.cmake
++#    COMPONENT devel
++#    DESTINATION ${package_config_destination}
++#  )
+ endif()
+ 
+ option(WITH_TESTS "build with tests" ON)
 @@ -806,7 +805,6 @@ if(WITH_TESTS)
          util/file_reader_writer_test.cc
          util/filelock_test.cc
