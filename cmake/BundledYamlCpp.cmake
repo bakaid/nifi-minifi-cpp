@@ -16,16 +16,19 @@
 # under the License.
 
 function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
+    # Define byproducts
     if (WIN32)
         set(BYPRODUCT "lib/libyaml-cppmd.lib")
     else()
         set(BYPRODUCT "lib/libyaml-cpp.a")
     endif()
 
+    # Set build options
     set(YAMLCPP_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/yaml-cpp-install"
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON)
 
+    # Build project
     ExternalProject_Add(
             yaml-cpp-external
             SOURCE_DIR "${SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024"
@@ -34,11 +37,13 @@ function(use_bundled_yamlcpp SOURCE_DIR BINARY_DIR)
             EXCLUDE_FROM_ALL TRUE
     )
 
+    # Set variables
     set(YAMLCPP_FOUND "YES" CACHE STRING "" FORCE)
     set(YAMLCPP_INCLUDE_DIR "${SOURCE_DIR}/thirdparty/yaml-cpp-yaml-cpp-20171024/include" CACHE STRING "" FORCE)
     set(YAMLCPP_LIBRARY "${BINARY_DIR}/thirdparty/yaml-cpp-install/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(YAMLCPP_LIBRARIES ${YAMLCPP_LIBRARY} CACHE STRING "" FORCE)
 
+    # Create imported targets
     add_library(yaml-cpp STATIC IMPORTED)
     set_target_properties(yaml-cpp PROPERTIES IMPORTED_LOCATION "${YAMLCPP_LIBRARY}")
     add_dependencies(yaml-cpp yaml-cpp-external)

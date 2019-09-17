@@ -49,7 +49,7 @@ include_directories("${PUGI_BYPRODUCT_DIR}/include")
 add_dependencies(minifi-wel pugixml-external)
 
 target_link_libraries(minifi-wel ${LIBMINIFI} ${BYPRODUCT})
-target_link_libraries(minifi-wel ZLIB::ZLIB)
+target_link_libraries(minifi-wel ZLIB::ZLIB Wevtapi.lib)
 
 SET(WEL-EXTENSION minifi-wel PARENT_SCOPE)
 
