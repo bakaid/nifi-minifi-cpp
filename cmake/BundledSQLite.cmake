@@ -16,12 +16,14 @@
 # under the License.
 
 function(use_bundled_sqlite SOURCE_DIR BINARY_DIR)
+    # Define byproducts
     if (WIN32)
         set(BYPRODUCT "libsqlite.lib")
     else()
         set(BYPRODUCT "libsqlite.a")
     endif()
 
+    # Build project
     ExternalProject_Add(
             sqlite-external
             SOURCE_DIR "${SOURCE_DIR}/thirdparty/sqlite"
@@ -32,11 +34,13 @@ function(use_bundled_sqlite SOURCE_DIR BINARY_DIR)
             EXCLUDE_FROM_ALL TRUE
     )
 
+    # Set variables
     set(SQLite3_FOUND "YES" CACHE STRING "" FORCE)
     set(SQLite3_INCLUDE_DIRS "${SOURCE_DIR}/thirdparty/sqlite" CACHE STRING "" FORCE)
     set(SQLite3_LIBRARY "${BINARY_DIR}/thirdparty/sqlite/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(SQLite3_LIBRARIES ${SQLite3_LIBRARY} CACHE STRING "" FORCE)
 
+    # Create imported targets
     add_library(SQLite::SQLite3 STATIC IMPORTED)
     set_target_properties(SQLite::SQLite3 PROPERTIES IMPORTED_LOCATION "${SQLite3_LIBRARY}")
     add_dependencies(SQLite::SQLite3 sqlite-external)

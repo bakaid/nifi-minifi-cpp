@@ -33,6 +33,7 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
         set(BYPRODUCT "lib${LIBSUFFIX}/librocksdb.a")
     endif()
 
+    # Set build options
     set(ROCKSDB_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/rocksdb-install"
             -DWITH_TESTS=OFF
@@ -45,6 +46,7 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
 		list(APPEND ROCKSDB_CMAKE_ARGS -DROCKSDB_INSTALL_ON_WINDOWS=ON)
 	endif()
 
+    # Build project
     ExternalProject_Add(
             rocksdb-external
             URL "https://github.com/facebook/rocksdb/archive/rocksdb-5.8.6.tar.gz"
@@ -56,14 +58,20 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
             EXCLUDE_FROM_ALL TRUE
     )
 
+    # Set variables
     set(ROCKSDB_FOUND "YES" CACHE STRING "" FORCE)
     set(ROCKSDB_INCLUDE_DIR "${BINARY_DIR}/thirdparty/rocksdb-install/include" CACHE STRING "" FORCE)
     set(ROCKSDB_LIBRARY "${BINARY_DIR}/thirdparty/rocksdb-install/${BYPRODUCT}" CACHE STRING "" FORCE)
     set(ROCKSDB_LIBRARIES ${ROCKSDB_LIBRARY} CACHE STRING "" FORCE)
 
+    # Create imported targets
     add_library(RocksDB::RocksDB STATIC IMPORTED)
     set_target_properties(RocksDB::RocksDB PROPERTIES IMPORTED_LOCATION "${ROCKSDB_LIBRARY}")
     add_dependencies(RocksDB::RocksDB rocksdb-external)
     file(MAKE_DIRECTORY ${ROCKSDB_INCLUDE_DIR})
     set_property(TARGET RocksDB::RocksDB APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ROCKSDB_INCLUDE_DIR})
+    set_property(TARGET RocksDB::RocksDB APPEND PROPERTY INTERFACE_LINK_LIBRARIES Threads::Threads)
+    if(WIN32)
+        set_property(TARGET RocksDB::RocksDB APPEND PROPERTY INTERFACE_LINK_LIBRARIES Rpcrt4.lib)
+    endif()
 endfunction(use_bundled_rocksdb)
