@@ -30,49 +30,8 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-rdkafka-extensions "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-  set(BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/kafka")
-  if (WIN32)
-  	set(BYPRODUCT "${BASE_DIR}/install/lib/rdkafka.lib")
-  else()
-  	set(BYPRODUCT "${BASE_DIR}/install/lib/librdkafka.a")
-  endif()
-
-list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST "${CMAKE_SOURCE_DIR}/cmake/ssl")
-list(APPEND CMAKE_MODULE_PATH_PASSTHROUGH_LIST "${CMAKE_SOURCE_DIR}/cmake/zlib/dummy")
-    
-ExternalProject_Add(
-    kafka-external
-    GIT_REPOSITORY "https://github.com/edenhill/librdkafka.git"
-    GIT_TAG "v1.0.1" 
-    PREFIX "${BASE_DIR}"
-    CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-               "-DCMAKE_INSTALL_PREFIX=${BASE_DIR}/install"
-               "-DWITH_SASL=OFF"
-               "-DOPENSSL_VERSION=1.0.2"
-               "-DRDKAFKA_BUILD_STATIC=ON"
-               "-DRDKAFKA_BUILD_EXAMPLES=OFF"
-               "-DRDKAFKA_BUILD_TESTS=OFF"
-               "-DENABLE_LZ4_EXT=OFF"
-               "-DWITH_ZSTD=OFF"
-               "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH_LIST}"
-               "-DCMAKE_C_FLAGS=${CURL_C_FLAGS}"
-               "-DCMAKE_INSTALL_LIBDIR=lib"
-               "-DCMAKE_CXX_FLAGS=${CURL_CXX_FLAGS}"
-    EXCLUDE_FROM_ALL TRUE
-  )
-add_dependencies(kafka-external libressl-portable)
-set(KAFKA_INCLUDE "${BASE_DIR}/install/include/librdkafka/")
-set(KAFKA_LIBRARY "${BYPRODUCT}")
-add_dependencies(minifi-rdkafka-extensions kafka-external)
-include_directories(${ZLIB_INCLUDE_DIRS})
-include_directories(${KAFKA_INCLUDE})
-if (WIN32)
-	target_link_libraries (minifi-rdkafka-extensions -WHOLEARCHIVE:${KAFKA_LIBRARY} ${KAFKA_LIBRARY})
-elseif (APPLE)
-	target_link_libraries (minifi-rdkafka-extensions -Wl,-force_load ${KAFKA_LIBRARY})
-else ()
-	target_link_libraries (minifi-rdkafka-extensions -Wl,--whole-archive ${KAFKA_LIBRARY} -Wl,--no-whole-archive)
-endif ()
+target_link_libraries(minifi-rdkafka-extensions ${LIBMINIFI})
+target_link_libraries(minifi-rdkafka-extensions librdkafka)
 
 SET (RDKAFKA-EXTENSIONS minifi-rdkafka-extensions PARENT_SCOPE)
 

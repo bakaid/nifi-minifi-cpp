@@ -36,22 +36,7 @@ if(CMAKE_THREAD_LIBS_INIT)
 endif()
 
 target_link_libraries(minifi-bustache-extensions ${LIBMINIFI} ${Boost_IOSTREAMS_LIBRARY})
-target_link_libraries(minifi-bustache-extensions ${CMAKE_DL_LIBS})
 target_link_libraries(minifi-bustache-extensions bustache)
-
-if (WIN32)
-    set_target_properties(minifi-bustache-extensions PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
-    )
-elseif (APPLE)
-    set_target_properties(minifi-bustache-extensions PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-else ()
-    set_target_properties(minifi-bustache-extensions PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-endif ()
 
 
 SET (BUSTACHE-EXTENSIONS minifi-bustache-extensions PARENT_SCOPE)
