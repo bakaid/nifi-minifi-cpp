@@ -30,26 +30,8 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-wel "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-set(PUGI_BYPRODUCT_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/pugixml-install" CACHE STRING "PugiXML install directory")
-set(BYPRODUCT "${PUGI_BYPRODUCT_DIR}/lib/pugixml.lib")
-  ExternalProject_Add(
-    pugixml-external
-    GIT_REPOSITORY "https://github.com/zeux/pugixml.git"
-    GIT_TAG "v1.9" 
-    SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/pugixml-src"
-    CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
-			   "-DBUILD_TESTS=OFF"
-			   "-DBUILD_SHARED_AND_STATIC_LIBS=OFF"
-			   "-DBUILD_SHARED_LIBS=OFF"
-               "-DCMAKE_INSTALL_PREFIX=${PUGI_BYPRODUCT_DIR}"
-    BUILD_BYPRODUCTS ${BYPRODUCT}
-  )
-
-include_directories("${PUGI_BYPRODUCT_DIR}/include")
-add_dependencies(minifi-wel pugixml-external)
-
-target_link_libraries(minifi-wel ${LIBMINIFI} ${BYPRODUCT})
-target_link_libraries(minifi-wel ZLIB::ZLIB Wevtapi.lib)
+target_link_libraries(minifi-wel ${LIBMINIFI})
+target_link_libraries(minifi-wel PUGI::libpugixml ZLIB::ZLIB Wevtapi.lib)
 
 SET(WEL-EXTENSION minifi-wel PARENT_SCOPE)
 
