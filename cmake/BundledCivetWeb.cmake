@@ -54,9 +54,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
         list(APPEND CIVETWEB_CMAKE_ARGS -DCIVETWEB_ENABLE_SSL=OFF)
     endif()
 
-    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
-    list(APPEND CIVETWEB_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    list(APPEND CIVETWEB_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
+    append_third_party_passthrough_args(CIVETWEB_CMAKE_ARGS "${CIVETWEB_CMAKE_ARGS}")
 
     # Build project
     ExternalProject_Add(

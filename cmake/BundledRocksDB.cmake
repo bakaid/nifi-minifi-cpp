@@ -19,7 +19,7 @@ function(use_bundled_rocksdb SOURCE_DIR BINARY_DIR)
     message("Using bundled RocksDB")
 
     # Define patch step
-    set(PC "${Patch_EXECUTABLE}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rocksdb/rocksdb-BUILD.patch")
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/rocksdb/rocksdb-BUILD.patch")
 
     # Define byproducts
     get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)

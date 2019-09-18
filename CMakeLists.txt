@@ -126,6 +126,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #### Third party dependencies ####
 
+# Define function for passing dependencies
+function(append_third_party_passthrough_args OUTPUT EXTERNALPROJECT_CMAKE_ARGS)
+	string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
+	list(APPEND EXTERNALPROJECT_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
+	list(APPEND EXTERNALPROJECT_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
+	set(${OUTPUT} ${EXTERNALPROJECT_CMAKE_ARGS} PARENT_SCOPE)
+endfunction()
+
 # Find patch executable
 find_package(Patch REQUIRED)
 

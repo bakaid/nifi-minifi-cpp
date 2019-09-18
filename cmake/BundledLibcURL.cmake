@@ -55,9 +55,7 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             -DHAVE_FSETXATTR_5__TRYRUN_OUTPUT=""
             )
 
-    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
-    list(APPEND CURL_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    list(APPEND CURL_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
+    append_third_party_passthrough_args(CURL_CMAKE_ARGS "${CURL_CMAKE_ARGS}")
 
     # Build project
     ExternalProject_Add(

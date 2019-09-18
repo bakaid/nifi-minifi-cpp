@@ -36,9 +36,7 @@ function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
             "-DCMAKE_INSTALL_LIBDIR=lib"
             "-DLIBRDKAFKA_STATICLIB=1")
 
-    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
-    list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    list(APPEND LIBRDKAFKA_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
+    append_third_party_passthrough_args(LIBRDKAFKA_CMAKE_ARGS "${LIBRDKAFKA_CMAKE_ARGS}")
 
     # Build project
     ExternalProject_Add(

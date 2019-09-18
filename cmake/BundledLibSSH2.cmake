@@ -36,9 +36,7 @@ function(use_bundled_libssh2 SOURCE_DIR BINARY_DIR)
             -DBUILD_TESTING=OFF
             -DBUILD_EXAMPLES=OFF)
 
-    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
-    list(APPEND LIBSSH2_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    list(APPEND LIBSSH2_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
+    append_third_party_passthrough_args(LIBSSH2_CMAKE_ARGS "${LIBSSH2_CMAKE_ARGS}")
 
     # Build project
     ExternalProject_Add(

@@ -39,9 +39,7 @@ function(use_bundled_pahomqttc SOURCE_DIR BINARY_DIR)
             -DPAHO_WITH_SSL=TRUE
             -DPAHO_ENABLE_TESTING=FALSE)
 
-    string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
-    list(APPEND PAHOMQTTC_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
-    list(APPEND PAHOMQTTC_CMAKE_ARGS ${PASSTHROUGH_VARIABLES})
+    append_third_party_passthrough_args(PAHOMQTTC_CMAKE_ARGS "${PAHOMQTTC_CMAKE_ARGS}")
 
     # Build project
     ExternalProject_Add(
