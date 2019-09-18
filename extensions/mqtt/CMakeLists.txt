@@ -20,10 +20,7 @@
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt) 
 include_directories(./controllerservice ./processors ./protocol ../../libminifi/include  ../../libminifi/include/core)
 
-include_directories(../../thirdparty/paho.mqtt.c/src)
-
 file(GLOB SOURCES "*.cpp" "protocol/*.cpp" "processors/*.cpp" "controllerservice/*.cpp")
-
 
 set(PAHO_BUILD_STATIC "ON" CACHE STRING "" FORCE)
 
