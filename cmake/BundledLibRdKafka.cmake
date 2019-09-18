@@ -17,7 +17,7 @@
 
 function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
     # Define byproducts
-    if (WIN32)
+    if(WIN32)
         set(BYPRODUCT "lib/rdkafka.lib")
     else()
         set(BYPRODUCT "lib/librdkafka.a")
@@ -33,7 +33,8 @@ function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
             "-DRDKAFKA_BUILD_TESTS=OFF"
             "-DENABLE_LZ4_EXT=OFF"
             "-DWITH_ZSTD=OFF"
-            "-DCMAKE_INSTALL_LIBDIR=lib")
+            "-DCMAKE_INSTALL_LIBDIR=lib"
+            "-DLIBRDKAFKA_STATICLIB=1")
 
     string(REPLACE ";" "%" CMAKE_MODULE_PATH_PASSTHROUGH "${CMAKE_MODULE_PATH}")
     list(APPEND LIBRDKAFKA_CMAKE_ARGS "-DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH_PASSTHROUGH}")
@@ -66,4 +67,5 @@ function(use_bundled_librdkafka SOURCE_DIR BINARY_DIR)
     set_property(TARGET librdkafka APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
     file(MAKE_DIRECTORY ${LIBRDKAFKA_INCLUDE_DIR})
     set_property(TARGET librdkafka APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBRDKAFKA_INCLUDE_DIR})
+	set_property(TARGET librdkafka APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS "LIBRDKAFKA_STATICLIB=1")
 endfunction(use_bundled_librdkafka)
