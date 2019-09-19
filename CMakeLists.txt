@@ -294,11 +294,18 @@ endif()
   else()
   endif()
 
+  list(APPEND CURL_CMAKE_MODULE_PATH_PASSTHROUGH_LIST "${CMAKE_SOURCE_DIR}/cmake/ssl")
+  if(WIN32 OR NOT USE_SYSTEM_ZLIB)
+	  list(APPEND CURL_CMAKE_MODULE_PATH_PASSTHROUGH_LIST "${CMAKE_SOURCE_DIR}/cmake/zlib/dummy")
+  endif()
+  string(REPLACE ";" "%" CURL_CMAKE_MODULE_PATH_PASSTHROUGH "${CURL_CMAKE_MODULE_PATH_PASSTHROUGH_LIST}")
+
   ExternalProject_Add(
     curl-external
     GIT_REPOSITORY "https://github.com/curl/curl.git"
     GIT_TAG "f3294d9d86e6a7915a967efff2842089b8b0d071"  # Version 7.64.0
     SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-src"
+    LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
     CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
                "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install"
                 -DCMAKE_POSITION_INDEPENDENT_CODE=ON
@@ -312,6 +319,10 @@ endif()
                 "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
                 "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
                 "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}"
+                "-DZLIB_BYPRODUCT_INCLUDE=${ZLIB_BYPRODUCT_INCLUDE}"
+                "-DZLIB_BYPRODUCT=${ZLIB_BYPRODUCT}"
+                "-DZLIB_LIBRARY=${ZLIB_LIBRARY}"
+                "-DZLIB_LIBRARIES=${ZLIB_LIBRARIES}"
                 -DCURL_DISABLE_CRYPTO_AUTH=ON
                 -DCMAKE_USE_LIBSSH2=OFF
                 "-DCMAKE_DEBUG_POSTFIX="
@@ -322,7 +333,7 @@ endif()
                 -DHAVE_POLL_FINE_EXITCODE=0
                 -DHAVE_FSETXATTR_5=0
                 -DHAVE_FSETXATTR_5__TRYRUN_OUTPUT=""
-               "-DCMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake/ssl"
+               "-DCMAKE_MODULE_PATH=${CURL_CMAKE_MODULE_PATH_PASSTHROUGH}"
                "-DCMAKE_C_FLAGS=${CURL_C_FLAGS}"
                "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
                "-DCMAKE_CXX_FLAGS=${CURL_CXX_FLAGS}"
@@ -331,6 +342,9 @@ endif()
   )
 
   add_dependencies(curl-external libressl-portable)
+  if(WIN32 OR NOT USE_SYSTEM_ZLIB)
+	  add_dependencies(curl-external zlib-external)
+  endif()
 
   set(CURL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl/" CACHE STRING "" FORCE)
   set(CURL_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/curl-install/" CACHE STRING "" FORCE)
