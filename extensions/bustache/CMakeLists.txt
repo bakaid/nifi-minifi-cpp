@@ -21,22 +21,13 @@
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 cmake_minimum_required(VERSION 2.6)
 
-find_package(Boost COMPONENTS system filesystem iostreams REQUIRED)
-include_directories(${Boost_INCLUDE_DIRS})
-
 file(GLOB SOURCES "*.cpp")
 
 add_library(minifi-bustache-extensions STATIC ${SOURCES})
 set_property(TARGET minifi-bustache-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
-if(THREADS_HAVE_PTHREAD_ARG)
-  target_compile_options(PUBLIC minifi-bustache-extensions "-pthread")
-endif()
-if(CMAKE_THREAD_LIBS_INIT)
-  target_link_libraries(minifi-bustache-extensions "${CMAKE_THREAD_LIBS_INIT}")
-endif()
 
-target_link_libraries(minifi-bustache-extensions ${LIBMINIFI} ${Boost_IOSTREAMS_LIBRARY})
-target_link_libraries(minifi-bustache-extensions bustache)
+target_link_libraries(minifi-bustache-extensions ${LIBMINIFI})
+target_link_libraries(minifi-bustache-extensions BUSTACHE::libbustache)
 
 
 SET (BUSTACHE-EXTENSIONS minifi-bustache-extensions PARENT_SCOPE)

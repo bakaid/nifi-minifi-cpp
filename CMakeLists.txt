@@ -422,7 +422,9 @@ endif()
 ## Bustache/template extensions
 option(ENABLE_BUSTACHE "Enables Bustache (ApplyTemplate) support." OFF)
 if (ENABLE_BUSTACHE)
-    createExtension(BUSTACHE-EXTENSIONS "BUSTACHE EXTENSIONS" "This enables bustache functionality including ApplyTemplate." "extensions/bustache" "${TEST_DIR}/bustache-tests" "TRUE" "thirdparty/bustache")
+	include(BundledBustache)
+	use_bundled_bustache(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+    createExtension(BUSTACHE-EXTENSIONS "BUSTACHE EXTENSIONS" "This enables bustache functionality including ApplyTemplate." "extensions/bustache" "${TEST_DIR}/bustache-tests")
 endif()
 
 ## SFTP extensions
