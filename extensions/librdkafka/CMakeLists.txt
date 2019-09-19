@@ -70,6 +70,7 @@ ExternalProject_Add(
                "-DZLIB_BYPRODUCT=${ZLIB_BYPRODUCT}"
                "-DZLIB_LIBRARY=${ZLIB_LIBRARY}"
                "-DZLIB_LIBRARIES=${ZLIB_LIBRARIES}"
+               "-DLIBRDKAFKA_STATICLIB=1"
     EXCLUDE_FROM_ALL TRUE
   )
 add_dependencies(kafka-external libressl-portable)
@@ -78,6 +79,7 @@ if(WIN32 OR NOT USE_SYSTEM_ZLIB)
 endif()
 set(KAFKA_INCLUDE "${BASE_DIR}/install/include/librdkafka/")
 set(KAFKA_LIBRARY "${BYPRODUCT}")
+add_definitions("-DLIBRDKAFKA_STATICLIB=1")
 add_dependencies(minifi-rdkafka-extensions kafka-external)
 include_directories(${ZLIB_INCLUDE_DIRS})
 include_directories(${KAFKA_INCLUDE})
