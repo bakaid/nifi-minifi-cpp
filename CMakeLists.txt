@@ -196,7 +196,7 @@ if (NOT OPENSSL_OFF)
 	include(LibreSSL)
 	use_libre_ssl("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ssl")
-	
+
 	find_package (OpenSSL REQUIRED)
 
 	if (OPENSSL_FOUND)
@@ -310,6 +310,8 @@ endif()
                 -DCMAKE_USE_OPENSSL=ON
                 "-DLIBRESSL_BIN_DIR=${LIBRESSL_BIN_DIR}"
                 "-DLIBRESSL_SRC_DIR=${LIBRESSL_SRC_DIR}"
+                "-DBYPRODUCT_PREFIX=${BYPRODUCT_PREFIX}"
+                "-DBYPRODUCT_SUFFIX=${BYPRODUCT_SUFFIX}"
                 -DCURL_DISABLE_CRYPTO_AUTH=ON
                 -DCMAKE_USE_LIBSSH2=OFF
                 "-DCMAKE_DEBUG_POSTFIX="
@@ -472,6 +474,10 @@ endif(WIN32)
 option(ENABLE_MQTT "Enables the mqtt extension." OFF)
 if(ENABLE_ALL OR ENABLE_MQTT)
         createExtension(MQTT-EXTENSIONS "MQTT EXTENSIONS" "This Enables MQTT functionality including PublishMQTT/ConsumeMQTT" "extensions/mqtt" "${TEST_DIR}/mqtt-tests" "TRUE" "thirdparty/paho.mqtt.c")
+        add_dependencies(paho-mqtt3cs libressl-portable)
+        add_dependencies(paho-mqtt3as libressl-portable)
+        add_dependencies(paho-mqtt3cs-static libressl-portable)
+        add_dependencies(paho-mqtt3as-static libressl-portable)
 endif()
 
 if(ENABLE_ALL OR ENABLE_JNI)
