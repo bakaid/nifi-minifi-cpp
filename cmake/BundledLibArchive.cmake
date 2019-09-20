@@ -29,6 +29,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
     # Set build options
     set(LIBARCHIVE_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libarchive-install"
+            -DENABLE_NETTLE=FALSE
             -DENABLE_OPENSSL=FALSE
             -DENABLE_TAR=FALSE
             -DENABLE_CPIO=FALSE

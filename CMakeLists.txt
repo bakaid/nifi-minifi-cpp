@@ -247,6 +247,10 @@ target_include_directories(RapidJSON INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thir
 add_library(cron INTERFACE)
 target_include_directories(cron INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cron")
 
+# cxxopts
+add_library(cxxopts INTERFACE)
+target_include_directories(cxxopts INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cxxopts/include")
+
 #### Extensions ####
 SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)
 include(Extensions)
@@ -445,7 +449,6 @@ add_subdirectory(nanofi)
 add_dependencies(nanofi minifiexe)
 
 if (NOT DISABLE_CURL AND NOT DISABLE_CONTROLLER)
-	add_subdirectory(thirdparty/cxxopts)
 	add_subdirectory(controller)
 	add_dependencies(minificontroller minifiexe)
 endif()
