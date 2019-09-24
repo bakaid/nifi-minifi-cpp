@@ -49,8 +49,12 @@ core::Property PublishKafka::DeliveryGuarantee(
 core::Property PublishKafka::MaxMessageSize(core::PropertyBuilder::createProperty("Max Request Size")->withDescription("Maximum Kafka protocol request message size")->isRequired(false)->build());
 
 core::Property PublishKafka::RequestTimeOut(
-    core::PropertyBuilder::createProperty("Request Timeout")->withDescription("The ack timeout of the producer request in milliseconds")->isRequired(false)->withDefaultValue<core::TimePeriodValue>(
+    core::PropertyBuilder::createProperty("Request Timeout")->withDescription("The ack timeout of the producer request")->isRequired(false)->withDefaultValue<core::TimePeriodValue>(
         "10 sec")->supportsExpressionLanguage(true)->build());
+
+core::Property PublishKafka::MessageTimeOut(
+    core::PropertyBuilder::createProperty("Message Timeout")->withDescription("The total time sending a message could take")->isRequired(false)->withDefaultValue<core::TimePeriodValue>(
+        "30 sec")->supportsExpressionLanguage(true)->build());
 
 core::Property PublishKafka::ClientName(
     core::PropertyBuilder::createProperty("Client Name")->withDescription("Client Name to use when communicating with Kafka")->isRequired(true)->supportsExpressionLanguage(true)->build());
@@ -94,6 +98,7 @@ void PublishKafka::initialize() {
   properties.insert(DeliveryGuarantee);
   properties.insert(MaxMessageSize);
   properties.insert(RequestTimeOut);
+  properties.insert(MessageTimeOut);
   properties.insert(ClientName);
   properties.insert(AttributeNameRegex);
   properties.insert(BatchSize);
@@ -382,6 +387,77 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
   return true;
 }
 
+bool PublishKafka::createNewTopic(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context, const std::string& topic_name) {
+  rd_kafka_topic_conf_t* topic_conf_ = rd_kafka_topic_conf_new();
+  if (topic_conf_ == nullptr) {
+    logger_->log_error("Failed to create rd_kafka_topic_conf_t object");
+    return false;
+  }
+  utils::ScopeGuard confGuard([topic_conf_](){
+    rd_kafka_topic_conf_destroy(topic_conf_);
+  });
+
+  rd_kafka_conf_res_t result;
+  std::string value;
+  std::array<char, 512U> errstr;
+  int64_t valInt;
+  std::string valueConf;
+
+  value = "";
+  if (context->getProperty(DeliveryGuarantee.getName(), value) && !value.empty()) {
+    rd_kafka_topic_conf_set(topic_conf_, "request.required.acks", value.c_str(), errstr.data(), errstr.size());
+    logger_->log_debug("PublishKafka: request.required.acks [%s]", value);
+    if (result != RD_KAFKA_CONF_OK) {
+      logger_->log_error("PublishKafka: configure request.required.acks error result [%s]", errstr);
+      return false;
+    }
+  }
+  value = "";
+  if (context->getProperty(RequestTimeOut.getName(), value) && !value.empty()) {
+    core::TimeUnit unit;
+    if (core::Property::StringToTime(value, valInt, unit) &&
+        core::Property::ConvertTimeUnitToMS(valInt, unit, valInt)) {
+      valueConf = std::to_string(valInt);
+      rd_kafka_topic_conf_set(topic_conf_, "request.timeout.ms", valueConf.c_str(), errstr.data(), errstr.size());
+      logger_->log_debug("PublishKafka: request.timeout.ms [%s]", valueConf);
+      if (result != RD_KAFKA_CONF_OK) {
+        logger_->log_error("PublishKafka: configure request.timeout.ms error result [%s]", errstr);
+        return false;
+      }
+    }
+  }
+  value = "";
+  if (context->getProperty(MessageTimeOut.getName(), value) && !value.empty()) {
+    core::TimeUnit unit;
+    if (core::Property::StringToTime(value, valInt, unit) &&
+        core::Property::ConvertTimeUnitToMS(valInt, unit, valInt)) {
+      valueConf = std::to_string(valInt);
+      rd_kafka_topic_conf_set(topic_conf_, "message.timeout.ms", valueConf.c_str(), errstr.data(), errstr.size());
+      logger_->log_debug("PublishKafka: message.timeout.ms [%s]", valueConf);
+      if (result != RD_KAFKA_CONF_OK) {
+        logger_->log_error("PublishKafka: configure message.timeout.ms error result [%s]", errstr);
+        return false;
+      }
+    }
+  }
+
+  rd_kafka_topic_t* topic_reference = rd_kafka_topic_new(conn->getConnection(), topic_name.c_str(), topic_conf_);
+  if (topic_reference == nullptr) {
+    rd_kafka_resp_err_t resp_err = rd_kafka_last_error();
+    logger_->log_error("PublishKafka: failed to create topic %s, error: %s", topic_name.c_str(), rd_kafka_err2str(resp_err));
+    return false;
+  }
+
+  // The topic took ownership of the configuration, we must not free it
+  confGuard.disable();
+
+  std::shared_ptr<KafkaTopic> kafkaTopicref = std::make_shared<KafkaTopic>(topic_reference);
+
+  conn->putTopic(topic_name, kafkaTopicref);
+
+  return true;
+}
+
 void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
   logger_->log_debug("PublishKafka::onTrigger enter");
 
@@ -458,40 +534,13 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
 
     // Add topic to the connection if needed
     if (!conn->hasTopic(topic)) {
-      auto topic_conf_ = rd_kafka_topic_conf_new();
-      rd_kafka_conf_res_t result;
-      std::string value;
-      std::array<char, 512U> errstr;
-      int64_t valInt;
-      std::string valueConf;
-
-      if (context->getProperty(DeliveryGuarantee, value, flowFile) && !value.empty()) {
-        rd_kafka_topic_conf_set(topic_conf_, "request.required.acks", value.c_str(), errstr.data(), errstr.size());
-        logger_->log_debug("PublishKafka: request.required.acks [%s]", value);
-        if (result != RD_KAFKA_CONF_OK)
-          logger_->log_error("PublishKafka: configure delivery guarantee error result [%s]", errstr);
+      if (!createNewTopic(conn, context, topic)) {
+        logger_->log_error("Failed to add topic %s", topic);
+        messages->modifyResult(flow_file_index, [](FlowFileResult& flow_file_result) {
+          flow_file_result.flow_file_error = true;
+        });
+        continue;
       }
-      value = "";
-      if (context->getProperty(RequestTimeOut, value, flowFile) && !value.empty()) {
-        core::TimeUnit unit;
-        if (core::Property::StringToTime(value, valInt, unit) &&
-            core::Property::ConvertTimeUnitToMS(valInt, unit, valInt)) {
-          valueConf = std::to_string(valInt);
-          rd_kafka_topic_conf_set(topic_conf_, "request.timeout.ms", valueConf.c_str(), errstr.data(), errstr.size());
-          logger_->log_debug("PublishKafka: request.timeout.ms [%s]", valueConf);
-          if (result != RD_KAFKA_CONF_OK)
-            logger_->log_error("PublishKafka: configure timeout error result [%s]", errstr);
-        }
-      }
-      result = rd_kafka_topic_conf_set(topic_conf_, "message.timeout.ms", "500", errstr.data(), errstr.size());
-      if (result != RD_KAFKA_CONF_OK)
-        logger_->log_error("PublishKafka: configure message.timeout.ms error result [%s]", errstr);
-
-      auto topic_reference = rd_kafka_topic_new(conn->getConnection(), topic.c_str(), topic_conf_);
-
-      std::shared_ptr<KafkaTopic> kafkaTopicref = std::make_shared<KafkaTopic>(topic_reference);
-
-      conn->putTopic(topic, kafkaTopicref);
     }
 
     std::string kafkaKey;

@@ -80,6 +80,7 @@ class PublishKafka : public core::Processor {
   static core::Property DeliveryGuarantee;
   static core::Property MaxMessageSize;
   static core::Property RequestTimeOut;
+  static core::Property MessageTimeOut;
   static core::Property ClientName;
   static core::Property BatchSize;
   static core::Property AttributeNameRegex;
@@ -311,6 +312,7 @@ class PublishKafka : public core::Processor {
  protected:
 
   bool configureNewConnection(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context);
+  bool createNewTopic(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context, const std::string& topic_name);
 
  private:
   static void messageDeliveryCallback(rd_kafka_t* rk, const rd_kafka_message_t* rkmessage, void* opaque);
