@@ -133,7 +133,7 @@ void PublishKafka::messageDeliveryCallback(rd_kafka_t* rk, const rd_kafka_messag
     return;
   }
   std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>* func =
-                                                                 reinterpret_cast<std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>*>(rkmessage->_private);
+    reinterpret_cast<std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>*>(rkmessage->_private);
   try {
     (*func)(rk, rkmessage);
   } catch (...) {
@@ -141,7 +141,7 @@ void PublishKafka::messageDeliveryCallback(rd_kafka_t* rk, const rd_kafka_messag
   delete func;
 }
 
-bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::FlowFile> &ff) {
+bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context) {
   std::string value;
   int64_t valInt;
   std::string valueConf;
@@ -179,7 +179,7 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
     return false;
   }
 
-// Kerberos configuration
+  // Kerberos configuration
   if (context->getProperty(KerberosServiceName.getName(), value) && !value.empty()) {
     result = rd_kafka_conf_set(conf_, "sasl.kerberos.service.name", value.c_str(), errstr, sizeof(errstr));
     logger_->log_debug("PublishKafka: sasl.kerberos.service.name [%s]", value);
@@ -331,40 +331,80 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
 }
 
 void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-  logger_->log_trace("Enter trigger");
-  std::shared_ptr<core::FlowFile> flowFile = session->get();
+  logger_->log_debug("PublishKafka::onTrigger enter");
 
-  if (!flowFile) {
+  // Try to get a KafkaConnection
+  std::string client_id, brokers;
+  if (!context->getProperty(ClientName.getName(), client_id)) {
+    logger_->log_error("Client Name property missing or invalid");
+    context->yield();
+    return;
+  }
+  if (!context->getProperty(SeedBrokers.getName(), brokers)) {
+    logger_->log_error("Knowb Brokers property missing or invalid");
+    context->yield();
     return;
   }
 
-  std::string client_id, brokers, topic;
+  KafkaConnectionKey key;
+  key.brokers_ = brokers;
+  key.client_id_ = client_id;
 
-  std::unique_ptr<KafkaLease> lease;
-  std::shared_ptr<KafkaConnection> conn;
-// get the client ID, brokers, and topic from either the flowfile, the configuration, or the properties
-  if (context->getProperty(ClientName, client_id, flowFile) && context->getProperty(SeedBrokers, brokers, flowFile) && context->getProperty(Topic, topic, flowFile)) {
-    KafkaConnectionKey key;
-    key.brokers_ = brokers;
-    key.client_id_ = client_id;
+  std::unique_ptr<KafkaLease> lease = connection_pool_.getOrCreateConnection(key);
+  if (lease == nullptr) {
+    logger_->log_info("This connection is used by another thread.");
+    context->yield();
+    return;
+  }
 
-    lease = connection_pool_.getOrCreateConnection(key);
-    if (lease == nullptr) {
-      logger_->log_info("This connection is used by another thread.");
+  std::shared_ptr<KafkaConnection> conn = lease->getConn();
+  if (!conn->initialized()) {
+    logger_->log_trace("Connection not initialized to %s, %s", client_id, brokers);
+    if (!configureNewConnection(conn, context)) {
+      logger_->log_error("Could not configure Kafka Connection");
       context->yield();
       return;
     }
-    conn = lease->getConn();
+  }
 
-    if (!conn->initialized()) {
-      logger_->log_trace("Connection not initialized to %s, %s, %s", client_id, brokers, topic);
-      if (!configureNewConnection(conn, context, flowFile)) {
-        logger_->log_error("Could not configure Kafka Connection");
-        session->transfer(flowFile, Failure);
-        return;
-      }
+  // Collect FlowFiles to process
+  uint32_t batch_size = 10U;
+  uint64_t target_bytes = 512 * 1024U;
+  uint64_t actual_bytes = 0U;
+  std::vector<std::shared_ptr<core::FlowFile>> flowFiles;
+  for (uint32_t i = 0; i < batch_size; i++) {
+    std::shared_ptr<core::FlowFile> flowFile = session->get();
+    if (flowFile == nullptr) {
+      break;
+    }
+    actual_bytes += flowFile->getSize();
+    flowFiles.emplace_back(std::move(flowFile));
+    if (actual_bytes >= target_bytes) {
+      break;
+    }
+  }
+  if (flowFiles.empty()) {
+    return;
+  }
+  logger_->log_debug("Processing %lu flow files with a total size of %llu B", flowFiles.size(), actual_bytes);
+
+  auto messages = std::make_shared<Messages>();
+
+  // Process FlowFiles
+  for (auto& flowFile : flowFiles) {
+    size_t flow_file_index = messages->addFlowFile();
+
+    // Get Topic (FlowFile-dependent EL property)
+    std::string topic;
+    if (!context->getProperty(Topic, topic, flowFile)) {
+      logger_->log_error("Flow file %s does not have a valid Topic", flowFile->getUUIDStr());
+      messages->modifyResult(flow_file_index, [](FlowFileResult& flow_file_result) {
+        flow_file_result.flow_file_error = true;
+      });
+      continue;
     }
 
+    // Add topic to the connection if needed
     if (!conn->hasTopic(topic)) {
       auto topic_conf_ = rd_kafka_topic_conf_new();
       rd_kafka_conf_res_t result;
@@ -382,7 +422,8 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
       value = "";
       if (context->getProperty(RequestTimeOut, value, flowFile) && !value.empty()) {
         core::TimeUnit unit;
-        if (core::Property::StringToTime(value, valInt, unit) && core::Property::ConvertTimeUnitToMS(valInt, unit, valInt)) {
+        if (core::Property::StringToTime(value, valInt, unit) &&
+            core::Property::ConvertTimeUnitToMS(valInt, unit, valInt)) {
           valueConf = std::to_string(valInt);
           rd_kafka_topic_conf_set(topic_conf_, "request.timeout.ms", valueConf.c_str(), errstr, sizeof(errstr));
           logger_->log_debug("PublishKafka: request.timeout.ms [%s]", valueConf);
@@ -390,7 +431,7 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
             logger_->log_error("PublishKafka: configure timeout error result [%s]", errstr);
         }
       }
-      result = rd_kafka_topic_conf_set(topic_conf_, "message.timeout.ms", "1000", errstr, sizeof(errstr));
+      result = rd_kafka_topic_conf_set(topic_conf_, "message.timeout.ms", "500", errstr, sizeof(errstr));
       if (result != RD_KAFKA_CONF_OK)
         logger_->log_error("PublishKafka: configure message.timeout.ms error result [%s]", errstr);
 
@@ -400,50 +441,68 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
 
       conn->putTopic(topic, kafkaTopicref);
     }
-  } else {
-    logger_->log_error("Do not have required properties");
-    session->transfer(flowFile, Failure);
-    return;
-  }
 
-  std::string kafkaKey;
-  kafkaKey = "";
-  if (context->getDynamicProperty(MessageKeyField, kafkaKey, flowFile) && !kafkaKey.empty()) {
-    logger_->log_debug("PublishKafka: Message Key Field [%s]", kafkaKey);
-  } else {
-    kafkaKey = flowFile->getUUIDStr();
-  }
+    std::string kafkaKey;
+    kafkaKey = "";
+    if (context->getDynamicProperty(MessageKeyField, kafkaKey, flowFile) && !kafkaKey.empty()) {
+      logger_->log_debug("PublishKafka: Message Key Field [%s]", kafkaKey);
+    } else {
+      kafkaKey = flowFile->getUUIDStr();
+    }
 
-  auto thisTopic = conn->getTopic(topic);
-  if (thisTopic) {
-    PublishKafka::ReadCallback callback(max_seg_size_, kafkaKey, thisTopic->getTopic(), conn->getConnection(), flowFile, attributeNameRegex);
+    auto thisTopic = conn->getTopic(topic);
+    if (thisTopic == nullptr) {
+      logger_->log_error("Topic %s is invalid", topic);
+      messages->modifyResult(flow_file_index, [](FlowFileResult& flow_file_result) {
+        flow_file_result.flow_file_error = true;
+      });
+      continue;
+    }
+
+    PublishKafka::ReadCallback callback(max_seg_size_, kafkaKey, thisTopic->getTopic(), conn->getConnection(), flowFile,
+                                        attributeNameRegex, messages, flow_file_index);
     session->read(flowFile, &callback);
     if (callback.status_ < 0) {
       logger_->log_error("Failed to send flow to kafka topic %s", topic);
-      session->transfer(flowFile, Failure);
-    } else {
-      callback.messages_->waitForCompletion();
-      bool success = true;
-      callback.messages_->iterateMessages([&](const ReadCallback::MessageKey& key, const ReadCallback::MessageResult& result) {
-        if (result.is_error) {
-          success = false;
-          logger_->log_error("Failed to deliver segment %llu, error: %s", key.segment_num, rd_kafka_err2str(result.err_code));
-        } else {
-          logger_->log_debug("Successfully delivered segment %llu", key.segment_num);
-        }
+      messages->modifyResult(flow_file_index, [](FlowFileResult& flow_file_result) {
+        flow_file_result.flow_file_error = true;
       });
-      if (success) {
-        logger_->log_debug("Sent flow with length %d to kafka topic %s", callback.read_size_, topic);
-        session->transfer(flowFile, Success);
-      } else {
-        logger_->log_error("Failed to send flow to kafka topic %s", topic);
-        session->transfer(flowFile, Failure);
+      continue;
+    }
+  }
+
+  logger_->log_debug("PublishKafka::onTrigger waitForCompletion start");
+  messages->waitForCompletion();
+  logger_->log_debug("PublishKafka::onTrigger waitForCompletion finish");
+
+  messages->iterateFlowFiles([&](size_t index, const FlowFileResult& flow_file) {
+    bool success;
+    if (flow_file.flow_file_error) {
+      success = false;
+    } else if (flow_file.messages.empty()) {
+      success = false;
+      logger_->log_error("Assertion error: no messages found for flow file %s", flowFiles[index]->getUUIDStr());
+    } else {
+      success = true;
+      for (size_t segment_num = 0; segment_num < flow_file.messages.size(); segment_num++) {
+        const auto& message = flow_file.messages[segment_num];
+        if (message.is_error) {
+          success = false;
+          logger_->log_error("Failed to deliver flow file %s segment %zu, error: %s", flowFiles[index]->getUUIDStr(), segment_num,
+                             rd_kafka_err2str(message.err_code));
+        } else {
+          logger_->log_debug("Successfully delivered flow file %s segment %zu",  flowFiles[index]->getUUIDStr(), segment_num);
+        }
       }
     }
-  } else {
-    logger_->log_error("Topic %s is invalid", topic);
-    session->transfer(flowFile, Failure);
-  }
+    if (success) {
+      session->transfer(flowFiles[index], Success);
+    } else {
+      session->transfer(flowFiles[index], Failure);
+    }
+  });
+
+  logger_->log_debug("PublishKafka::onTrigger exit");
 }
 
 } /* namespace processors */
