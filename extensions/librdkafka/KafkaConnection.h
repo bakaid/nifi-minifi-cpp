@@ -55,9 +55,7 @@ class KafkaConnection {
 
   bool initialized() const;
 
-  void setConnection(rd_kafka_t *producer, rd_kafka_conf_t *conf);
-
-  rd_kafka_conf_t *getConf() const;
+  void setConnection(rd_kafka_t *producer);
 
   rd_kafka_t *getConnection() const;
 
@@ -89,7 +87,6 @@ class KafkaConnection {
 
   std::map<std::string, std::shared_ptr<KafkaTopic>> topics_;
 
-  rd_kafka_conf_t *conf_;
   rd_kafka_t *kafka_connection_;
 
   std::atomic<bool> poll_;

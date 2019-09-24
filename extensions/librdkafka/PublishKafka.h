@@ -258,7 +258,7 @@ class PublishKafka : public core::Processor {
                                     RD_KAFKA_V_KEY(key_.c_str(), key_.size()), RD_KAFKA_V_OPAQUE(callback.release()), RD_KAFKA_V_END);
           }
           if (err) {
-            rd_kafka_resp_err_t resp_err = rd_kafka_errno2err(errno);
+            rd_kafka_resp_err_t resp_err = rd_kafka_last_error();
             messages_->modifyResult(flow_file_index_, [segment_num, resp_err](FlowFileResult& flow_file) {
               auto& message = flow_file.messages.at(segment_num);
               message.completed = true;
@@ -293,7 +293,7 @@ class PublishKafka : public core::Processor {
 
  public:
 
-  virtual bool supportsDynamicProperties() {
+  virtual bool supportsDynamicProperties() override {
     return true;
   }
 

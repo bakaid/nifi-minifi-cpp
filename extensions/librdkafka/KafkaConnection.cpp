@@ -25,7 +25,6 @@ namespace processors {
 
 KafkaConnection::KafkaConnection(const KafkaConnectionKey &key)
     : logger_(logging::LoggerFactory<KafkaConnection>::getLogger()),
-      conf_(nullptr),
       kafka_connection_(nullptr) {
   lease_ = false;
   initialized_ = false;
@@ -52,10 +51,6 @@ void KafkaConnection::removeConnection() {
     });
     kafka_connection_ = nullptr;
   }
-  if (conf_) {
-    rd_kafka_conf_destroy(conf_);
-    conf_ = nullptr;
-  }
   initialized_ = false;
 }
 
@@ -63,19 +58,14 @@ bool KafkaConnection::initialized() const {
   return initialized_;
 }
 
-void KafkaConnection::setConnection(rd_kafka_t *producer, rd_kafka_conf_t *conf) {
+void KafkaConnection::setConnection(rd_kafka_t *producer) {
   removeConnection();
   kafka_connection_ = producer;
-  conf_ = conf;
   initialized_ = true;
   modifyLoggers([&](std::unordered_map<const rd_kafka_t*, std::weak_ptr<logging::Logger>>& loggers) {
     loggers[producer] = logger_;
   });
   startPoll();
-}
-
-rd_kafka_conf_t *KafkaConnection::getConf() const {
-  return conf_;
 }
 
 rd_kafka_t *KafkaConnection::getConnection() const {
