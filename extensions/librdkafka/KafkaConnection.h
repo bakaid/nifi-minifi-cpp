@@ -89,11 +89,11 @@ class KafkaConnection {
 
   std::map<std::string, std::shared_ptr<KafkaTopic>> topics_;
 
-  std::atomic<bool> poll_;
-  std::thread thread_kafka_poll_;
-
   rd_kafka_conf_t *conf_;
   rd_kafka_t *kafka_connection_;
+
+  std::atomic<bool> poll_;
+  std::thread thread_kafka_poll_;
 
   static void modifyLoggers(const std::function<void(std::unordered_map<const rd_kafka_t*, std::weak_ptr<logging::Logger>>&)>& func) {
     static std::mutex loggers_mutex;
@@ -103,9 +103,9 @@ class KafkaConnection {
     func(loggers);
   }
 
-  void finishPoll() {
+  void stopPoll() {
     poll_ = false;
-    logger_->log_info("Finish polling");
+    logger_->log_info("Stop polling");
     if (thread_kafka_poll_.joinable()) {
       thread_kafka_poll_.join();
     }
@@ -115,10 +115,9 @@ class KafkaConnection {
     poll_ = true;
     logger_->log_info("Start polling");
     thread_kafka_poll_ = std::thread([this]{
-//        printf("Poll events:\n");
         while (this->poll_) {
-          int tmp = rd_kafka_poll(this->kafka_connection_, 100);
-          printf("Poll events: %d\n", tmp);
+          int tmp = rd_kafka_poll(this->kafka_connection_, 1000);
+          std::cerr << "poll result is " << tmp << std::endl;
         }
     });
   }

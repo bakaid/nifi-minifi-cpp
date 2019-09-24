@@ -43,7 +43,7 @@ core::Property PublishKafka::Topic(core::PropertyBuilder::createProperty("Topic 
 
 core::Property PublishKafka::DeliveryGuarantee(
     core::PropertyBuilder::createProperty("Delivery Guarantee")->withDescription("Specifies the requirement for guaranteeing that a message is sent to Kafka")->isRequired(false)
-        ->supportsExpressionLanguage(true)->withDefaultValue("DELIVERY_ONE_NODE")->build());
+        ->supportsExpressionLanguage(true)->withDefaultValue(DELIVERY_ONE_NODE)->build());
 
 core::Property PublishKafka::MaxMessageSize(core::PropertyBuilder::createProperty("Max Request Size")->withDescription("Maximum Kafka protocol request message size")->isRequired(false)->build());
 
@@ -121,16 +121,24 @@ void PublishKafka::initialize() {
 void PublishKafka::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
 }
 
+void PublishKafka::notifyStop() {
+  std::cerr << "notifyStop called" << std::endl;
+}
+
 /**
  * Message delivery report callback using the richer rd_kafka_message_t object.
  */
-void PublishKafka::msgDelivered(rd_kafka_t *rk,
-                           const rd_kafka_message_t *rkmessage, void *opaque) {
-//    if (rkmessage->err) {
-        printf("%% Message delivery failed: %d -- %s\n", rkmessage->err,
-               rd_kafka_err2str(rkmessage->err));
-//    }
-  *(rd_kafka_resp_err_t*)rkmessage->_private = rkmessage->err;
+void PublishKafka::messageDeliveryCallback(rd_kafka_t* rk, const rd_kafka_message_t* rkmessage, void* /*opaque*/) {
+  if (rkmessage->_private == nullptr) {
+    return;
+  }
+  std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>* func =
+                                                                 reinterpret_cast<std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>*>(rkmessage->_private);
+  try {
+    (*func)(rk, rkmessage);
+  } catch (...) {
+  }
+  delete func;
 }
 
 bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::FlowFile> &ff) {
@@ -141,11 +149,11 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
   rd_kafka_conf_res_t result;
 
   auto conf_ = rd_kafka_conf_new();
-  rd_kafka_conf_set_dr_msg_cb(conf_, msgDelivered);
+  rd_kafka_conf_set_dr_msg_cb(conf_, &PublishKafka::messageDeliveryCallback);
   auto key = conn->getKey();
 
   if (context->getProperty(DebugContexts.getName(), value) && !value.empty()) {
-    rd_kafka_conf_set(conf_, "debug", value.c_str(), errstr, sizeof(errstr));
+    result = rd_kafka_conf_set(conf_, "debug", value.c_str(), errstr, sizeof(errstr));
     logger_->log_debug("PublishKafka: debug properties [%s]", value);
     if (result != RD_KAFKA_CONF_OK)
       logger_->log_error("PublishKafka: configure debug properties error result [%s]", errstr);
@@ -293,9 +301,6 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
     }
   }
 
-  //TODO: hardcoded for developing
-  rd_kafka_conf_set(conf_, "message.timeout.ms", "42", errstr, sizeof(errstr));
-
   // Add all of the dynamic properties as librdkafka configurations
   const auto &dynamic_prop_keys = context->getDynamicPropertyKeys();
   logger_->log_info("PublishKafka registering %d librdkafka dynamic properties", dynamic_prop_keys.size());
@@ -360,24 +365,8 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
       }
     }
 
-//    // Check if brokers are down, if yes then yield.
-//    const struct rd_kafka_metadata *metadata;
-//    /* Fetch metadata */
-//    // TODO: What is the time complexity of this??
-//    rd_kafka_resp_err_t err = rd_kafka_metadata(conn->getConnection(), 0, nullptr,
-//                            &metadata, 500);
-//    if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-//      logger_->log_error("Failed to acquire metadata: %s\n", rd_kafka_err2str(err));
-//      context->yield();
-//      return;
-//    } else {
-//      logger_->log_debug("There are %d brokers", metadata->broker_cnt);
-//      rd_kafka_metadata_destroy(metadata);
-//    }
-
     if (!conn->hasTopic(topic)) {
       auto topic_conf_ = rd_kafka_topic_conf_new();
-      auto topic_reference = rd_kafka_topic_new(conn->getConnection(), topic.c_str(), topic_conf_);
       rd_kafka_conf_res_t result;
       std::string value;
       char errstr[512];
@@ -401,6 +390,11 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
             logger_->log_error("PublishKafka: configure timeout error result [%s]", errstr);
         }
       }
+      result = rd_kafka_topic_conf_set(topic_conf_, "message.timeout.ms", "1000", errstr, sizeof(errstr));
+      if (result != RD_KAFKA_CONF_OK)
+        logger_->log_error("PublishKafka: configure message.timeout.ms error result [%s]", errstr);
+
+      auto topic_reference = rd_kafka_topic_new(conn->getConnection(), topic.c_str(), topic_conf_);
 
       std::shared_ptr<KafkaTopic> kafkaTopicref = std::make_shared<KafkaTopic>(topic_reference, topic_conf_);
 
@@ -428,8 +422,23 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
       logger_->log_error("Failed to send flow to kafka topic %s", topic);
       session->transfer(flowFile, Failure);
     } else {
-      logger_->log_debug("Sent flow with length %d to kafka topic %s", callback.read_size_, topic);
-      session->transfer(flowFile, Success);
+      callback.messages_->waitForCompletion();
+      bool success = true;
+      callback.messages_->iterateMessages([&](const ReadCallback::MessageKey& key, const ReadCallback::MessageResult& result) {
+        if (result.is_error) {
+          success = false;
+          logger_->log_error("Failed to deliver segment %llu, error: %s", key.segment_num, rd_kafka_err2str(result.err_code));
+        } else {
+          logger_->log_debug("Successfully delivered segment %llu", key.segment_num);
+        }
+      });
+      if (success) {
+        logger_->log_debug("Sent flow with length %d to kafka topic %s", callback.read_size_, topic);
+        session->transfer(flowFile, Success);
+      } else {
+        logger_->log_error("Failed to send flow to kafka topic %s", topic);
+        session->transfer(flowFile, Failure);
+      }
     }
   } else {
     logger_->log_error("Topic %s is invalid", topic);

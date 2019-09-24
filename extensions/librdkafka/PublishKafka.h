@@ -31,6 +31,9 @@
 #include "rdkafka.h"
 #include "KafkaPool.h"
 #include <regex>
+#include <map>
+#include <mutex>
+#include <condition_variable>
 
 namespace org {
 namespace apache {
@@ -109,31 +112,30 @@ class PublishKafka : public core::Processor {
           rkt_(rkt),
           rk_(rk),
           flowFile_(flowFile),
+          messages_(std::make_shared<Messages>()),
           attributeNameRegex_(attributeNameRegex) {
       flow_size_ = flowFile_->getSize();
       status_ = 0;
       read_size_ = 0;
       hdrs = nullptr;
     }
+
     ~ReadCallback() {
       if (hdrs) {
         rd_kafka_headers_destroy(hdrs);
       }
     }
+
     int64_t process(std::shared_ptr<io::BaseStream> stream) {
-      if (flow_size_ < max_seg_size_)
+      messages_->clear();
+      if (flow_size_ < max_seg_size_) {
         max_seg_size_ = flow_size_;
+      }
       std::vector<unsigned char> buffer;
       buffer.reserve(max_seg_size_);
       read_size_ = 0;
       status_ = 0;
       rd_kafka_resp_err_t err;
-      // TODO: Change this.
-      // Create struct with map
-      // onTrigger check
-      // onStop failure
-      // *** Thread-safe
-      rd_kafka_resp_err_t err_dr;
 
       for (auto kv : flowFile_->getAttributes()) {
         if (regex_match(kv.first, attributeNameRegex_)) {
@@ -144,6 +146,7 @@ class PublishKafka : public core::Processor {
         }
       }
 
+      uint64_t segment_num = 0U;
       while (read_size_ < flow_size_) {
         int readRet = stream->read(&buffer[0], max_seg_size_);
         if (readRet < 0) {
@@ -151,17 +154,29 @@ class PublishKafka : public core::Processor {
           return read_size_;
         }
         if (readRet > 0) {
+          MessageKey key(flowFile_, segment_num);
+          messages_->addMessage(key);
+          auto messages_copy = this->messages_;
+          auto callback = std::unique_ptr<std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>>(
+              new std::function<void(rd_kafka_t*, const rd_kafka_message_t*)>(
+                [messages_copy, key](rd_kafka_t* /*rk*/, const rd_kafka_message_t* rkmessage) {
+                  messages_copy->modifyResult(key, [rkmessage](MessageResult& result){
+                    result.completed = true;
+                    result.err_code = rkmessage->err;
+                    result.is_error = result.err_code != 0;
+                  });
+                }));
           if (hdrs) {
             rd_kafka_headers_t *hdrs_copy;
             hdrs_copy = rd_kafka_headers_copy(hdrs);
             err = rd_kafka_producev(rk_, RD_KAFKA_V_RKT(rkt_), RD_KAFKA_V_PARTITION(RD_KAFKA_PARTITION_UA), RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY), RD_KAFKA_V_VALUE(&buffer[0], readRet),
-                                    RD_KAFKA_V_HEADERS(hdrs_copy), RD_KAFKA_V_KEY(key_.c_str(), key_.size()), RD_KAFKA_V_OPAQUE(&err_dr), RD_KAFKA_V_END);
+                                    RD_KAFKA_V_HEADERS(hdrs_copy), RD_KAFKA_V_KEY(key_.c_str(), key_.size()), RD_KAFKA_V_OPAQUE(callback.release()), RD_KAFKA_V_END);
             if (err) {
               rd_kafka_headers_destroy(hdrs_copy);
             }
           } else {
             err = rd_kafka_producev(rk_, RD_KAFKA_V_RKT(rkt_), RD_KAFKA_V_PARTITION(RD_KAFKA_PARTITION_UA), RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY), RD_KAFKA_V_VALUE(&buffer[0], readRet),
-                                    RD_KAFKA_V_KEY(key_.c_str(), key_.size()), RD_KAFKA_V_OPAQUE(&err_dr), RD_KAFKA_V_END);
+                                    RD_KAFKA_V_KEY(key_.c_str(), key_.size()), RD_KAFKA_V_OPAQUE(callback.release()), RD_KAFKA_V_END);
           }
           if (err) {
             status_ = -1;
@@ -171,9 +186,80 @@ class PublishKafka : public core::Processor {
         } else {
           break;
         }
+        segment_num++;
       }
       return read_size_;
     }
+
+    struct MessageKey {
+      std::shared_ptr<core::FlowFile> flow_file;
+      uint64_t segment_num;
+
+      MessageKey(std::shared_ptr<core::FlowFile> flow_file_, uint64_t segment_num_)
+        : flow_file(std::move(flow_file_))
+        , segment_num(segment_num_) {
+      }
+      bool operator<(const MessageKey& other) const {
+        return std::tie(this->flow_file, this->segment_num) < std::tie(other.flow_file, other.segment_num);
+      }
+      MessageKey(const MessageKey&) = default;
+      MessageKey(MessageKey&&) = default;
+      MessageKey& operator=(const MessageKey&) = default;
+      MessageKey& operator=(MessageKey&&) = default;
+    };
+    struct MessageResult {
+      bool completed;
+      bool is_error;
+      rd_kafka_resp_err_t err_code;
+
+      MessageResult()
+      : completed(false)
+      , is_error(false) {
+      }
+      MessageResult(const MessageResult&) = default;
+      MessageResult(MessageResult&&) = default;
+      MessageResult& operator=(const MessageResult&) = default;
+      MessageResult& operator=(MessageResult&&) = default;
+    };
+    struct Messages {
+      std::mutex mutex;
+      std::condition_variable cv;
+      std::map<MessageKey, MessageResult> messages;
+
+      void clear() {
+        std::lock_guard<std::mutex> lock(mutex);
+        messages.clear();
+      }
+
+      void waitForCompletion() {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [this]() -> bool {
+          return std::all_of(this->messages.begin(), this->messages.end(), [](const std::pair<MessageKey, MessageResult>& message) {
+            std::cerr << "message completed is: " << message.second.completed << std::endl;
+            return message.second.completed;
+          });
+        });
+      }
+
+      void addMessage(const MessageKey& key) {
+        std::lock_guard<std::mutex> lock(mutex);
+        messages.emplace(key, MessageResult{});
+      }
+
+      void modifyResult(const MessageKey& key, const std::function<void(MessageResult&)>& fun) {
+        std::unique_lock<std::mutex> lock(mutex);
+        fun(messages.at(key));
+        cv.notify_all();
+      }
+
+      void iterateMessages(const std::function<void(const MessageKey&, const MessageResult&)>& fun) {
+        std::lock_guard<std::mutex> lock(mutex);
+        for (const auto& message: messages) {
+          fun(message.first, message.second);
+        }
+      }
+    };
+
     uint64_t flow_size_;
     uint64_t max_seg_size_;
     std::string key_;
@@ -181,6 +267,7 @@ class PublishKafka : public core::Processor {
     rd_kafka_t *rk_;
     rd_kafka_headers_t *hdrs;
     std::shared_ptr<core::FlowFile> flowFile_;
+    std::shared_ptr<Messages> messages_;
     int status_;
     int read_size_;
     std::regex attributeNameRegex_;
@@ -201,13 +288,14 @@ class PublishKafka : public core::Processor {
   virtual void onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) override;
   virtual void initialize() override;
   virtual void onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) override;
+  virtual void notifyStop() override;
 
  protected:
 
   bool configureNewConnection(const std::shared_ptr<KafkaConnection> &conn, const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::FlowFile> &ff);
 
  private:
-  static void msgDelivered (rd_kafka_t *rk, const rd_kafka_message_t *rkmessage, void *opaque);
+  static void messageDeliveryCallback(rd_kafka_t* rk, const rd_kafka_message_t* rkmessage, void* opaque);
 
   std::shared_ptr<logging::Logger> logger_;
 

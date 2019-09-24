@@ -43,9 +43,9 @@ void KafkaConnection::remove() {
 }
 
 void KafkaConnection::removeConnection() {
+  stopPoll();
   if (kafka_connection_) {
     rd_kafka_flush(kafka_connection_, 10 * 1000); /* wait for max 10 seconds */
-    finishPoll();
     rd_kafka_destroy(kafka_connection_);
     modifyLoggers([&](std::unordered_map<const rd_kafka_t*, std::weak_ptr<logging::Logger>>& loggers) {
       loggers.erase(kafka_connection_);
