@@ -68,7 +68,7 @@ core::Property PublishKafka::BatchSize(
 core::Property PublishKafka::TargetBatchPayloadSize(
     core::PropertyBuilder::createProperty("Target Batch Payload Size")->withDescription("The target total payload size for a batch. 0 B means unlimited (Batch Size is still applied).")
         ->isRequired(false)->withDefaultValue<core::DataSizeValue>("512 KB")->build());
-core::Property PublishKafka::AttributeNameRegex("Attributes to Send as Headers", "Any attribute whose name matches the regex will be added to the Kafka messages as a Header", ".*");
+core::Property PublishKafka::AttributeNameRegex("Attributes to Send as Headers", "Any attribute whose name matches the regex will be added to the Kafka messages as a Header", "");
 core::Property PublishKafka::QueueBufferMaxTime("Queue Buffering Max Time", "Delay to wait for messages in the producer queue to accumulate before constructing message batches", "");
 core::Property PublishKafka::QueueBufferMaxSize("Queue Max Buffer Size", "Maximum total message size sum allowed on the producer queue", "");
 core::Property PublishKafka::QueueBufferMaxMessage("Queue Max Message", "Maximum number of messages allowed on the producer queue", "");
@@ -135,7 +135,7 @@ void PublishKafka::onSchedule(const std::shared_ptr<core::ProcessContext> &conte
 }
 
 void PublishKafka::notifyStop() {
-  logger_->log_error("notifyStop called");
+  logger_->log_debug("notifyStop called");
   interrupted_ = true;
   std::lock_guard<std::mutex> lock(messages_mutex_);
   for (auto& messages : messages_set_) {
@@ -192,7 +192,7 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
     logger_->log_error("Client id is empty");
     return false;
   }
-  rd_kafka_conf_set(conf_, "client.id", key->client_id_.c_str(), errstr.data(), errstr.size());
+  result = rd_kafka_conf_set(conf_, "client.id", key->client_id_.c_str(), errstr.data(), errstr.size());
   logger_->log_debug("PublishKafka: client.id [%s]", key->client_id_);
   if (result != RD_KAFKA_CONF_OK) {
     logger_->log_error("PublishKafka: configure error result [%s]", errstr);
@@ -248,7 +248,7 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
   }
   value = "";
   if (context->getProperty(QueueBufferMaxMessage.getName(), value) && !value.empty()) {
-    rd_kafka_conf_set(conf_, "queue.buffering.max.messages", value.c_str(), errstr.data(), errstr.size());
+    result = rd_kafka_conf_set(conf_, "queue.buffering.max.messages", value.c_str(), errstr.data(), errstr.size());
     logger_->log_debug("PublishKafka: queue.buffering.max.messages [%s]", value);
     if (result != RD_KAFKA_CONF_OK) {
       logger_->log_error("PublishKafka: configure error result [%s]", errstr);
@@ -308,7 +308,7 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
       }
       value = "";
       if (context->getProperty(SecurityCA.getName(), value) && !value.empty()) {
-        rd_kafka_conf_set(conf_, "ssl.ca.location", value.c_str(), errstr.data(), errstr.size());
+        result = rd_kafka_conf_set(conf_, "ssl.ca.location", value.c_str(), errstr.data(), errstr.size());
         logger_->log_debug("PublishKafka: ssl.ca.location [%s]", value);
         if (result != RD_KAFKA_CONF_OK) {
           logger_->log_error("PublishKafka: configure error result [%s]", errstr);
@@ -459,8 +459,6 @@ bool PublishKafka::createNewTopic(const std::shared_ptr<KafkaConnection> &conn, 
 }
 
 void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
-  logger_->log_debug("PublishKafka::onTrigger enter");
-
   // Check whether we have been interrupted
   if (interrupted_) {
     logger_->log_info("The processor has been interrupted, not running onTrigger");
@@ -625,12 +623,12 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
     }
   }
 
-  logger_->log_debug("PublishKafka::onTrigger waitForCompletion start");
+  logger_->log_trace("PublishKafka::onTrigger waitForCompletion start");
   messages->waitForCompletion();
   if (messages->wasInterrupted()) {
     logger_->log_warn("Waiting for delivery confirmation was interrupted, some flow files might be routed to Failure, even if they were successfully delivered.");
   }
-  logger_->log_debug("PublishKafka::onTrigger waitForCompletion finish");
+  logger_->log_trace("PublishKafka::onTrigger waitForCompletion finish");
 
   messages->iterateFlowFiles([&](size_t index, const FlowFileResult& flow_file) {
     bool success;
@@ -651,7 +649,7 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
           logger_->log_error("Failed to deliver flow file %s segment %zu, error: %s", flowFiles[index]->getUUIDStr(), segment_num,
                              rd_kafka_err2str(message.err_code));
         } else {
-          logger_->log_debug("Successfully delivered flow file %s segment %zu",  flowFiles[index]->getUUIDStr(), segment_num);
+          logger_->log_debug("Successfully delivered flow file %s segment %zu", flowFiles[index]->getUUIDStr(), segment_num);
         }
       }
     }
@@ -661,8 +659,6 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
       session->transfer(flowFiles[index], Failure);
     }
   });
-
-  logger_->log_debug("PublishKafka::onTrigger exit");
 }
 
 } /* namespace processors */

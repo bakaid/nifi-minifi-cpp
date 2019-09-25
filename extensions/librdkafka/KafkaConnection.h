@@ -102,7 +102,7 @@ class KafkaConnection {
 
   void stopPoll() {
     poll_ = false;
-    logger_->log_info("Stop polling");
+    logger_->log_debug("Stop polling");
     if (thread_kafka_poll_.joinable()) {
       thread_kafka_poll_.join();
     }
@@ -110,11 +110,10 @@ class KafkaConnection {
 
   void startPoll() {
     poll_ = true;
-    logger_->log_info("Start polling");
+    logger_->log_debug("Start polling");
     thread_kafka_poll_ = std::thread([this]{
         while (this->poll_) {
-          int tmp = rd_kafka_poll(this->kafka_connection_, 1000);
-          std::cerr << "poll result is " << tmp << std::endl;
+          rd_kafka_poll(this->kafka_connection_, 1000);
         }
     });
   }

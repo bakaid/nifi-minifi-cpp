@@ -148,8 +148,7 @@ class PublishKafka : public core::Processor {
           if (flow_file.flow_file_error) {
             return true;
           }
-          return std::all_of(flow_file.messages.begin(), flow_file.messages.end(), [&](const MessageResult& message) {
-            std::cerr << index << " message completed status is: " << message.completed << std::endl;
+          return std::all_of(flow_file.messages.begin(), flow_file.messages.end(), [](const MessageResult& message) {
             return message.completed;
           });
         });

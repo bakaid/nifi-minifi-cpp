@@ -25,11 +25,11 @@ namespace processors {
 
 KafkaConnection::KafkaConnection(const KafkaConnectionKey &key)
     : logger_(logging::LoggerFactory<KafkaConnection>::getLogger()),
-      kafka_connection_(nullptr) {
+      kafka_connection_(nullptr),
+      poll_(false) {
   lease_ = false;
   initialized_ = false;
   key_ = key;
-  poll_ = false;
 }
 
 KafkaConnection::~KafkaConnection() {
