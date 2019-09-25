@@ -31,8 +31,9 @@
 #include "utils/RegexUtils.h"
 #include "rdkafka.h"
 #include "KafkaPool.h"
-#include <regex>
+#include <atomic>
 #include <map>
+#include <set>
 #include <mutex>
 #include <condition_variable>
 
@@ -67,7 +68,8 @@ class PublishKafka : public core::Processor {
   explicit PublishKafka(std::string name, utils::Identifier uuid = utils::Identifier())
       : core::Processor(name, uuid),
         connection_pool_(5),
-        logger_(logging::LoggerFactory<PublishKafka>::getLogger()) {
+        logger_(logging::LoggerFactory<PublishKafka>::getLogger()),
+        interrupted_(false) {
   }
   // Destructor
   virtual ~PublishKafka() {
@@ -114,10 +116,6 @@ class PublishKafka : public core::Processor {
         : completed(false)
         , is_error(false) {
     }
-    MessageResult(const MessageResult&) = default;
-    MessageResult(MessageResult&&) = default;
-    MessageResult& operator=(const MessageResult&) = default;
-    MessageResult& operator=(MessageResult&&) = default;
   };
   struct FlowFileResult {
     bool flow_file_error;
@@ -126,19 +124,23 @@ class PublishKafka : public core::Processor {
     FlowFileResult()
         : flow_file_error(false) {
     }
-    FlowFileResult(const FlowFileResult&) = default;
-    FlowFileResult(FlowFileResult&&) = default;
-    FlowFileResult& operator=(const FlowFileResult&) = default;
-    FlowFileResult& operator=(FlowFileResult&&) = default;
   };
   struct Messages {
     std::mutex mutex;
     std::condition_variable cv;
     std::vector<FlowFileResult> flow_files;
+    bool interrupted;
+
+    Messages()
+        : interrupted(false) {
+    }
 
     void waitForCompletion() {
       std::unique_lock<std::mutex> lock(mutex);
       cv.wait(lock, [this]() -> bool {
+        if (interrupted) {
+          return true;
+        }
         size_t index = 0U;
         return std::all_of(this->flow_files.begin(), this->flow_files.end(), [&](const FlowFileResult& flow_file) {
           index++;
@@ -170,6 +172,17 @@ class PublishKafka : public core::Processor {
       for (size_t index = 0U; index < flow_files.size(); index++) {
         fun(index, flow_files[index]);
       }
+    }
+
+    void interrupt() {
+      std::unique_lock<std::mutex> lock(mutex);
+      interrupted = true;
+      cv.notify_all();
+    }
+
+    bool wasInterrupted() {
+      std::lock_guard<std::mutex> lock(mutex);
+      return interrupted;
     }
   };
 
@@ -320,6 +333,10 @@ class PublishKafka : public core::Processor {
   std::shared_ptr<logging::Logger> logger_;
 
   KafkaPool connection_pool_;
+
+  std::atomic<bool> interrupted_;
+  std::mutex messages_mutex_;
+  std::set<std::shared_ptr<Messages>> messages_set_;
 };
 
 REGISTER_RESOURCE(PublishKafka, "This Processor puts the contents of a FlowFile to a Topic in Apache Kafka. The content of a FlowFile becomes the contents of a Kafka message. "

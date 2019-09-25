@@ -128,10 +128,16 @@ void PublishKafka::initialize() {
 }
 
 void PublishKafka::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &sessionFactory) {
+  interrupted_ = false;
 }
 
 void PublishKafka::notifyStop() {
-  std::cerr << "notifyStop called" << std::endl;
+  logger_->log_error("notifyStop called");
+  interrupted_ = true;
+  std::lock_guard<std::mutex> lock(messages_mutex_);
+  for (auto& messages : messages_set_) {
+    messages->interrupt();
+  }
 }
 
 /**
@@ -452,6 +458,13 @@ bool PublishKafka::createNewTopic(const std::shared_ptr<KafkaConnection> &conn, 
 void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
   logger_->log_debug("PublishKafka::onTrigger enter");
 
+  // Check whether we have been interrupted
+  if (interrupted_) {
+    logger_->log_info("The processor has been interrupted, not running onTrigger");
+    context->yield();
+    return;
+  }
+
   // Try to get a KafkaConnection
   std::string client_id, brokers;
   if (!context->getProperty(ClientName.getName(), client_id)) {
@@ -528,6 +541,16 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
   logger_->log_debug("Processing %lu flow files with a total size of %llu B", flowFiles.size(), actual_bytes);
 
   auto messages = std::make_shared<Messages>();
+  // We must add this to the messages set, so that it will be interrupted when notifyStop is called
+  {
+    std::lock_guard<std::mutex> lock(messages_mutex_);
+    messages_set_.emplace(messages);
+  }
+  // We also have to insure that it will be removed once we are done with it
+  utils::ScopeGuard messagesSetGuard([&]() {
+    std::lock_guard<std::mutex> lock(messages_mutex_);
+    messages_set_.erase(messages);
+  });
 
   // Process FlowFiles
   for (auto& flowFile : flowFiles) {
@@ -585,6 +608,9 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
 
   logger_->log_debug("PublishKafka::onTrigger waitForCompletion start");
   messages->waitForCompletion();
+  if (messages->wasInterrupted()) {
+    logger_->log_warn("Waiting for delivery confirmation was interrupted, some flow files might be routed to Failure, even if they were successfully delivered.");
+  }
   logger_->log_debug("PublishKafka::onTrigger waitForCompletion finish");
 
   messages->iterateFlowFiles([&](size_t index, const FlowFileResult& flow_file) {
@@ -598,7 +624,10 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
       success = true;
       for (size_t segment_num = 0; segment_num < flow_file.messages.size(); segment_num++) {
         const auto& message = flow_file.messages[segment_num];
-        if (message.is_error) {
+        if (!message.completed) {
+          success = false;
+          logger_->log_error("Waiting for delivery confirmation was interrupted for flow file %s segment %zu", flowFiles[index]->getUUIDStr(), segment_num);
+        } else if (message.is_error) {
           success = false;
           logger_->log_error("Failed to deliver flow file %s segment %zu, error: %s", flowFiles[index]->getUUIDStr(), segment_num,
                              rd_kafka_err2str(message.err_code));
