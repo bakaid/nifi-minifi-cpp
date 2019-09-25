@@ -28,6 +28,7 @@
 #include "core/Property.h"
 #include "core/logging/LoggerConfiguration.h"
 #include "core/logging/Logger.h"
+#include "utils/RegexUtils.h"
 #include "rdkafka.h"
 #include "KafkaPool.h"
 #include <regex>
@@ -67,7 +68,6 @@ class PublishKafka : public core::Processor {
       : core::Processor(name, uuid),
         connection_pool_(5),
         logger_(logging::LoggerFactory<PublishKafka>::getLogger()) {
-    max_seg_size_ = -1;
   }
   // Destructor
   virtual ~PublishKafka() {
@@ -181,7 +181,7 @@ class PublishKafka : public core::Processor {
                  rd_kafka_topic_t *rkt,
                  rd_kafka_t *rk,
                  const std::shared_ptr<core::FlowFile> flowFile,
-                 const std::regex &attributeNameRegex,
+                 utils::Regex &attributeNameRegex,
                  std::shared_ptr<Messages> messages,
                  size_t flow_file_index)
         : max_seg_size_(max_seg_size),
@@ -205,7 +205,7 @@ class PublishKafka : public core::Processor {
     }
 
     int64_t process(std::shared_ptr<io::BaseStream> stream) {
-      if (flow_size_ < max_seg_size_) {
+      if (max_seg_size_ == 0U || flow_size_ < max_seg_size_) {
         max_seg_size_ = flow_size_;
       }
       std::vector<unsigned char> buffer;
@@ -215,7 +215,7 @@ class PublishKafka : public core::Processor {
       rd_kafka_resp_err_t err;
 
       for (auto kv : flowFile_->getAttributes()) {
-        if (regex_match(kv.first, attributeNameRegex_)) {
+        if(attributeNameRegex_.match(kv.first)) {
           if (!hdrs) {
             hdrs = rd_kafka_headers_new(8);
           }
@@ -289,7 +289,7 @@ class PublishKafka : public core::Processor {
     size_t flow_file_index_;
     int status_;
     int read_size_;
-    std::regex attributeNameRegex_;
+    utils::Regex& attributeNameRegex_;
   };
 
  public:
@@ -320,9 +320,6 @@ class PublishKafka : public core::Processor {
   std::shared_ptr<logging::Logger> logger_;
 
   KafkaPool connection_pool_;
-
-  uint64_t max_seg_size_;
-  std::regex attributeNameRegex;
 };
 
 REGISTER_RESOURCE(PublishKafka, "This Processor puts the contents of a FlowFile to a Topic in Apache Kafka. The content of a FlowFile becomes the contents of a Kafka message. "

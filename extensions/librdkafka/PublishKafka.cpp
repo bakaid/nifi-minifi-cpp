@@ -71,7 +71,9 @@ core::Property PublishKafka::QueueBufferMaxTime("Queue Buffering Max Time", "Del
 core::Property PublishKafka::QueueBufferMaxSize("Queue Max Buffer Size", "Maximum total message size sum allowed on the producer queue", "");
 core::Property PublishKafka::QueueBufferMaxMessage("Queue Max Message", "Maximum number of messages allowed on the producer queue", "");
 core::Property PublishKafka::CompressCodec("Compress Codec", "compression codec to use for compressing message sets", COMPRESSION_CODEC_NONE);
-core::Property PublishKafka::MaxFlowSegSize("Max Flow Segment Size", "Maximum flow content payload segment size for the kafka record", "");
+core::Property PublishKafka::MaxFlowSegSize(
+    core::PropertyBuilder::createProperty("Max Flow Segment Size")->withDescription("Maximum flow content payload segment size for the kafka record. 0 B means unlimited.")
+        ->isRequired(false)->withDefaultValue<core::DataSizeValue>("0 B")->build());
 core::Property PublishKafka::SecurityProtocol("Security Protocol", "Protocol used to communicate with brokers", "");
 core::Property PublishKafka::SecurityCA("Security CA", "File or directory path to CA certificate(s) for verifying the broker's key", "");
 core::Property PublishKafka::SecurityCert("Security Cert", "Path to client's public key (PEM) used for authentication", "");
@@ -245,11 +247,6 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
     }
   }
   value = "";
-  if (context->getProperty(AttributeNameRegex.getName(), value) && !value.empty()) {
-    attributeNameRegex.assign(value);
-    logger_->log_debug("PublishKafka: AttributeNameRegex %s", value);
-  }
-  value = "";
   if (context->getProperty(QueueBufferMaxSize.getName(), value) && !value.empty() && core::Property::StringToInt(value, valInt)) {
     valInt = valInt / 1024;
     valueConf = std::to_string(valInt);
@@ -259,12 +256,6 @@ bool PublishKafka::configureNewConnection(const std::shared_ptr<KafkaConnection>
       logger_->log_error("PublishKafka: configure error result [%s]", errstr);
       return false;
     }
-  }
-  value = "";
-  max_seg_size_ = std::numeric_limits<uint64_t>::max();
-  if (context->getProperty(MaxFlowSegSize.getName(), value) && !value.empty() && core::Property::StringToInt(value, valInt)) {
-    max_seg_size_ = valInt;
-    logger_->log_debug("PublishKafka: max flow segment size [%llu]", max_seg_size_);
   }
   value = "";
   if (context->getProperty(QueueBufferMaxTime.getName(), value) && !value.empty()) {
@@ -495,6 +486,26 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
     }
   }
 
+  // Get some properties not used directly to set up librdkafka
+  std::string value;
+
+  // Max Flow Segment Size
+  uint64_t max_flow_seg_size;
+  value = "";
+  if (context->getProperty(MaxFlowSegSize.getName(), value) && !value.empty() && core::Property::StringToInt(value, max_flow_seg_size)) {
+    logger_->log_debug("PublishKafka: max flow segment size [%llu]", max_flow_seg_size);
+  } else {
+    max_flow_seg_size = 0U;
+  }
+
+  // Attributes to Send as Headers
+  value = "";
+  utils::Regex attributeNameRegex;
+  if (context->getProperty(AttributeNameRegex.getName(), value) && !value.empty()) {
+    attributeNameRegex = utils::Regex(value);
+    logger_->log_debug("PublishKafka: AttributeNameRegex [%s]", value);
+  }
+
   // Collect FlowFiles to process
   uint32_t batch_size = 10U;
   uint64_t target_bytes = 512 * 1024U;
@@ -560,7 +571,7 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
       continue;
     }
 
-    PublishKafka::ReadCallback callback(max_seg_size_, kafkaKey, thisTopic->getTopic(), conn->getConnection(), flowFile,
+    PublishKafka::ReadCallback callback(max_flow_seg_size, kafkaKey, thisTopic->getTopic(), conn->getConnection(), flowFile,
                                         attributeNameRegex, messages, flow_file_index);
     session->read(flowFile, &callback);
     if (callback.status_ < 0) {
