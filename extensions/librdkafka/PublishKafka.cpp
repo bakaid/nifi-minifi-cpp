@@ -65,7 +65,9 @@ core::Property PublishKafka::ClientName(
 
 core::Property PublishKafka::BatchSize(
     core::PropertyBuilder::createProperty("Batch Size")->withDescription("Maximum number of messages batched in one MessageSet")->isRequired(false)->withDefaultValue<uint32_t>(10)->build());
-
+core::Property PublishKafka::TargetBatchPayloadSize(
+    core::PropertyBuilder::createProperty("Target Batch Payload Size")->withDescription("The target total payload size for a batch. 0 B means unlimited (Batch Size is still applied).")
+        ->isRequired(false)->withDefaultValue<core::DataSizeValue>("512 KB")->build());
 core::Property PublishKafka::AttributeNameRegex("Attributes to Send as Headers", "Any attribute whose name matches the regex will be added to the Kafka messages as a Header", ".*");
 core::Property PublishKafka::QueueBufferMaxTime("Queue Buffering Max Time", "Delay to wait for messages in the producer queue to accumulate before constructing message batches", "");
 core::Property PublishKafka::QueueBufferMaxSize("Queue Max Buffer Size", "Maximum total message size sum allowed on the producer queue", "");
@@ -104,6 +106,7 @@ void PublishKafka::initialize() {
   properties.insert(ClientName);
   properties.insert(AttributeNameRegex);
   properties.insert(BatchSize);
+  properties.insert(TargetBatchPayloadSize);
   properties.insert(QueueBufferMaxTime);
   properties.insert(QueueBufferMaxSize);
   properties.insert(QueueBufferMaxMessage);
@@ -499,29 +502,45 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
     }
   }
 
-  // Get some properties not used directly to set up librdkafka
+  // Get some properties not (only) used directly to set up librdkafka
   std::string value;
+
+  // Batch Size
+  uint32_t batch_size;
+  value = "";
+  if (context->getProperty(BatchSize.getName(), value) && !value.empty() && core::Property::StringToInt(value, batch_size)) {
+    logger_->log_debug("PublishKafka: Batch Size [%lu]", batch_size);
+  } else {
+    batch_size = 10;
+  }
+
+  // Target Batch Payload Size
+  uint64_t target_batch_payload_size;
+  value = "";
+  if (context->getProperty(TargetBatchPayloadSize.getName(), value) && !value.empty() && core::Property::StringToInt(value, target_batch_payload_size)) {
+    logger_->log_debug("PublishKafka: Target Batch Payload Size [%llu]", target_batch_payload_size);
+  } else {
+    target_batch_payload_size = 512 * 1024U;
+  }
 
   // Max Flow Segment Size
   uint64_t max_flow_seg_size;
   value = "";
   if (context->getProperty(MaxFlowSegSize.getName(), value) && !value.empty() && core::Property::StringToInt(value, max_flow_seg_size)) {
-    logger_->log_debug("PublishKafka: max flow segment size [%llu]", max_flow_seg_size);
+    logger_->log_debug("PublishKafka: Max Flow Segment Size [%llu]", max_flow_seg_size);
   } else {
     max_flow_seg_size = 0U;
   }
 
   // Attributes to Send as Headers
-  value = "";
   utils::Regex attributeNameRegex;
+  value = "";
   if (context->getProperty(AttributeNameRegex.getName(), value) && !value.empty()) {
     attributeNameRegex = utils::Regex(value);
     logger_->log_debug("PublishKafka: AttributeNameRegex [%s]", value);
   }
 
   // Collect FlowFiles to process
-  uint32_t batch_size = 10U;
-  uint64_t target_bytes = 512 * 1024U;
   uint64_t actual_bytes = 0U;
   std::vector<std::shared_ptr<core::FlowFile>> flowFiles;
   for (uint32_t i = 0; i < batch_size; i++) {
@@ -531,7 +550,7 @@ void PublishKafka::onTrigger(const std::shared_ptr<core::ProcessContext> &contex
     }
     actual_bytes += flowFile->getSize();
     flowFiles.emplace_back(std::move(flowFile));
-    if (actual_bytes >= target_bytes) {
+    if (target_batch_payload_size != 0U && actual_bytes >= target_batch_payload_size) {
       break;
     }
   }

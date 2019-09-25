@@ -85,6 +85,7 @@ class PublishKafka : public core::Processor {
   static core::Property MessageTimeOut;
   static core::Property ClientName;
   static core::Property BatchSize;
+  static core::Property TargetBatchPayloadSize;
   static core::Property AttributeNameRegex;
   static core::Property QueueBufferMaxTime;
   static core::Property QueueBufferMaxSize;
