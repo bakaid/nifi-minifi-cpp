@@ -78,7 +78,6 @@ if (ENABLE_LUA_SCRIPTING)
     find_package(Lua REQUIRED)
 
     include_directories(${LUA_INCLUDE_DIR})
-    include_directories(../../thirdparty/sol2-2.20.0)
 
     include_directories(lua)
     add_definitions(-DLUA_SUPPORT)
@@ -87,7 +86,7 @@ if (ENABLE_LUA_SCRIPTING)
     add_library(minifi-lua-extensions STATIC ${LUA_SOURCES})
 
     target_link_libraries(minifi-lua-extensions ${LIBMINIFI})
-    target_link_libraries(minifi-lua-extensions ${LUA_LIBRARIES})
+    target_link_libraries(minifi-lua-extensions ${LUA_LIBRARIES} sol)
     target_link_libraries(minifi-script-extensions minifi-lua-extensions)
 endif()
 
