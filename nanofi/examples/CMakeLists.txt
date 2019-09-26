@@ -76,9 +76,4 @@ add_executable(monitor_directory monitor_directory.c)
 target_wholearchive_library(monitor_directory minifi-http-curl)
 target_link_libraries(monitor_directory nanofi ${CMAKE_THREAD_LIBS_INIT})
 
-add_executable(tail_file tail_file.c)
-
-target_wholearchive_library(tail_file minifi-http-curl)
-target_link_libraries(tail_file nanofi ${CMAKE_THREAD_LIBS_INIT})
-
 endif()
