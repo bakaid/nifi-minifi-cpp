@@ -42,7 +42,6 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             -DBUILD_TESTING=OFF
             -DBUILD_SHARED_LIBS=OFF
             -DHTTP_ONLY=ON
-            -DCMAKE_USE_OPENSSL=ON
             -DCURL_DISABLE_CRYPTO_AUTH=ON
             -DCMAKE_USE_LIBSSH2=OFF
             -DCMAKE_DEBUG_POSTFIX=
@@ -54,6 +53,11 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             -DHAVE_FSETXATTR_5=0
             -DHAVE_FSETXATTR_5__TRYRUN_OUTPUT=""
             )
+    if (OPENSSL_OFF)
+        list(APPEND CURL_CMAKE_ARGS -DCMAKE_USE_OPENSSL=OFF)
+    else()
+        list(APPEND CURL_CMAKE_ARGS -DCMAKE_USE_OPENSSL=ON)
+    endif()
 
     append_third_party_passthrough_args(CURL_CMAKE_ARGS "${CURL_CMAKE_ARGS}")
 
@@ -71,7 +75,10 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
     )
 
     # Set dependencies
-    add_dependencies(curl-external OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+    add_dependencies(curl-external ZLIB::ZLIB)
+    if (NOT OPENSSL_OFF)
+        add_dependencies(curl-external OpenSSL::SSL OpenSSL::Crypto)
+    endif()
 
     # Set variables
     set(CURL_FOUND "YES" CACHE STRING "" FORCE)
@@ -91,5 +98,8 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
     set_target_properties(CURL::libcurl PROPERTIES IMPORTED_LOCATION "${CURL_LIBRARY}")
     add_dependencies(CURL::libcurl curl-external)
     set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIRS})
-    set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+    set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES ZLIB::ZLIB)
+    if (NOT OPENSSL_OFF)
+        set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+    endif()
 endfunction(use_bundled_curl SOURCE_DIR BINARY_DIR)

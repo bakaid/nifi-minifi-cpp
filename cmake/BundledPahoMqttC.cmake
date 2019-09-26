@@ -36,8 +36,12 @@ function(use_bundled_pahomqttc SOURCE_DIR BINARY_DIR)
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/paho.mqtt.c-install"
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
             -DPAHO_BUILD_STATIC=TRUE
-            -DPAHO_WITH_SSL=TRUE
             -DPAHO_ENABLE_TESTING=FALSE)
+    if (OPENSSL_OFF)
+        list(APPEND PAHOMQTTC_CMAKE_ARGS -DPAHO_WITH_SSL=FALSE)
+    else()
+        list(APPEND PAHOMQTTC_CMAKE_ARGS -DPAHO_WITH_SSL=TRUE)
+    endif()
 
     append_third_party_passthrough_args(PAHOMQTTC_CMAKE_ARGS "${PAHOMQTTC_CMAKE_ARGS}")
 
@@ -55,7 +59,9 @@ function(use_bundled_pahomqttc SOURCE_DIR BINARY_DIR)
     )
 
     # Set dependencies
-    add_dependencies(paho.mqtt.c-external OpenSSL::SSL OpenSSL::Crypto)
+    if (NOT OPENSSL_OFF)
+        add_dependencies(paho.mqtt.c-external OpenSSL::SSL OpenSSL::Crypto)
+    endif()
 
     # Set variables
     set(PAHOMQTTC_FOUND "YES" CACHE STRING "" FORCE)
@@ -69,5 +75,7 @@ function(use_bundled_pahomqttc SOURCE_DIR BINARY_DIR)
     add_dependencies(paho.mqtt.c paho.mqtt.c-external)
     file(MAKE_DIRECTORY ${PAHOMQTTC_INCLUDE_DIR})
     set_property(TARGET paho.mqtt.c APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${PAHOMQTTC_INCLUDE_DIR})
-    set_property(TARGET paho.mqtt.c APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+    if (NOT OPENSSL_OFF)
+        set_property(TARGET paho.mqtt.c APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+    endif()
 endfunction(use_bundled_pahomqttc)

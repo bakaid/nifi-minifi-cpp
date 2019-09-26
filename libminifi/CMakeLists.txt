@@ -85,10 +85,9 @@ include_directories(opsys/posix)
 set(SOCKET_SOURCES "src/io/posix/*.cpp")
 endif()
 
-find_package(OpenSSL)
-if (OPENSSL_FOUND)
+if (NOT OPENSSL_OFF)
 	set(TLS_SOURCES "src/io/tls/*.cpp")
-endif(OPENSSL_FOUND)
+endif()
 
 file(GLOB SOURCES  "src/utils/file/*.cpp" "src/sitetosite/*.cpp"  "src/core/logging/*.cpp"  "src/core/state/*.cpp" "src/core/state/nodes/*.cpp" "src/c2/protocols/*.cpp" "src/c2/triggers/*.cpp" "src/c2/*.cpp" "src/io/*.cpp" ${SOCKET_SOURCES} ${TLS_SOURCES} "src/core/controller/*.cpp" "src/controllers/*.cpp" "src/core/*.cpp"  "src/core/repository/*.cpp" "src/core/yaml/*.cpp" "src/core/reporting/*.cpp"  "src/provenance/*.cpp" "src/utils/*.cpp" "src/*.cpp")
 
@@ -96,7 +95,10 @@ file(GLOB PROCESSOR_SOURCES  "src/processors/*.cpp" )
 
 
 add_library(core-minifi STATIC ${SOURCES})
-target_link_libraries(core-minifi ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog cron)
+target_link_libraries(core-minifi ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB concurrentqueue RapidJSON spdlog cron)
+if (NOT OPENSSL_OFF)
+	target_link_libraries(core-minifi OpenSSL::SSL)
+endif()
 
 add_library(minifi STATIC ${PROCESSOR_SOURCES})
 
@@ -113,7 +115,10 @@ SET (LIBMINIFI core-minifi PARENT_SCOPE)
 if (ENABLE_PYTHON AND NOT STATIC_BUILD)
 #### shared
 	add_library(core-minifi-shared SHARED ${SOURCES})
-	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB OpenSSL::SSL concurrentqueue RapidJSON spdlog cron)
+	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB concurrentqueue RapidJSON spdlog cron)
+	if (NOT OPENSSL_OFF)
+		target_link_libraries(core-minifi-shared OpenSSL::SSL)
+	endif()
 
 	add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
 
