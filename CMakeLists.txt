@@ -262,31 +262,19 @@ endif()
 
 add_subdirectory(libminifi)
 
-add_dependencies(minifi libressl-portable)
-add_dependencies(minifi curl-external)
-
-if (WIN32 OR NOT USE_SYSTEM_ZLIB)
-	add_dependencies(minifi zlib-external)
-endif(WIN32 OR NOT USE_SYSTEM_ZLIB)
-
 createExtension(STANDARD-PROCESSORS "STANDARD PROCESSORS" "Provides standard processors" "extensions/standard-processors" "extensions/standard-processors/tests/")
 
 if ((DISABLE_CURL STREQUAL "OFF" OR NOT DISABLE_CURL) AND NOT DISABLE_CIVET)
 	createExtension(HTTP-CURL "HTTP CURL" "This enables RESTProtocol, InvokeHTTP, and the HTTPClient for Site to Site" "extensions/http-curl" "extensions/http-curl/tests/")
 	message("minifi-http-curl will depend on curl-external")
-	add_dependencies(minifi-http-curl curl-external)
 endif()
 
 option(DISABLE_EXPRESSION_LANGUAGE "Disables the scripting extensions." OFF)
 if (NOT DISABLE_EXPRESSION_LANGUAGE)
     createExtension(EXPRESSION-LANGUAGE-EXTENSIONS "EXPRESSION LANGUAGE EXTENSIONS" "This enables NiFi expression language" "extensions/expression-language" "extensions/expression-language/tests")
-	add_dependencies(minifi-expression-language-extensions libressl-portable)
 
 	message("minifi-expression-language-extensions will depend on curl-external")
-	add_dependencies(minifi-expression-language-extensions curl-external)
 endif()
-
-
 
 option(DISABLE_CIVET "Disables CivetWeb components." OFF)
 if (NOT DISABLE_CIVET)
@@ -295,7 +283,6 @@ if (NOT DISABLE_CIVET)
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/civetweb/dummy")
 
 	createExtension(CIVETWEB CIVETWEB "This enables ListenHTTP" "extensions/civetweb" "extensions/civetweb/tests")
-	add_dependencies(minifi-civet-extensions civetweb-external)
 endif()
 
 ## Add the rocks DB extension

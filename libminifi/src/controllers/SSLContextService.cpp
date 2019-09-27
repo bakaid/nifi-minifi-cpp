@@ -47,6 +47,7 @@ void SSLContextService::initialize() {
   initialized_ = true;
 }
 
+#ifdef OPENSSL_SUPPORT
 bool SSLContextService::configure_ssl_context(SSL_CTX *ctx) {
   if (!IsNullOrEmpty(certificate)) {
     if (isFileTypeP12(certificate)) {
@@ -124,6 +125,7 @@ bool SSLContextService::configure_ssl_context(SSL_CTX *ctx) {
 
   return true;
 }
+#endif
 
 /**
  * If OpenSSL is not installed we may still continue operations. Nullptr will

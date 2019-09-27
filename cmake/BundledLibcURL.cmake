@@ -43,6 +43,7 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
             -DBUILD_SHARED_LIBS=OFF
             -DHTTP_ONLY=ON
             -DCURL_DISABLE_CRYPTO_AUTH=ON
+            -DCURL_CA_PATH=none
             -DCMAKE_USE_LIBSSH2=OFF
             -DCMAKE_DEBUG_POSTFIX=
             -DHAVE_GLIBC_STRERROR_R=1
