@@ -58,7 +58,6 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-usb-camera-extensions "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-find_package(UUID REQUIRED)
 target_link_libraries(minifi-usb-camera-extensions ${LIBMINIFI})
 target_link_libraries(minifi-usb-camera-extensions libuvc PNG::PNG)
 
