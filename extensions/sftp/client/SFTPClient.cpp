@@ -26,7 +26,7 @@
 #include "utils/StringUtils.h"
 #include "utils/ScopeGuard.h"
 #include "utils/StringUtils.h"
-#include "utils/base64.h"
+#include "base64.h"
 
 namespace org {
 namespace apache {

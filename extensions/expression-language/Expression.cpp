@@ -48,7 +48,7 @@
 #include <sys/types.h>
 #endif
 
-#include "utils/base64.h"
+#include "base64.h"
 #include "Driver.h"
 
 #ifdef EXPRESSION_LANGUAGE_USE_DATE

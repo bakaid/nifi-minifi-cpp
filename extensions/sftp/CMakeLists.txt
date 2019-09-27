@@ -33,7 +33,7 @@ endif()
 
 target_link_libraries(minifi-sftp ${LIBMINIFI})
 
-target_link_libraries(minifi-sftp CURL::libcurl libssh2 RapidJSON)
+target_link_libraries(minifi-sftp CURL::libcurl libssh2 RapidJSON base64)
 
 SET (SFTP minifi-sftp PARENT_SCOPE)
 register_extension(minifi-sftp)

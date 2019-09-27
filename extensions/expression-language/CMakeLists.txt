@@ -118,7 +118,7 @@ add_library(minifi-expression-language-extensions STATIC ${SOURCES} ${BISON_el-p
 set_property(TARGET minifi-expression-language-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(minifi-expression-language-extensions ${LIBMINIFI})
-target_link_libraries(minifi-expression-language-extensions tz RapidJSON CURL::libcurl)
+target_link_libraries(minifi-expression-language-extensions tz RapidJSON CURL::libcurl base64)
 
 SET (EXPRESSION-LANGUAGE-EXTENSIONS minifi-expression-language-extensions PARENT_SCOPE)
 

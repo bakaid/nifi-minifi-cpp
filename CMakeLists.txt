@@ -223,6 +223,10 @@ else()
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DDISABLE_CURL")
 endif()
 
+# base64
+add_library(base64 INTERFACE)
+target_include_directories(base64 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/base64")
+
 # spdlog
 add_library(spdlog INTERFACE)
 target_include_directories(spdlog INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/spdlog-20170710/include")
