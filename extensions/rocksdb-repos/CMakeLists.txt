@@ -19,8 +19,6 @@
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt) 
 
-find_package(RocksDB)
-
 file(GLOB SOURCES  "*.cpp")
 
 add_library(minifi-rocksdb-repos STATIC ${SOURCES})
