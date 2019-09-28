@@ -16,7 +16,6 @@
  */
 
 //OPC includes
-#include "open62541.h"
 #include "opc.h"
 
 //MiNiFi includes
@@ -187,7 +186,7 @@ void setCertificates(ClientPtr& clientPtr, const std::vector<char>& certBuffer, 
 }
 
 ClientPtr connect(const std::string& url, const std::shared_ptr<core::logging::Logger>& logger, const std::string& username, const std::string& password) {
-  UA_Client *client = UA_Client_new(UA_ClientConfig_default);
+  UA_Client *client = UA_Client_new();
   UA_StatusCode retval;
   if(username.empty()) {
     retval = UA_Client_connect(client, url.c_str());
@@ -436,8 +435,19 @@ std::string nodeValue2String(const nodeData& nd) {
     case UA_TYPES_DATETIME: {
       UA_DateTime dt;
       memcpy(&dt, nd.data.data(), sizeof(UA_DateTime));
-      UA_String string_date = UA_DateTime_toString(dt);
-      ret_val = std::string(reinterpret_cast<const char *>(string_date.data), string_date.length);
+      UA_DateTimeStruct date_struct = UA_DateTime_toStruct(dt);
+      char date_string[32];
+      snprintf(date_string, sizeof(date_string), "%02hu/%02hu/%04hu %02hu:%02hu:%02hu.%03hu.%03hu.%03hu",
+          date_struct.month,
+          date_struct.day,
+          date_struct.year,
+          date_struct.hour,
+          date_struct.min,
+          date_struct.sec,
+          date_struct.milliSec,
+          date_struct.microSec,
+          date_struct.nanoSec);
+      ret_val = date_string;
       break;
     }
     default:

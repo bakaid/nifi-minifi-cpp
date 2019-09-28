@@ -562,6 +562,12 @@ endif()
 
 ## OPC Extentions
 if (ENABLE_OPC)
+	include(BundledMbedTLS)
+	use_bundled_mbedtls(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+
+	include(BundledOpen62541)
+	use_bundled_open62541(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+
 	createExtension(OPC-EXTENSIONS "OPC EXTENSIONS" "This enables OPC-UA support" "extensions/opc" )
 endif()
 

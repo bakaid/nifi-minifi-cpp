@@ -19,7 +19,9 @@
 #ifndef NIFI_MINIFI_CPP_OPC_H
 #define NIFI_MINIFI_CPP_OPC_H
 
-#include "open62541.h"
+#include "open62541/client.h"
+#include "open62541/client_highlevel.h"
+
 #include "logging/Logger.h"
 
 #include <string>

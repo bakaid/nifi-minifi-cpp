@@ -21,31 +21,9 @@ set( CMAKE_VERBOSE_MAKEFILE on )
 
 include(${CMAKE_SOURCE_DIR}/extensions/ExtensionHeader.txt)
 
-ExternalProject_Add(
-        open62541-header
-        PREFIX ${CMAKE_SOURCE_DIR}/open62541
-        URL https://github.com/open62541/open62541/releases/download/v0.3.0/open62541.h
-        DOWNLOAD_NO_EXTRACT 1
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ""
-)
-
-ExternalProject_Add(
-        open62541-cpp
-        PREFIX ${CMAKE_SOURCE_DIR}/open62541
-        URL https://github.com/open62541/open62541/releases/download/v0.3.0/open62541.c
-        DOWNLOAD_NO_EXTRACT 1
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ""
-)
-
-include_directories("${CMAKE_SOURCE_DIR}/open62541/src")
-
 include_directories(include)
 
-file(GLOB SOURCES "src/*.cpp" "${CMAKE_SOURCE_DIR}/open62541/src/open62541.c")
+file(GLOB SOURCES "src/*.cpp")
 
 add_library(minifi-opc-extensions STATIC ${SOURCES})
 set_property(TARGET minifi-opc-extensions PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -57,7 +35,7 @@ if(CMAKE_THREAD_LIBS_INIT)
   target_link_libraries(minifi-opc-extensions "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-target_link_libraries(minifi-opc-extensions ${CMAKE_DL_LIBS})
+target_link_libraries(minifi-opc-extensions ${CMAKE_DL_LIBS} open62541::open62541)
 
 if (WIN32)
     set_target_properties(minifi-opc-extensions PROPERTIES
@@ -75,8 +53,5 @@ endif ()
 
 
 SET (OPC-EXTENSIONS minifi-opc-extensions PARENT_SCOPE)
-
-add_dependencies(minifi-opc-extensions open62541-header)
-add_dependencies(minifi-opc-extensions open62541-cpp)
 
 register_extension(minifi-opc-extensions)
