@@ -251,6 +251,14 @@ target_include_directories(cron INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdpart
 add_library(cxxopts INTERFACE)
 target_include_directories(cxxopts INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cxxopts/include")
 
+# mbedTLS
+include(BundledMbedTLS)
+use_bundled_mbedtls(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+
+# open62541
+include(BundledOpen62541)
+use_bundled_open62541(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+
 #### Extensions ####
 SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)
 include(Extensions)

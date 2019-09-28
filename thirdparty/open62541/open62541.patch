@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d426e1da..41646ab5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -7,7 +7,7 @@ endif()
+ 
+ string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_LOWER_CASE)
+ 
+-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/tools/cmake")
++list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/tools/cmake")
+ find_package(PythonInterp REQUIRED)
+ find_package(Git)
+ include(AssignSourceGroup)
