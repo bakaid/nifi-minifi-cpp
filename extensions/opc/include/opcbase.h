@@ -42,6 +42,7 @@ class BaseOPCProcessor : public core::Processor {
   static core::Property Password;
   static core::Property CertificatePath;
   static core::Property KeyPath;
+  static core::Property TrustedPath;
 
   BaseOPCProcessor(std::shared_ptr<logging::Logger> logger, std::string name, utils::Identifier uuid = utils::Identifier())
   : Processor(name, uuid),
@@ -62,13 +63,15 @@ class BaseOPCProcessor : public core::Processor {
   std::string password_;
   std::string certpath_;
   std::string keypath_;
+  std::string trustpath_;
 
   std::vector<char> certBuffer_;
   std::vector<char> keyBuffer_;
+  std::vector<std::vector<char>> trustBuffers_;
 
   bool configOK_;
 
-  virtual std::set<core::Property> getSupportedProperties() const {return {OPCServerEndPoint, Username, Password, CertificatePath, KeyPath};}
+  virtual std::set<core::Property> getSupportedProperties() const {return {OPCServerEndPoint, Username, Password, CertificatePath, KeyPath, TrustedPath};}
 };
 
 } /* namespace processors */

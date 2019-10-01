@@ -181,41 +181,60 @@ void disconnect(UA_Client *client, std::shared_ptr<core::logging::Logger> logger
   UA_Client_delete(client);
 }
 
-UA_StatusCode setCertificates(ClientPtr& clientPtr, const std::vector<char>& certBuffer, const std::vector<char>& keyBuffer) {
-  UA_ClientConfig *cc = UA_Client_getConfig(clientPtr.get());
-  cc->securityMode = UA_MESSAGESECURITYMODE_SIGNANDENCRYPT;
+ClientPtr createClient(std::shared_ptr<core::logging::Logger> logger, const std::vector<char>& certBuffer, const std::vector<char>& keyBuffer, const std::vector<std::vector<char>>& trustBuffers) {
+  auto disconnect_func = std::bind(disconnect, std::placeholders::_1, logger);
+  UA_Client* client = UA_Client_new();
+  if (certBuffer.empty()) {
+    UA_ClientConfig_setDefault(UA_Client_getConfig(client));
+  } else {
+    UA_ClientConfig *cc = UA_Client_getConfig(client);
+    cc->securityMode = UA_MESSAGESECURITYMODE_SIGNANDENCRYPT;
 
-  UA_ByteString certByteString = UA_BYTESTRING_ALLOC(certBuffer.data());
-  UA_ByteString keyByteString = UA_BYTESTRING_ALLOC(keyBuffer.data());
+    // Certificate
+    UA_ByteString certByteString = UA_STRING_NULL;
+    certByteString.length = certBuffer.size();
+    certByteString.data = (UA_Byte*)UA_malloc(certByteString.length * sizeof(UA_Byte));
+    memcpy(certByteString.data, certBuffer.data(), certByteString.length);
 
-  UA_StatusCode sc = UA_ClientConfig_setDefaultEncryption(cc, certByteString, keyByteString,
-                                       nullptr, 0,
-                                       nullptr, 0);
+    // Key
+    UA_ByteString keyByteString = UA_STRING_NULL;
+    keyByteString.length = keyBuffer.size();
+    keyByteString.data = (UA_Byte*)UA_malloc(keyByteString.length * sizeof(UA_Byte));
+    memcpy(keyByteString.data, keyBuffer.data(), keyByteString.length);
 
-  UA_ByteString_delete(&certByteString);
-  UA_ByteString_delete(&keyByteString);
-  return sc;
+    // Trusted certificates
+    UA_STACKARRAY(UA_ByteString, trustList, trustBuffers.size());
+    for (size_t i = 0; i < trustBuffers.size(); i++) {
+      trustList[i] = UA_STRING_NULL;
+      trustList[i].length = trustBuffers[i].size();
+      trustList[i].data = (UA_Byte*)UA_malloc(trustList[i].length * sizeof(UA_Byte));
+      memcpy(trustList[i].data, trustBuffers[i].data(), trustList[i].length);
+    }
+
+    UA_StatusCode sc = UA_ClientConfig_setDefaultEncryption(cc, certByteString, keyByteString,
+                                                            trustList, trustBuffers.size(),
+                                                            nullptr, 0);
+
+    UA_ByteString_clear(&certByteString);
+    UA_ByteString_clear(&keyByteString);
+    for (size_t i = 0; i < trustBuffers.size(); i++) {
+      UA_ByteString_clear(&trustList[i]);
+    }
+    if (sc != UA_STATUSCODE_GOOD) {
+      logger->log_error("Configuring the client for encryption failed: %s", UA_StatusCode_name(sc));
+      UA_Client_delete(client);
+      return ClientPtr(nullptr, disconnect_func);
+    }
+  }
+  return ClientPtr(client, disconnect_func);
 }
 
-ClientPtr connect(const std::string& url, std::shared_ptr<core::logging::Logger> logger, const std::string& username, const std::string& password) {
-  UA_Client *client = UA_Client_new();
-  UA_ClientConfig_setDefault(UA_Client_getConfig(client));
-  UA_StatusCode retval;
+UA_StatusCode connect(ClientPtr& clientPtr, const std::string& url, const std::string& username, const std::string& password) {
   if(username.empty()) {
-    retval = UA_Client_connect(client, url.c_str());
+    return UA_Client_connect(clientPtr.get(), url.c_str());
   } else {
-    retval = UA_Client_connect_username(client, url.c_str(), username.c_str(), password.c_str());
+    return UA_Client_connect_username(clientPtr.get(), url.c_str(), username.c_str(), password.c_str());
   }
-
-  auto disconnect_func = std::bind(disconnect, std::placeholders::_1, logger);
-
-  if (retval != UA_STATUSCODE_GOOD) {
-    logger->log_error("Failed to connect to %s (%s)", url.c_str(), UA_StatusCode_name(retval));
-    UA_Client_delete(client);
-    return ClientPtr(nullptr, disconnect_func);
-  }
-  logger->log_info("Successfully connected to %s", url.c_str());
-  return ClientPtr(client, disconnect_func);
 }
 
 bool isConnected(const ClientPtr &ptr) {

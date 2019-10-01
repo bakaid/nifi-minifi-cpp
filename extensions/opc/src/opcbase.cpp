@@ -55,11 +55,16 @@ namespace processors {
       core::PropertyBuilder::createProperty("Key path")
           ->withDescription("Path to the key file")->build());
 
+  core::Property BaseOPCProcessor::TrustedPath(
+    core::PropertyBuilder::createProperty("Trusted certificate path")
+        ->withDescription("Path to the trusted certificate or trutested certificates directory")->build());
+
   void BaseOPCProcessor::onSchedule(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSessionFactory> &factory) {
     logger_->log_trace("BaseOPCProcessor::onSchedule");
 
     certBuffer_.clear();
     keyBuffer_.clear();
+    trustBuffers_.clear();
     password_.clear();
     username_.clear();
 
@@ -72,14 +77,16 @@ namespace processors {
       return;
     }
 
-    if (context->getProperty(CertificatePath.getName(), certpath_) !=
-        context->getProperty(Password.getName(), keypath_)) {
-      logger_->log_error("Both or neither of certificate and key paths should be provided!");
+    auto certificatePathRes = context->getProperty(CertificatePath.getName(), certpath_);
+    auto keyPathRes = context->getProperty(KeyPath.getName(), keypath_);
+    auto trustedPathRes = context->getProperty(TrustedPath.getName(), trustpath_);
+    if (certificatePathRes != keyPathRes || keyPathRes != trustedPathRes) {
+      logger_->log_error("All or none of certificate, key and trusted paths should be provided!");
       return;
     }
 
-    if (!password_.empty() && (certpath_.empty() || keypath_.empty())) {
-      logger_->log_error("Cert and key must be provided in case password is provided!");
+    if (!password_.empty() && (certpath_.empty() || keypath_.empty() || trustpath_.empty())) {
+      logger_->log_error("Certificate, key and trusted paths must be provided in case password is provided!");
       return;
     }
 
@@ -93,6 +100,12 @@ namespace processors {
         keyBuffer_ = std::vector<char>(std::istreambuf_iterator<char>(input_key), {});
       }
 
+      trustBuffers_.emplace_back();
+      std::ifstream input_trust(trustpath_, std::ios::binary);
+      if (input_trust.good()) {
+        trustBuffers_[0] = std::vector<char>(std::istreambuf_iterator<char>(input_trust), {});
+      }
+
       if (certBuffer_.empty()) {
         logger_->log_error("Failed to load cert from path: %s", certpath_);
         return;
@@ -101,6 +114,13 @@ namespace processors {
         logger_->log_error("Failed to load key from path: %s", keypath_);
         return;
       }
+      if (trustBuffers_[0].empty()) {
+        logger_->log_error("Failed to load trusted certs from path: %s", trustpath_);
+        return;
+      }
+      certBuffer_.emplace_back('\0');
+      keyBuffer_.emplace_back('\0');
+      trustBuffers_[0].emplace_back('\0');
     }
 
     configOK_ = true;
