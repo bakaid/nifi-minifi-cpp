@@ -181,13 +181,17 @@ void disconnect(UA_Client *client, std::shared_ptr<core::logging::Logger> logger
   UA_Client_delete(client);
 }
 
-ClientPtr createClient(std::shared_ptr<core::logging::Logger> logger, const std::vector<char>& certBuffer, const std::vector<char>& keyBuffer, const std::vector<std::vector<char>>& trustBuffers) {
+ClientPtr createClient(std::shared_ptr<core::logging::Logger> logger,
+                       const std::string& applicationURI,
+                       const std::vector<char>& certBuffer,
+                       const std::vector<char>& keyBuffer,
+                       const std::vector<std::vector<char>>& trustBuffers) {
   auto disconnect_func = std::bind(disconnect, std::placeholders::_1, logger);
   UA_Client* client = UA_Client_new();
+  UA_ClientConfig *cc = UA_Client_getConfig(client);
   if (certBuffer.empty()) {
     UA_ClientConfig_setDefault(UA_Client_getConfig(client));
   } else {
-    UA_ClientConfig *cc = UA_Client_getConfig(client);
     cc->securityMode = UA_MESSAGESECURITYMODE_SIGNANDENCRYPT;
 
     // Certificate
@@ -226,6 +230,10 @@ ClientPtr createClient(std::shared_ptr<core::logging::Logger> logger, const std:
       return ClientPtr(nullptr, disconnect_func);
     }
   }
+
+  UA_String_clear(&cc->clientDescription.applicationUri);
+  cc->clientDescription.applicationUri = UA_STRING_ALLOC(applicationURI.c_str());
+
   return ClientPtr(client, disconnect_func);
 }
 

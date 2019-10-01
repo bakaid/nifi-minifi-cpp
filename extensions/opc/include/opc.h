@@ -86,7 +86,11 @@ static std::map<std::string, OPCNodeDataType>  StringToOPCDataTypeMap = {{"Int64
 
 int32_t OPCNodeDataTypeToTypeID(OPCNodeDataType dt);
 
-ClientPtr createClient(std::shared_ptr<core::logging::Logger> logger, const std::vector<char>& certBuffer, const std::vector<char>& keyBuffer, const std::vector<std::vector<char>>& trustBuffers);
+ClientPtr createClient(std::shared_ptr<core::logging::Logger> logger,
+                       const std::string& applicationURI,
+                       const std::vector<char>& certBuffer,
+                       const std::vector<char>& keyBuffer,
+                       const std::vector<std::vector<char>>& trustBuffers);
 
 UA_StatusCode connect(ClientPtr& clientPtr, const std::string& url, const std::string& username = "", const std::string& password = "");
 

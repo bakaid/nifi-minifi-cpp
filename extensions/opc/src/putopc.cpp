@@ -177,7 +177,7 @@ namespace processors {
     }
 
     if (connection_ == nullptr) {
-      connection_ = opc::createClient(logger_, certBuffer_, keyBuffer_, trustBuffers_);
+      connection_ = opc::createClient(logger_, applicationURI_, certBuffer_, keyBuffer_, trustBuffers_);
     }
     if (!opc::isConnected(connection_)) {
       auto sc = opc::connect(connection_, endPointURL_, username_, password_);
