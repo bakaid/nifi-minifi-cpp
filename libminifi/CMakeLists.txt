@@ -33,9 +33,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (WIN32)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
-	include_directories("thirdparty/uuid/include/win32/")
-else()
-	include_directories("thirdparty/uuid/include/posix")
 endif()
 IF (IOS)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fobjc-abi-version=2 -fobjc-arc -std=gnu++11 -stdlib=libc++ -isysroot ${CMAKE_OSX_SYSROOT} -DIOS")
@@ -77,11 +74,6 @@ else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-reorder")
 endif()
 
-include_directories(../thirdparty/spdlog-20170710/include)
-include_directories(../thirdparty/yaml-cpp-yaml-cpp-20171024/include)
-include_directories(../thirdparty/cron)
-include_directories(../thirdparty/rapidjson-1.1.0/include)
-include_directories(../thirdparty/concurrentqueue/)
 include_directories(include)
 
 
@@ -93,56 +85,28 @@ include_directories(opsys/posix)
 set(SOCKET_SOURCES "src/io/posix/*.cpp")
 endif()
 
-find_package(OpenSSL)
-if (OPENSSL_FOUND)
+if (NOT OPENSSL_OFF)
 	set(TLS_SOURCES "src/io/tls/*.cpp")
-endif(OPENSSL_FOUND)
+endif()
 
 file(GLOB SOURCES  "src/utils/file/*.cpp" "src/sitetosite/*.cpp"  "src/core/logging/*.cpp"  "src/core/state/*.cpp" "src/core/state/nodes/*.cpp" "src/c2/protocols/*.cpp" "src/c2/triggers/*.cpp" "src/c2/*.cpp" "src/io/*.cpp" ${SOCKET_SOURCES} ${TLS_SOURCES} "src/core/controller/*.cpp" "src/controllers/*.cpp" "src/core/*.cpp"  "src/core/repository/*.cpp" "src/core/yaml/*.cpp" "src/core/reporting/*.cpp"  "src/provenance/*.cpp" "src/utils/*.cpp" "src/*.cpp")
 
 file(GLOB PROCESSOR_SOURCES  "src/processors/*.cpp" )
 
 
-file(GLOB SPD_SOURCES "../thirdparty/spdlog-20170710/include/spdlog/*")
-
-# Workaround the limitations of having a
-# header only library
-add_library(spdlog STATIC ${SPD_SOURCES})
 add_library(core-minifi STATIC ${SOURCES})
-target_link_libraries(core-minifi ${CMAKE_DL_LIBS} ${UUID_LIBRARIES} yaml-cpp)
-
-#target_link_libraries(core-minifi  PRIVATE bsdiff )
-
-
-include_directories(${ZLIB_INCLUDE_DIRS})
-
-target_link_libraries (core-minifi ${ZLIB_LIBRARIES})
-
-
-# Include OpenSSL
-if (OPENSSL_FOUND)
-	include_directories(${OPENSSL_INCLUDE_DIR})
-	if (WIN32)
-		foreach(OPENSSL_LIB ${OPENSSL_LIBRARIES})
-			if (OPENSSL_LIB MATCHES "\\.lib$" OR OPENSSL_LIB MATCHES "\\.dll$" )
-			message( "Including ${OPENSSL_LIB}")
-			target_link_libraries (core-minifi ${OPENSSL_LIB})	
-			set_target_properties(core-minifi PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:${OPENSSL_LIB}")
-			endif()
-		endforeach()
-	else()
-		target_link_libraries (core-minifi ${OPENSSL_LIBRARIES})
-	endif()
-
-endif (OPENSSL_FOUND)
+target_link_libraries(core-minifi ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB concurrentqueue RapidJSON spdlog cron)
+if (NOT OPENSSL_OFF)
+	target_link_libraries(core-minifi OpenSSL::SSL)
+endif()
 
 add_library(minifi STATIC ${PROCESSOR_SOURCES})
 
 
 target_link_libraries(minifi core-minifi)
 if (WIN32)
-set_target_properties(minifi PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-set_target_properties(minifi PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi")
+	set_target_properties(minifi PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+	set_target_properties(minifi PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi")
 endif()
 
 
@@ -150,35 +114,21 @@ SET (LIBMINIFI core-minifi PARENT_SCOPE)
 
 if (ENABLE_PYTHON AND NOT STATIC_BUILD)
 #### shared
+	add_library(core-minifi-shared SHARED ${SOURCES})
+	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid yaml-cpp ZLIB::ZLIB concurrentqueue RapidJSON spdlog cron)
+	if (NOT OPENSSL_OFF)
+		target_link_libraries(core-minifi-shared OpenSSL::SSL)
+	endif()
 
-add_library(core-minifi-shared SHARED ${SOURCES})
-if (APPLE)
-	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} yaml-cpp)
-else()
-	target_link_libraries(core-minifi-shared ${CMAKE_DL_LIBS} uuid-shared yaml-cpp)
-endif()
+	add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
 
-include_directories(${ZLIB_INCLUDE_DIRS})
-
-target_link_libraries (core-minifi-shared ${ZLIB_LIBRARIES})
-
-# Include OpenSSL
-
-if (OPENSSL_FOUND)
-	include_directories(${OPENSSL_INCLUDE_DIR})
-	target_link_libraries (core-minifi-shared ${OPENSSL_LIBRARIES})
-endif (OPENSSL_FOUND)
-
-add_library(minifi-shared SHARED ${PROCESSOR_SOURCES})
-
-target_link_libraries(minifi-shared core-minifi-shared)
-if (WIN32)
-set_target_properties(minifi-shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-set_target_properties(minifi-shared PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi-shared")
-endif()
+	target_link_libraries(minifi-shared core-minifi-shared)
+	if (WIN32)
+		set_target_properties(minifi-shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+		set_target_properties(minifi-shared PROPERTIES LINK_FLAGS "${LINK_FLAGS} /WHOLEARCHIVE:core-minifi-shared")
+	endif()
 
 
-set_property(TARGET core-minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
-#endif()
+	set_property(TARGET core-minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
+	set_property(TARGET minifi-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif(ENABLE_PYTHON AND NOT STATIC_BUILD)

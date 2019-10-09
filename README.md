@@ -530,6 +530,10 @@ On Windows it is suggested that MSI be used for installation.
 
 Please see [Extensions.md](Extensions.md) on how to build and run conditionally built dependencies and extensions.
 
+### Third parties
+
+Please see [ThirdParties.md](ThirdParties.md) on how MiNiFi builds and uses third party libraries and how you can add new ones.
+
 ## Operations
 See our [operations documentation for additional inforomation on how to manage instances](OPS.md)
 

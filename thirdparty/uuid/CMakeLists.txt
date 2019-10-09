@@ -17,14 +17,15 @@
 # under the License.
 #
 
+set(UUID_INCLUDE_DIRECTORIES )
 if (WIN32)
-	include_directories("include/win32/uuid")
+	set(UUID_INCLUDE_DIRECTORIES "include/win32/uuid")
 else()
-	include_directories("include/posix/uuid")
+	set(UUID_INCLUDE_DIRECTORIES "include/posix/uuid")
 endif()
+include_directories("${UUID_INCLUDE_DIRECTORIES}")
 
-add_library(
-    uuid
+add_library(uuid STATIC
     clear.c
     compare.c
     copy.c
@@ -37,19 +38,10 @@ add_library(
     uuid_time.c
 )
 
+set_property(TARGET uuid PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-add_library(
-    uuid-shared
-    clear.c
-    compare.c
-    copy.c
-    gen_uuid.c
-    isnull.c
-    pack.c
-    parse.c
-    unpack.c
-    unparse.c
-    uuid_time.c
-)
+install(TARGETS uuid
+		ARCHIVE DESTINATION lib)
 
-set_property(TARGET uuid-shared PROPERTY POSITION_INDEPENDENT_CODE ON)
+install(DIRECTORY "${UUID_INCLUDE_DIRECTORIES}"
+		DESTINATION include)
