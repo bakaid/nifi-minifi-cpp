@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 #include "FlowFileRecord.h"
+#include "utils/ScopeGuard.h"
 
 namespace org {
 namespace apache {
@@ -91,7 +92,10 @@ void FlowFileRepository::run() {
 }
 
 void FlowFileRepository::prune_stored_flowfiles() {
-  rocksdb::DB* stored_database_;
+  rocksdb::DB* stored_database_ = nullptr;
+  utils::ScopeGuard db_guard([&stored_database_]() {
+    delete stored_database_;
+  });
   bool corrupt_checkpoint = false;
   if (nullptr != checkpoint_) {
     rocksdb::Options options;
@@ -101,6 +105,7 @@ void FlowFileRepository::prune_stored_flowfiles() {
     rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, FLOWFILE_CHECKPOINT_DIRECTORY, &stored_database_);
     if (!status.ok()) {
       stored_database_ = db_;
+      db_guard.disable();
     }
   } else {
     logger_->log_trace("Could not open checkpoint as object doesn't exist. Likely not needed or file system error.");

@@ -869,8 +869,11 @@ void ProcessSession::commit() {
     _clonedFlowFiles.clear();
     _deletedFlowFiles.clear();
     _originalFlowFiles.clear();
+
+    _transferRelationship.clear();
     // persistent the provenance report
     this->provenance_report_->commit();
+    this->provenance_report_->clear();
     logger_->log_trace("ProcessSession committed for %s", process_context_->getProcessorNode()->getName());
   } catch (std::exception &exception) {
     logger_->log_debug("Caught Exception %s", exception.what());

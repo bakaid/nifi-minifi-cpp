@@ -455,8 +455,9 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
     if (batch_commit_size_ != 0 && (flowFileCount % batch_commit_size_ == 0)) {
       auto before_commit = std::chrono::high_resolution_clock::now();
       session->commit();
-	  logger_->log_info("processQueue commit took %llu ms",
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - before_commit).count());
+	  logger_->log_info("processQueue commit took %llu ms, %zu events remaining in queue",
+		  std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - before_commit).count(),
+		  listRenderedData_.size_approx());
     }
   }
 
