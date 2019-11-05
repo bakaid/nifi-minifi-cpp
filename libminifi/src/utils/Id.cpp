@@ -124,8 +124,12 @@ Identifier &Identifier::operator=(UUID_FIELD o) {
 }
 
 Identifier &Identifier::operator=(std::string id) {
-//  uuid_parse(id.c_str(), id_);
-//  converted_ = id;
+  sscanf(id.c_str(), "%02hhx%02hhx%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx",
+         &id_[0], &id_[1], &id_[2], &id_[3],
+         &id_[4], &id_[5],
+         &id_[6], &id_[7],
+         &id_[8], &id_[9],
+         &id_[10], &id_[11], &id_[12], &id_[13], &id_[14], &id_[15]);
   return *this;
 }
 

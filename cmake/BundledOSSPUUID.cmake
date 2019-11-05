@@ -35,6 +35,12 @@ function(use_bundled_osspuuid SOURCE_DIR BINARY_DIR)
     ENDFOREACH(BYPRODUCT)
 
     # Build project
+    set(CONFIGURE_COMMAND ./configure --with-cxx --without-perl --without-php --without-pgsql "--prefix=${BINARY_DIR}/thirdparty/ossp-uuid-install")
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
+    if(NOT build_type MATCHES debug)
+        list(APPEND CONFIGURE_COMMAND --enable-debug=yes)
+    endif()
+
     ExternalProject_Add(
             ossp-uuid-external
             URL "https://deb.debian.org/debian/pool/main/o/ossp-uuid/ossp-uuid_1.6.2.orig.tar.gz"
@@ -47,7 +53,7 @@ function(use_bundled_osspuuid SOURCE_DIR BINARY_DIR)
             INSTALL_COMMAND make install
             BUILD_BYPRODUCTS ${OSSPUUID_LIBRARIES_LIST}
             CONFIGURE_COMMAND ""
-            PATCH_COMMAND ${PC} && ./configure --enable-debug=yes --with-cxx --without-perl --without-php --without-pgsql --prefix=${BINARY_DIR}/thirdparty/ossp-uuid-install
+            PATCH_COMMAND ${PC} && ${CONFIGURE_COMMAND}
             STEP_TARGETS build
             EXCLUDE_FROM_ALL TRUE
     )
