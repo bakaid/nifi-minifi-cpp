@@ -19,17 +19,17 @@
 #include "core/cuuid.h"
 
 void generate_uuid(const CIDGenerator * generator, char * out) {
-  UUID_FIELD output;
-  switch (generator->implementation_) {
-    case CUUID_RANDOM_IMPL:
-      uuid_generate_random(output);
-      break;
-    case CUUID_DEFAULT_IMPL:
-      uuid_generate(output);
-      break;
-    default:
-      uuid_generate_time(output);
-      break;
-  }
-  uuid_unparse_lower(output, out);
+//  UUID_FIELD output;
+//  switch (generator->implementation_) {
+//    case CUUID_RANDOM_IMPL:
+//      uuid_generate_random(output);
+//      break;
+//    case CUUID_DEFAULT_IMPL:
+//      uuid_generate(output);
+//      break;
+//    default:
+//      uuid_generate_time(output);
+//      break;
+//  }
+//  uuid_unparse_lower(output, out);
 }

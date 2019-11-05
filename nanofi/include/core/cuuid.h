@@ -19,7 +19,7 @@
 #ifndef NIFI_MINIFI_CPP_CUUID_H
 #define NIFI_MINIFI_CPP_CUUID_H
 
-#include "uuid/uuid.h"
+//#include "uuid.h"
 
 #ifdef __cplusplus
 extern "C" {

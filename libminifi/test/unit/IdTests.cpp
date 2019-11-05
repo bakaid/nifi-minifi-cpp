@@ -199,3 +199,33 @@ TEST_CASE("Test Hex Device Segment 18 bits", "[id]") {
   REQUIRE(true == LogTestController::getInstance().contains("Using minifi uid prefix: 9af8"));
   LogTestController::getInstance().reset();
 }
+
+
+TEST_CASE("Collision", "[collision]") {
+  TestController test_controller;
+
+  LogTestController::getInstance().setDebug<utils::IdGenerator>();
+  std::shared_ptr<minifi::Properties> id_props = std::make_shared<minifi::Properties>();
+  id_props->set("uid.implementation", "time");
+
+  std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
+  generator->initialize(id_props);
+
+  std::array<utils::Identifier, 16U*1024U> uuids;
+  std::vector<std::thread> threads;
+  for (size_t i = 0U; i < 16U; i++) {
+    threads.emplace_back([&, i](){
+      for (size_t j = 0U; j < 1024U; j++) {
+        generator->generate(uuids[i*1024U+j]);
+      }
+    });
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  for (const auto& uuid : uuids) {
+    std::cout << uuid.to_string() << std::endl;
+  }
+
+  LogTestController::getInstance().reset();
+}
