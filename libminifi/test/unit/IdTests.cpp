@@ -229,3 +229,24 @@ TEST_CASE("Collision", "[collision]") {
 
   LogTestController::getInstance().reset();
 }
+
+TEST_CASE("Speed", "[speed]") {
+  TestController test_controller;
+
+  LogTestController::getInstance().setDebug<utils::IdGenerator>();
+  std::shared_ptr<minifi::Properties> id_props = std::make_shared<minifi::Properties>();
+  id_props->set("uid.implementation", "time");
+
+  std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
+  generator->initialize(id_props);
+
+  std::array<utils::Identifier, 16U*1024U> uuids;
+  auto before = std::chrono::high_resolution_clock::now();
+  for (size_t i = 0U; i < uuids.size(); i++) {
+    generator->generate(uuids[i]);
+  }
+  auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - before).count();
+  std::cerr << (duration / uuids.size()) << " ns" << std::endl;
+
+  LogTestController::getInstance().reset();
+}

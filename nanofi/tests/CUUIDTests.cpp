@@ -17,12 +17,14 @@
  */
 
 #include <string>
+#include <cstring>
 #include "TestBase.h"
 #include "core/cuuid.h"
 
 bool verify_uuid(const char * uuid) {
   std::string uuid_str(uuid, 36);
-  if(uuid_str.length() != 36) {
+  fprintf(stderr, "Verifying UUID %s\n", uuid_str.c_str());
+  if(strlen(uuid_str.c_str()) != 36) {
     return false;
   }
   for(int i = 0; i < uuid_str.length(); ++i) {
@@ -40,11 +42,11 @@ bool verify_uuid(const char * uuid) {
 }
 
 TEST_CASE("Test C UUID generation", "[testCUUID]") {
-  char uuid[36];
+  char uuid[37];
   CIDGenerator gen;
-  for(int i = 0; i < 4; ++i) {
+  for(int i = 0; i < 3; ++i) {
+    gen.implementation_ = i;
     generate_uuid(&gen, uuid);
     REQUIRE(verify_uuid(uuid));
-    gen.implementation_ = i;
   }
 }

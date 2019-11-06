@@ -211,11 +211,11 @@ uint64_t IdGenerator::getRandomDeviceSegment(int numBits) const {
 #ifdef WIN32
     windows_uuid_generate_random(random_uuid);
 #else
-  uuid temp_uuid;
-  temp_uuid.make(UUID_MAKE_V4);
-  void* uuid_bin = temp_uuid.binary();
-  memcpy(random_uuid, uuid_bin, 16);
-  free(uuid_bin);
+    uuid temp_uuid;
+    temp_uuid.make(UUID_MAKE_V4);
+    void* uuid_bin = temp_uuid.binary();
+    memcpy(random_uuid, uuid_bin, 16);
+    free(uuid_bin);
 #endif
     for (int i = 0; i < 4; i++) {
       deviceSegment += random_uuid[i];
@@ -306,12 +306,6 @@ void IdGenerator::generate(Identifier &ident) {
   UUID_FIELD output;
   switch (implementation_) {
     case UUID_RANDOM_IMPL:
-#ifdef WIN32
-      windows_uuid_generate_random(output);
-#else
-      generateWithUuidImpl(UUID_MAKE_V4, output);
-#endif
-      break;
     case UUID_DEFAULT_IMPL:
 #ifdef WIN32
       windows_uuid_generate_random(output);
@@ -326,7 +320,8 @@ void IdGenerator::generate(Identifier &ident) {
         output[i] = (incrementor_value >> ((15 - i) * 8)) & std::numeric_limits<unsigned char>::max();
       }
     }
-      break;
+    break;
+    case UUID_TIME_IMPL:
     default:
 #ifdef WIN32
       windows_uuid_generate_time(output);
