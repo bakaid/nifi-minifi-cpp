@@ -50,3 +50,31 @@ TEST_CASE("Test C UUID generation", "[testCUUID]") {
     REQUIRE(verify_uuid(uuid));
   }
 }
+
+TEST_CASE("Speed test", "[testCUUID]") {
+  std::shared_ptr<minifi::Properties> id_props = std::make_shared<minifi::Properties>();
+  CIDGenerator gen;
+  SECTION("CUUID_TIME_IMPL") {
+    gen.implementation_ = CUUID_TIME_IMPL;
+  }
+  SECTION("CUUID_RANDOM_IMPL") {
+    gen.implementation_ = CUUID_RANDOM_IMPL;
+  }
+  SECTION("CUUID_DEFAULT_IMPL") {
+    gen.implementation_ = CUUID_DEFAULT_IMPL;
+  }
+
+  std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
+  generator->initialize(id_props);
+
+  std::vector<std::array<char, 37U>> uuids(128U * 1024U);
+  // Prime the generator
+  generate_uuid(&gen, uuids[0].data());
+
+  auto before = std::chrono::high_resolution_clock::now();
+  for (size_t i = 0U; i < uuids.size(); i++) {
+    generate_uuid(&gen, uuids[i].data());
+  }
+  auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - before).count();
+  std::cerr << "Generating one " << gen.implementation_  << " UUID took " << (duration / uuids.size()) << "ns" << std::endl;
+}
