@@ -220,7 +220,7 @@ TEST_CASE("Collision", "[collision]") {
   std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
   generator->initialize(id_props);
 
-  std::array<utils::Identifier, 16 * 1024U> uuids;
+  std::vector<utils::Identifier> uuids(16 * 1024U);
   std::vector<std::thread> threads;
   for (size_t i = 0U; i < 16U; i++) {
     threads.emplace_back([&, i](){
@@ -261,7 +261,7 @@ TEST_CASE("Speed", "[speed]") {
   std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
   generator->initialize(id_props);
 
-  std::array<utils::Identifier, 128U * 1024U> uuids;
+  std::vector<utils::Identifier> uuids(128U * 1024U);
   // Prime the generator
   generator->generate(uuids[0]);
 
