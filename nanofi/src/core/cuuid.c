@@ -53,7 +53,7 @@
   }
 #else
   int generate_uuid_with_uuid_impl(unsigned int mode, char* out) {
-    static pthread_mutex_t mutex;
+    static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     static uuid_t* uuid_impl = NULL;
     pthread_mutex_lock(&mutex);
     if (uuid_impl == NULL) {

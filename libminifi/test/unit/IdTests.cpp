@@ -19,6 +19,7 @@
 #include <string>
 #include <memory>
 #include <ctime>
+#include <algorithm>
 #include "../TestBase.h"
 #include "utils/Id.h"
 
@@ -206,26 +207,36 @@ TEST_CASE("Collision", "[collision]") {
 
   LogTestController::getInstance().setDebug<utils::IdGenerator>();
   std::shared_ptr<minifi::Properties> id_props = std::make_shared<minifi::Properties>();
-  id_props->set("uid.implementation", "time");
+  SECTION("random") {
+    id_props->set("uid.implementation", "random");
+  }
+  SECTION("time") {
+    id_props->set("uid.implementation", "time");
+  }
+  SECTION("uuid_default") {
+    id_props->set("uid.implementation", "uuid_default");
+  }
 
   std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
   generator->initialize(id_props);
 
-  std::array<utils::Identifier, 16U*1024U> uuids;
+  std::array<utils::Identifier, 16 * 1024U> uuids;
   std::vector<std::thread> threads;
   for (size_t i = 0U; i < 16U; i++) {
     threads.emplace_back([&, i](){
       for (size_t j = 0U; j < 1024U; j++) {
-        generator->generate(uuids[i*1024U+j]);
+        generator->generate(uuids[i * 1024U + j]);
       }
     });
   }
   for (auto& thread : threads) {
     thread.join();
   }
-  for (const auto& uuid : uuids) {
-    std::cout << uuid.to_string() << std::endl;
-  }
+
+  std::sort(uuids.begin(), uuids.end(), [](const utils::Identifier& a, const utils::Identifier& b) {
+    return memcmp(a.toArray(), b.toArray(), 16U) < 0;
+  });
+  REQUIRE(uuids.end() == std::adjacent_find(uuids.begin(), uuids.end()));
 
   LogTestController::getInstance().reset();
 }
@@ -235,18 +246,31 @@ TEST_CASE("Speed", "[speed]") {
 
   LogTestController::getInstance().setDebug<utils::IdGenerator>();
   std::shared_ptr<minifi::Properties> id_props = std::make_shared<minifi::Properties>();
-  id_props->set("uid.implementation", "time");
+  std::string implementation;
+  SECTION("random") {
+    implementation = "random";
+  }
+  SECTION("time") {
+    implementation = "time";
+  }
+  SECTION("uuid_default") {
+    implementation = "uuid_default";
+  }
+  id_props->set("uid.implementation", implementation);
 
   std::shared_ptr<utils::IdGenerator> generator = utils::IdGenerator::getIdGenerator();
   generator->initialize(id_props);
 
-  std::array<utils::Identifier, 16U*1024U> uuids;
+  std::array<utils::Identifier, 128U * 1024U> uuids;
+  // Prime the generator
+  generator->generate(uuids[0]);
+
   auto before = std::chrono::high_resolution_clock::now();
   for (size_t i = 0U; i < uuids.size(); i++) {
     generator->generate(uuids[i]);
   }
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - before).count();
-  std::cerr << (duration / uuids.size()) << " ns" << std::endl;
+  std::cerr << "Generating one " << implementation << " UUID took " << (duration / uuids.size()) << "ns" << std::endl;
 
   LogTestController::getInstance().reset();
 }
