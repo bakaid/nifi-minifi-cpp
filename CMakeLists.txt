@@ -252,8 +252,10 @@ SET(TEST_DIR ${CMAKE_SOURCE_DIR}/libminifi/test)
 
 include(Extensions)
 
-include(BundledOSSPUUID)
-use_bundled_osspuuid(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+if(NOT WIN32)
+	include(BundledOSSPUUID)
+	use_bundled_osspuuid(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+endif()
 
 include_directories(thirdparty/ut)
 

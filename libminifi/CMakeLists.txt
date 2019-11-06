@@ -116,7 +116,9 @@ include_directories(${ZLIB_INCLUDE_DIRS})
 
 target_link_libraries (core-minifi ${ZLIB_LIBRARIES})
 
-target_link_libraries (core-minifi OSSP::libuuid++)
+if(NOT WIN32)
+	target_link_libraries (core-minifi OSSP::libuuid++)
+endif()
 
 
 # Include OpenSSL
@@ -162,7 +164,9 @@ include_directories(${ZLIB_INCLUDE_DIRS})
 
 target_link_libraries (core-minifi-shared ${ZLIB_LIBRARIES})
 
-target_link_libraries (core-minifi-shared OSSP::libuuid++)
+if(NOT WIN32)
+	target_link_libraries (core-minifi-shared OSSP::libuuid++)
+endif()
 
 # Include OpenSSL
 
