@@ -81,7 +81,6 @@ Identifier::Identifier(UUID_FIELD u)
 
 Identifier::Identifier()
     : IdentifierBase() {
-  build_string();
 }
 
 Identifier::Identifier(const Identifier &other) {
