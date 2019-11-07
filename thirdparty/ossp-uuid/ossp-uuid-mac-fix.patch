@@ -26,8 +26,8 @@ diff -rupN orig/uuid.c patched/uuid.c
 -
 diff -rupN orig/uuid_mac.c patched/uuid_mac.c
 --- orig/uuid_mac.c	2008-03-07 11:49:59.000000000 +0100
-+++ patched/uuid_mac.c	2019-11-07 13:37:40.000000000 +0100
-@@ -122,26 +122,34 @@ int mac_address(unsigned char *data_ptr,
++++ patched/uuid_mac.c	2019-11-07 14:09:09.000000000 +0100
+@@ -122,26 +122,40 @@ int mac_address(unsigned char *data_ptr,
      }
  #endif
  
@@ -40,7 +40,9 @@ diff -rupN orig/uuid_mac.c patched/uuid_mac.c
 +        struct ifconf ifc;
          struct sockaddr *sa;
          int s;
-         int i;
+-        int i;
++        int i, j;
++        int empty;
  
          if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0)
              return FALSE;
@@ -56,11 +58,16 @@ diff -rupN orig/uuid_mac.c patched/uuid_mac.c
 -        for (i = 0; i < MAC_LEN; i++)
 -            data_ptr[i] = (unsigned char)(sa->sa_data[i] & 0xff);
 +        for (i = 0; i < ifc.ifc_len / sizeof(ifrs[0]); i++) {
-+            if (ioctl(s, SIOCGIFHWADDR, &ifr[i]) < 0)
++            if (ioctl(s, SIOCGIFHWADDR, &ifrs[i]) < 0)
 +                continue;
-+            sa = (struct sockaddr *)&(ifr[i].ifr_hwaddr);
-+            for (j = 0; j < MAC_LEN; j++)
++            sa = (struct sockaddr *)&(ifrs[i].ifr_hwaddr);
++            empty = TRUE;
++            for (j = 0; j < MAC_LEN; j++) {
++                empty &= (sa->sa_data[j] & 0xff) == 0x00;
 +                data_ptr[j] = (unsigned char)(sa->sa_data[j] & 0xff);
++            }
++            if (empty)
++                continue;
 +            close(s);
 +            return TRUE;
 +        }
@@ -70,7 +77,7 @@ diff -rupN orig/uuid_mac.c patched/uuid_mac.c
      }
  #endif
  
-@@ -180,4 +188,3 @@ int mac_address(unsigned char *data_ptr,
+@@ -180,4 +194,3 @@ int mac_address(unsigned char *data_ptr,
  
      return FALSE;
  }
