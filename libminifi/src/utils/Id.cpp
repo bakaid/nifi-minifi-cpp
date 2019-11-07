@@ -179,6 +179,9 @@ IdGenerator::IdGenerator()
     : implementation_(UUID_TIME_IMPL),
       logger_(logging::LoggerFactory<IdGenerator>::getLogger()),
       incrementor_(0) {
+  #ifndef WIN32
+    uuid_impl_ = std::unique_ptr<uuid>(new uuid());
+  #endif
 }
 
 IdGenerator::~IdGenerator() {
@@ -272,11 +275,6 @@ void IdGenerator::initialize(const std::shared_ptr<Properties> & properties) {
   } else {
     logging::LOG_DEBUG(logger_) << "Using uuid_generate_time implementation for uids.";
   }
-#ifndef WIN32
-  if (implementation_ != MINIFI_UID_IMPL) {
-    uuid_impl_ = std::unique_ptr<uuid>(new uuid());
-  }
-#endif
 }
 
 #ifndef WIN32
