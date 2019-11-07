@@ -24,3 +24,54 @@ diff -rupN orig/uuid.c patched/uuid.c
      return (unsigned long)(_UUID_VERSION);
  }
 -
+diff -rupN orig/uuid_mac.c patched/uuid_mac.c
+--- orig/uuid_mac.c	2008-03-07 11:49:59.000000000 +0100
++++ patched/uuid_mac.c	2019-11-07 13:37:40.000000000 +0100
+@@ -122,26 +122,34 @@ int mac_address(unsigned char *data_ptr,
+     }
+ #endif
+ 
+-#if defined(HAVE_NET_IF_H) && defined(SIOCGIFHWADDR)
++#if defined(HAVE_NET_IF_H) && defined(SIOCGIFCONF) && defined(SIOCGIFHWADDR)
+     /* use SIOCGIFHWADDR ioctl(2) on Linux class platforms */
+     {
+-        struct ifreq ifr;
++        struct ifreq ifrs[16];
++        struct ifconf ifc;
+         struct sockaddr *sa;
+         int s;
+         int i;
+ 
+         if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0)
+             return FALSE;
+-        sprintf(ifr.ifr_name, "eth0");
+-        if (ioctl(s, SIOCGIFHWADDR, &ifr) < 0) {
++        ifc.ifc_len = sizeof(ifrs);
++        ifc.ifc_req = ifrs;
++        if (ioctl(s, SIOCGIFCONF, &ifc) < 0) {
+             close(s);
+             return FALSE;
+         }
+-        sa = (struct sockaddr *)&ifr.ifr_addr;
+-        for (i = 0; i < MAC_LEN; i++)
+-            data_ptr[i] = (unsigned char)(sa->sa_data[i] & 0xff);
++        for (i = 0; i < ifc.ifc_len / sizeof(ifrs[0]); i++) {
++            if (ioctl(s, SIOCGIFHWADDR, &ifr[i]) < 0)
++                continue;
++            sa = (struct sockaddr *)&(ifr[i].ifr_hwaddr);
++            for (j = 0; j < MAC_LEN; j++)
++                data_ptr[j] = (unsigned char)(sa->sa_data[j] & 0xff);
++            close(s);
++            return TRUE;
++        }
+         close(s);
+-        return TRUE;
++        return FALSE;
+     }
+ #endif
+ 
+@@ -180,4 +188,3 @@ int mac_address(unsigned char *data_ptr,
+ 
+     return FALSE;
+ }
+-
