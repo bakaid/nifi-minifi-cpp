@@ -76,6 +76,8 @@ public:
   static core::Property ResolveAsAttributes;
   static core::Property EventHeaderDelimiter;
   static core::Property EventHeader;
+  static core::Property OutputFormat;
+  static core::Property BatchCommitSize;
 
   //! Supported Relationships
   static core::Relationship Success;
@@ -105,6 +107,11 @@ protected:
   bool insertHeaderName(wel::METADATA_NAMES &header, const std::string &key, const std::string &value);
 
   void LogWindowsError();
+
+  static constexpr const char * const XML = "XML";
+  static constexpr const char * const Both = "Both";
+  static constexpr const char * const Plaintext = "Plaintext";
+
 private:
 
   // Logger
@@ -125,6 +132,9 @@ private:
   std::shared_ptr<core::ProcessSessionFactory> sessionFactory_;
   std::mutex cache_mutex_;
   std::map<std::string, wel::WindowsEventLogHandler > providers_;
+  int batch_commit_size_;
+  bool writeXML_;
+  bool writePlainText_;
 };
 
 REGISTER_RESOURCE(ConsumeWindowsEventLog, "Windows Event Log Subscribe Callback to receive FlowFiles from Events on Windows.");
