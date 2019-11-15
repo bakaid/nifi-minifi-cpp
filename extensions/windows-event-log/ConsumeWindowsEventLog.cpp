@@ -236,6 +236,12 @@ void ConsumeWindowsEventLog::onTrigger(const std::shared_ptr<core::ProcessContex
     }
   }
 
+  std::unique_lock<std::mutex> lock(onTriggerMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    logger_->log_warn("processor was triggered before previous listing finished, configuration should be revised!");
+    return;
+  }
+
   const auto flowFileCount = processQueue(session);
 
   const auto now = GetTickCount64();

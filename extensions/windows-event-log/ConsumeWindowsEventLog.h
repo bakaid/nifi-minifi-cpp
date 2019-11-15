@@ -33,9 +33,7 @@
 #include <codecvt>
 #include "utils/OsUtils.h"
 #include <Objbase.h>
-
-
-//#import <msxml6.dll>
+#include <mutex>
 
 namespace org {
 namespace apache {
@@ -140,6 +138,7 @@ private:
   bool writeXML_;
   bool writePlainText_;
   std::unique_ptr<Bookmark> pBookmark_;
+  std::mutex onTriggerMutex_;
 };
 
 REGISTER_RESOURCE(ConsumeWindowsEventLog, "Windows Event Log Subscribe Callback to receive FlowFiles from Events on Windows.");
