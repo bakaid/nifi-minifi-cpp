@@ -2,6 +2,8 @@
 
 #include <direct.h>
 
+#include "utils/file/FileUtils.h"
+
 namespace org {
 namespace apache {
 namespace nifi {
@@ -28,6 +30,11 @@ Bookmark::Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> log
   } else {
     if (!(hBookmark_ = EvtCreateBookmark(bookmarkXml_.c_str()))) {
       logger_->log_error("!EvtCreateBookmark error: %d bookmarkXml_ '%s'", GetLastError(), bookmarkXml_.c_str());
+
+      // BookmarkXml can be corrupted - clear bookmarkXml and create empty file. 
+      bookmarkXml_.clear();
+      ok_ = createEmptyBookmarkXmlFile();
+
       return;
     }
   }
@@ -80,6 +87,7 @@ bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
         return false;
       }
 
+      // This is faster than truncate.
       file_.seekp(std::ios::beg);
 
       // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'.
@@ -111,25 +119,24 @@ bool Bookmark::createEmptyBookmarkXmlFile() {
   return ret;
 }
 
-// Creates directory "processor_repository\ConsumeWindowsEventLog\uuid\{uuid}" under "bin" directory.
+// Creates directory "processor_repository\ConsumeWindowsEventLog\uuid\{uuid}" under "root" directory.
 bool Bookmark::createUUIDDir(const std::string& uuid, std::string& dir)
 {
+  // Returns root directory with backslash.
   auto getRootDirectory = [](std::string& rootDir, std::shared_ptr<logging::Logger> logger)
   {
-    char dir[MAX_PATH + 1];
-    auto length = GetModuleFileName(0, dir, _countof(dir) - 1);
-    if (!length) {
-      logger->log_error("!GetModuleFileName error: %x", GetLastError());
-      return false;
+    auto dir = utils::file::FileUtils::get_executable_dir();
+    if (dir.back() == '\\') {
+      dir.pop_back();
     }
-    dir[length] = '\0';
 
-    auto pBackslash = strrchr(dir, '\\');
+    auto pBackslash = strrchr(dir.c_str(), '\\');
     if (!pBackslash) {
       logger->log_error("!pBackslash");
       return false;
     }
-    *(pBackslash + 1) = '\0';
+    auto posBackslash = pBackslash - dir.c_str();
+    dir.resize(posBackslash + 1);
 
     rootDir = dir;
 
@@ -156,15 +163,6 @@ bool Bookmark::createUUIDDir(const std::string& uuid, std::string& dir)
   return true;
 }
 
-std::string Bookmark::filePath(const std::string& uuid) {
-  static auto s_filePath = [&uuid, this]() {
-    std::string uuidDir;
-    return createUUIDDir(uuid, uuidDir) ? uuidDir + "Bookmark.txt" : uuidDir;
-  }();
-
-  return s_filePath;
-}
-
 bool Bookmark::getBookmarkXmlFromFile() {
   bookmarkXml_.clear();
 
@@ -173,6 +171,7 @@ bool Bookmark::getBookmarkXmlFromFile() {
     return createEmptyBookmarkXmlFile();
   }
 
+  // Generically is not efficient, but bookmarkXML is small ~100 bytes. 
   wchar_t c;
   do {
     file.read(&c, 1);

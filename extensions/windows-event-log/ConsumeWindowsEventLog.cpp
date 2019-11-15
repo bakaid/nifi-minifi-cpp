@@ -158,7 +158,7 @@ ConsumeWindowsEventLog::ConsumeWindowsEventLog(const std::string& name, utils::I
 
   pBookmark_ = std::make_unique<Bookmark>(getUUIDStr(), logger_);
   if (!*pBookmark_) {
-    pBookmark_.release();
+    pBookmark_.reset();
   }
 }
 
@@ -397,35 +397,36 @@ bool ConsumeWindowsEventLog::subscribe(const std::shared_ptr<core::ProcessContex
   auto channel = std::wstring(channel_.begin(), channel_.end());
   auto query = std::wstring(query_.begin(), query_.end());
 
-  [&channel, &query, this]() {
+  do {
     auto hEventResults = EvtQuery(0, channel.c_str(), query.c_str(), EvtQueryChannelPath);
     if (!hEventResults) {
       logger_->log_error("!EvtQuery error: %d.", GetLastError());
-      return;
+      // Consider it as a serious error.
+      return false;
     }
     const utils::ScopeGuard guard_hEventResults([hEventResults]() { EvtClose(hEventResults); });
 
     if (pBookmark_->hasBookmarkXml()) {
       if (!processEventsAfterBookmark(hEventResults, channel, query)) {
-        return;
+        break;
       }
     } else {
       // Seek to the last event in the hEventResults.
       if (!EvtSeek(hEventResults, 0, 0, 0, EvtSeekRelativeToLast)) {
         logger_->log_error("!EvtSeek error: %d.", GetLastError());
-        return;
+        break;
       }
 
       DWORD dwReturned{};
       EVT_HANDLE hEvent{};
       if (!EvtNext(hEventResults, 1, &hEvent, INFINITE, 0, &dwReturned)) {
         logger_->log_error("!EvtNext error: %d.", GetLastError());
-        return;
+        break;
       }
 
       pBookmark_->saveBookmark(hEvent);
     }
-  }();
+  } while (false);
 
   subscriptionHandle_ = EvtSubscribe(
       NULL,
