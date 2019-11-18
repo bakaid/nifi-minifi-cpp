@@ -16,31 +16,36 @@ Bookmark::Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> log
     filePath_ += "Bookmark.txt";
   }
 
-  if (!filePath_.empty() && !getBookmarkXmlFromFile()) {
+  std::wstring bookmarkXml;
+  if (!filePath_.empty() && !getBookmarkXmlFromFile(bookmarkXml)) {
     return;
   }
 
-  if (bookmarkXml_.empty()) {
+  if (bookmarkXml.empty()) {
     if (!(hBookmark_ = EvtCreateBookmark(0))) {
       logger_->log_error("!EvtCreateBookmark error: %d", GetLastError());
       return;
     }
-  } else {
-    if (!(hBookmark_ = EvtCreateBookmark(bookmarkXml_.c_str()))) {
-      logger_->log_error("!EvtCreateBookmark error: %d bookmarkXml_ '%s'", GetLastError(), bookmarkXml_.c_str());
 
-      // BookmarkXml can be corrupted - create hBookmark_, clear bookmarkXml_ and create empty file. 
+    hasBookmarkXml_ = false;
+  } else {
+    if (!(hBookmark_ = EvtCreateBookmark(bookmarkXml.c_str()))) {
+      logger_->log_error("!EvtCreateBookmark error: %d bookmarkXml_ '%s'", GetLastError(), bookmarkXml.c_str());
+
+      // BookmarkXml can be corrupted - create hBookmark_, and create empty file. 
       if (!(hBookmark_ = EvtCreateBookmark(0))) {
         logger_->log_error("!EvtCreateBookmark error: %d", GetLastError());
         return;
       }
 
-      bookmarkXml_.clear();
+      hasBookmarkXml_ = false;
 
       ok_ = createEmptyBookmarkXmlFile();
 
       return;
     }
+
+    hasBookmarkXml_ = true;
   }
 
   ok_ = true;
@@ -61,7 +66,7 @@ Bookmark::operator bool() const {
 }
   
 bool Bookmark::hasBookmarkXml() const {
-  return !bookmarkXml_.empty();
+  return hasBookmarkXml_;
 }
 
 EVT_HANDLE Bookmark::bookmarkHandle() const {
@@ -158,8 +163,8 @@ bool Bookmark::createUUIDDir(const std::string& uuid, std::string& dir)
   return utils::file::FileUtils::is_directory(dir.c_str());
 }
 
-bool Bookmark::getBookmarkXmlFromFile() {
-  bookmarkXml_.clear();
+bool Bookmark::getBookmarkXmlFromFile(std::wstring& bookmarkXml) {
+  bookmarkXml.clear();
 
   std::wifstream file(filePath_);
   if (!file.is_open()) {
@@ -174,7 +179,7 @@ bool Bookmark::getBookmarkXmlFromFile() {
       break;
     }
 
-    bookmarkXml_ += c;
+    bookmarkXml += c;
   } while (true);
 
   file.close();
@@ -182,24 +187,24 @@ bool Bookmark::getBookmarkXmlFromFile() {
   file_.open(filePath_);
   if (!file_.is_open()) {
     logger_->log_error("Cannot open %s", filePath_.c_str());
-    bookmarkXml_.clear();
+    bookmarkXml.clear();
     return false;
   }
 
-  if (bookmarkXml_.empty()) {
+  if (bookmarkXml.empty()) {
     return true;
   }
 
   // '!' should be at the end of bookmark.
-  auto pos = bookmarkXml_.find(L'!');
+  auto pos = bookmarkXml.find(L'!');
   if (std::wstring::npos == pos) {
-    logger_->log_error("No '!' in bookmarXml '%s'", bookmarkXml_.c_str());
-    bookmarkXml_.clear();
+    logger_->log_error("No '!' in bookmarXml '%s'", bookmarkXml.c_str());
+    bookmarkXml.clear();
     return createEmptyBookmarkXmlFile();
   }
 
   // Remove '!'.
-  bookmarkXml_.resize(pos);
+  bookmarkXml.resize(pos);
 
   return true;
 }

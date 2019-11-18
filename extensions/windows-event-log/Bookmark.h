@@ -28,6 +28,7 @@ public:
 
   bool saveBookmark(EVT_HANDLE hEvent);
 
+
 private:
   bool createEmptyBookmarkXmlFile();
 
@@ -36,15 +37,15 @@ private:
 
   std::string filePath(const std::string& uuid);
 
-  bool getBookmarkXmlFromFile();
+  bool getBookmarkXmlFromFile(std::wstring& bookmarkXml);
 
 private:
   bool ok_{};
   EVT_HANDLE hBookmark_{};
-  std::wstring bookmarkXml_;
   std::string filePath_;
   std::wfstream file_;
   std::shared_ptr<logging::Logger> logger_;
+  bool hasBookmarkXml_{};
 };
 
 } /* namespace processors */
