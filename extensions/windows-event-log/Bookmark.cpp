@@ -29,8 +29,14 @@ Bookmark::Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> log
     if (!(hBookmark_ = EvtCreateBookmark(bookmarkXml_.c_str()))) {
       logger_->log_error("!EvtCreateBookmark error: %d bookmarkXml_ '%s'", GetLastError(), bookmarkXml_.c_str());
 
-      // BookmarkXml can be corrupted - clear bookmarkXml and create empty file. 
+      // BookmarkXml can be corrupted - create hBookmark_, clear bookmarkXml_ and create empty file. 
+      if (!(hBookmark_ = EvtCreateBookmark(0))) {
+        logger_->log_error("!EvtCreateBookmark error: %d", GetLastError());
+        return;
+      }
+
       bookmarkXml_.clear();
+
       ok_ = createEmptyBookmarkXmlFile();
 
       return;
