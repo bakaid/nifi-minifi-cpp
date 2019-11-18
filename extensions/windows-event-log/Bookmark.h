@@ -20,11 +20,11 @@ public:
   Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> logger);
   ~Bookmark();
 
-  operator bool();
+  operator bool() const;
   
-  bool hasBookmarkXml();
+  bool hasBookmarkXml() const;
 
-  EVT_HANDLE bookmarkHandle();
+  EVT_HANDLE bookmarkHandle() const;
 
   bool saveBookmark(EVT_HANDLE hEvent);
 

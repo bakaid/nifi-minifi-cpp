@@ -16,10 +16,8 @@ Bookmark::Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> log
     filePath_ += "Bookmark.txt";
   }
 
-  if (!filePath_.empty()) {
-    if (!getBookmarkXmlFromFile()) {
-      return;
-    }
+  if (!filePath_.empty() && !getBookmarkXmlFromFile()) {
+    return;
   }
 
   if (bookmarkXml_.empty()) {
@@ -52,15 +50,15 @@ Bookmark::~Bookmark() {
   }
 }
 
-Bookmark::operator bool() {
+Bookmark::operator bool() const {
   return ok_;
 }
   
-bool Bookmark::hasBookmarkXml() {
+bool Bookmark::hasBookmarkXml() const {
   return !bookmarkXml_.empty();
 }
 
-EVT_HANDLE Bookmark::bookmarkHandle() {
+EVT_HANDLE Bookmark::bookmarkHandle() const {
   return hBookmark_;
 }
 
@@ -87,10 +85,9 @@ bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
         return false;
       }
 
-      // This is faster than truncate.
+      // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'. This is faster than truncate.
       file_.seekp(std::ios::beg);
 
-      // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'.
       file_ << &buf[0] << L'!';
 
       file_.flush();
@@ -110,13 +107,12 @@ bool Bookmark::createEmptyBookmarkXmlFile() {
   }
 
   file_.open(filePath_, std::ios::out);
-
-  auto ret = file_.is_open();
-  if (!ret) {
+  if (!file_.is_open()) {
     logger_->log_error("Cannot open %s", filePath_.c_str());
+    return false;
   }
 
-  return ret;
+  return true;
 }
 
 // Creates directory "processor_repository\ConsumeWindowsEventLog\uuid\{uuid}" under "root" directory.
@@ -148,19 +144,12 @@ bool Bookmark::createUUIDDir(const std::string& uuid, std::string& dir)
   if (!getRootDirectory(dir, logger_))
     return false;
 
-  for (const auto& curDir : std::vector<std::string>{ "processor_repository", "ConsumeWindowsEventLog", "uuid", uuid }) {
+  for (const auto& curDir : std::vector<std::string>{"processor_repository", "ConsumeWindowsEventLog", "uuid", uuid}) {
     dir += curDir + '\\';
-
-    if (GetFileAttributes(dir.c_str()) == INVALID_FILE_ATTRIBUTES) {
-      if (_mkdir(dir.c_str())) {
-        logger_->log_error("!_mkdir directory '%s'", dir.c_str());
-        dir.clear();
-        return false;
-      }
-    }
+    utils::file::FileUtils::create_dir(dir, false);
   }
 
-  return true;
+  return utils::file::FileUtils::is_directory(dir.c_str());
 }
 
 bool Bookmark::getBookmarkXmlFromFile() {
