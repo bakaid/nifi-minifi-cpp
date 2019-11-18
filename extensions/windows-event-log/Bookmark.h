@@ -28,7 +28,9 @@ public:
 
   bool saveBookmark(EVT_HANDLE hEvent);
 
+  bool getNewBookmarkXml(EVT_HANDLE hEvent, std::wstring& bookmarkXml);
 
+  void saveBookmarkXml(std::wstring& bookmarkXml);
 private:
   bool createEmptyBookmarkXmlFile();
 

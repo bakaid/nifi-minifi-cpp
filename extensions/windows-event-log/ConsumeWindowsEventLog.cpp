@@ -341,7 +341,10 @@ void ConsumeWindowsEventLog::processEvent(EVT_HANDLE hEvent) {
       }
 
       if (pBookmark_) {
-        pBookmark_->saveBookmark(hEvent);
+        std::wstring bookmarkXml;
+        if (pBookmark_->getNewBookmarkXml(hEvent, bookmarkXml)) {
+          renderedData.bookmarkXml_ = bookmarkXml;
+        }
       }
 
       listRenderedData_.enqueue(std::move(renderedData));
@@ -532,6 +535,11 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
     }
 
     flowFileCount++;
+
+    // Should it be moved after 'session->commit();' bellow ?
+    if (pBookmark_) {
+      pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
+    }
 
     if (batch_commit_size_ != 0U && (flowFileCount % batch_commit_size_ == 0)) {
       auto before_commit = std::chrono::high_resolution_clock::now();

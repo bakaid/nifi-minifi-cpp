@@ -45,6 +45,7 @@ struct EventRender {
 	std::map<std::string, std::string> matched_fields_;
 	std::string text_;
 	std::string rendered_text_;
+  std::wstring bookmarkXml_;
 };
 
 class Bookmark;

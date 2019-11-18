@@ -75,6 +75,17 @@ EVT_HANDLE Bookmark::bookmarkHandle() const {
 
 bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
 {
+  std::wstring bookmarkXml;
+  if (!getNewBookmarkXml(hEvent, bookmarkXml)) {
+    return false;
+  }
+
+  saveBookmarkXml(bookmarkXml);
+
+  return true;
+}
+
+bool Bookmark::getNewBookmarkXml(EVT_HANDLE hEvent, std::wstring& bookmarkXml) {
   if (!EvtUpdateBookmark(hBookmark_, hEvent)) {
     logger_->log_error("!EvtUpdateBookmark error: %d.", GetLastError());
     return false;
@@ -96,12 +107,9 @@ bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
         return false;
       }
 
-      // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'. This is faster than truncate.
-      file_.seekp(std::ios::beg);
+      bookmarkXml = &buf[0];
 
-      file_ << &buf[0] << L'!';
-
-      file_.flush();
+      return true;
     }
     else if (ERROR_SUCCESS != (status = GetLastError())) {
       logger_->log_error("!EvtRender error: %d.", GetLastError());
@@ -109,8 +117,18 @@ bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
     }
   }
 
-  return true;
+  return false;
 }
+
+void Bookmark::saveBookmarkXml(std::wstring& bookmarkXml) {
+  // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'. This is faster than truncate.
+  file_.seekp(std::ios::beg);
+
+  file_ << bookmarkXml << L'!';
+
+  file_.flush();
+}
+
 
 bool Bookmark::createEmptyBookmarkXmlFile() {
   if (file_.is_open()) {
