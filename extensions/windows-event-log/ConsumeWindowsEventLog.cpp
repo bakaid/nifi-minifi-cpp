@@ -536,16 +536,15 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
 
     flowFileCount++;
 
-    // Should it be moved after 'session->commit();' bellow ?
-    if (pBookmark_) {
-      pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
-    }
-
     if (batch_commit_size_ != 0U && (flowFileCount % batch_commit_size_ == 0)) {
       auto before_commit = std::chrono::high_resolution_clock::now();
       session->commit();
       logger_->log_debug("processQueue commit took %llu ms",
                         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - before_commit).count());
+
+      if (pBookmark_) {
+        pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
+      }
     }
   }
 
