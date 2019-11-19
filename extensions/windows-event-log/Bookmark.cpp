@@ -147,6 +147,7 @@ bool Bookmark::createEmptyBookmarkXmlFile() {
 bool Bookmark::createUUIDDir(const std::string& bookmarkRootDir, const std::string& uuid, std::string& dir)
 {
   if (bookmarkRootDir.empty()) {
+    dir.clear();
     return false;
   }
 
@@ -155,7 +156,7 @@ bool Bookmark::createUUIDDir(const std::string& bookmarkRootDir, const std::stri
     dirWithBackslash += '\\';
   }
   
-  dir = dirWithBackslash + "\\uuid\\" + uuid + "\\";
+  dir = dirWithBackslash + "uuid\\" + uuid + "\\";
 
   utils::file::FileUtils::create_dir(dir);
 
