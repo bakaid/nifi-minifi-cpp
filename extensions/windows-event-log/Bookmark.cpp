@@ -18,7 +18,7 @@ Bookmark::Bookmark(const std::string& bookmarkRootDir, const std::string& uuid, 
   filePath_ += "Bookmark.txt";
 
   std::wstring bookmarkXml;
-  if (!filePath_.empty() && !getBookmarkXmlFromFile(bookmarkXml)) {
+  if (!getBookmarkXmlFromFile(bookmarkXml)) {
     return;
   }
 
