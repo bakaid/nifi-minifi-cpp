@@ -521,8 +521,12 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
                       std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - before_time).count());
   });
 
+  bool commitAndSaveBookmark = false;
+
   EventRender evt;
   while (listRenderedData_.try_dequeue(evt)) {
+    commitAndSaveBookmark = true;
+
     if (writeXML_) {
       auto flowFile = session->create();
 
@@ -559,6 +563,16 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
       if (pBookmark_) {
         pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
       }
+
+      commitAndSaveBookmark = false;
+    }
+  }
+
+  if (commitAndSaveBookmark) {
+    session->commit();
+
+    if (pBookmark_) {
+      pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
     }
   }
 
