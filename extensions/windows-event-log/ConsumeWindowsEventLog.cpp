@@ -140,11 +140,17 @@ core::Property ConsumeWindowsEventLog::BatchCommitSize(
   withDescription("Maximum number of Events to consume and create to Flow Files from before committing.")->
   build());
 
+core::Property ConsumeWindowsEventLog::BookmarkRootDirectory(
+  core::PropertyBuilder::createProperty("State Directory")->
+  isRequired(false)->
+  withDefaultValue("CWELState")->
+  withDescription("Directory which contains processor state data.")->
+  build());
+
 core::Relationship ConsumeWindowsEventLog::Success("success", "Relationship for successfully consumed events.");
 
 ConsumeWindowsEventLog::ConsumeWindowsEventLog(const std::string& name, utils::Identifier uuid)
   : core::Processor(name, uuid), logger_(logging::LoggerFactory<ConsumeWindowsEventLog>::getLogger()), apply_identifier_function_(false), batch_commit_size_(0U) {
-
   char buff[MAX_COMPUTERNAME_LENGTH + 1];
   DWORD size = sizeof(buff);
   if (GetComputerName(buff, &size)) {
@@ -155,11 +161,6 @@ ConsumeWindowsEventLog::ConsumeWindowsEventLog(const std::string& name, utils::I
 
   writeXML_ = false;
   writePlainText_ = false;
-
-  pBookmark_ = std::make_unique<Bookmark>(getUUIDStr(), logger_);
-  if (!*pBookmark_) {
-    pBookmark_.reset();
-  }
 }
 
 ConsumeWindowsEventLog::~ConsumeWindowsEventLog() {
@@ -167,7 +168,9 @@ ConsumeWindowsEventLog::~ConsumeWindowsEventLog() {
 
 void ConsumeWindowsEventLog::initialize() {
   //! Set the supported properties
-  setSupportedProperties({Channel, Query, MaxBufferSize, InactiveDurationToReconnect, IdentifierMatcher, IdentifierFunction, ResolveAsAttributes, EventHeaderDelimiter, EventHeader, OutputFormat, BatchCommitSize});
+  setSupportedProperties(
+    {Channel, Query, MaxBufferSize, InactiveDurationToReconnect, IdentifierMatcher, IdentifierFunction, ResolveAsAttributes, EventHeaderDelimiter, EventHeader, OutputFormat, BatchCommitSize, BookmarkRootDirectory}
+  );
 
   //! Set the supported relationships
   setSupportedRelationships({Success});
@@ -190,6 +193,14 @@ void ConsumeWindowsEventLog::onSchedule(const std::shared_ptr<core::ProcessConte
   context->getProperty(IdentifierFunction.getName(), apply_identifier_function_);
   context->getProperty(EventHeaderDelimiter.getName(), header_delimiter_);
   context->getProperty(BatchCommitSize.getName(), batch_commit_size_);
+
+  std::string bookmarkDir;
+  context->getProperty(BookmarkRootDirectory.getName(), bookmarkDir);
+
+  pBookmark_ = std::make_unique<Bookmark>(bookmarkDir, getUUIDStr(), logger_);
+  if (!*pBookmark_) {
+    pBookmark_.reset();
+  }
 
   std::string header;
   context->getProperty(EventHeader.getName(), header);

@@ -79,6 +79,7 @@ public:
   static core::Property EventHeader;
   static core::Property OutputFormat;
   static core::Property BatchCommitSize;
+  static core::Property BookmarkRootDirectory;
 
   //! Supported Relationships
   static core::Relationship Success;
@@ -133,7 +134,6 @@ private:
   std::shared_ptr<core::ProcessSessionFactory> sessionFactory_;
   std::mutex cache_mutex_;
   std::map<std::string, wel::WindowsEventLogHandler > providers_;
-
   uint64_t batch_commit_size_;
 
   bool writeXML_;

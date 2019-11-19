@@ -10,9 +10,9 @@ namespace nifi {
 namespace minifi {
 namespace processors {
 
-Bookmark::Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> logger)
+Bookmark::Bookmark(const std::string& bookmarkRootDir, const std::string& uuid, std::shared_ptr<logging::Logger> logger)
   :logger_(logger) {
-  if (createUUIDDir(uuid, filePath_)) {
+  if (createUUIDDir(bookmarkRootDir, uuid, filePath_)) {
     filePath_ += "Bookmark.txt";
   }
 
@@ -144,41 +144,16 @@ bool Bookmark::createEmptyBookmarkXmlFile() {
   return true;
 }
 
-// Creates directory "processor_repository\ConsumeWindowsEventLog\uuid\{uuid}" under "root" directory.
-bool Bookmark::createUUIDDir(const std::string& uuid, std::string& dir)
+bool Bookmark::createUUIDDir(const std::string& bookmarkRootDir, const std::string& uuid, std::string& dir)
 {
-  // Returns root directory with backslash.
-  auto getRootDirectory = [](std::string& rootDir, std::shared_ptr<logging::Logger> logger)
-  {
-    auto dir = utils::file::FileUtils::get_executable_dir();
-    if (dir.back() == '\\') {
-      dir.pop_back();
-    }
+  dir = bookmarkRootDir + "\\uuid\\" + uuid + "\\";
+  utils::file::FileUtils::create_dir(dir);
 
-    auto pBackslash = strrchr(dir.c_str(), '\\');
-    if (!pBackslash) {
-      logger->log_error("!pBackslash");
-      return false;
-    }
-    auto posBackslash = pBackslash - dir.c_str();
-    dir.resize(posBackslash + 1);
-
-    rootDir = dir;
-
-    return true;
-  };
-
-  dir.clear();
-
-  if (!getRootDirectory(dir, logger_))
-    return false;
-
-  for (const auto& curDir : std::vector<std::string>{"processor_repository", "ConsumeWindowsEventLog", "uuid", uuid}) {
-    dir += curDir + '\\';
-    utils::file::FileUtils::create_dir(dir, false);
+  auto dirCreated = utils::file::FileUtils::is_directory(dir.c_str());
+  if (!dirCreated) {
+    dir.clear();
   }
-
-  return utils::file::FileUtils::is_directory(dir.c_str());
+  return dirCreated;;
 }
 
 bool Bookmark::getBookmarkXmlFromFile(std::wstring& bookmarkXml) {
