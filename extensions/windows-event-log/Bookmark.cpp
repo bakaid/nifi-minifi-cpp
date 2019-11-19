@@ -166,7 +166,8 @@ bool Bookmark::createUUIDDir(const std::string& bookmarkRootDir, const std::stri
     logger_->log_error("Cannot create %s", dir.c_str());
     dir.clear();
   }
-  return dirCreated;;
+
+  return dirCreated;
 }
 
 bool Bookmark::getBookmarkXmlFromFile(std::wstring& bookmarkXml) {
