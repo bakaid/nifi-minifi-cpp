@@ -2,34 +2,51 @@
 
 #include <direct.h>
 
+#include "utils/file/FileUtils.h"
+
 namespace org {
 namespace apache {
 namespace nifi {
 namespace minifi {
 namespace processors {
 
-Bookmark::Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> logger)
+Bookmark::Bookmark(const std::string& bookmarkRootDir, const std::string& uuid, std::shared_ptr<logging::Logger> logger)
   :logger_(logger) {
-  if (createUUIDDir(uuid, filePath_)) {
-    filePath_ += "Bookmark.txt";
+  if (!createUUIDDir(bookmarkRootDir, uuid, filePath_))
+    return;
+
+  filePath_ += "Bookmark.txt";
+
+  std::wstring bookmarkXml;
+  if (!getBookmarkXmlFromFile(bookmarkXml)) {
+    return;
   }
 
-  if (!filePath_.empty()) {
-    if (!getBookmarkXmlFromFile()) {
-      return;
-    }
-  }
-
-  if (bookmarkXml_.empty()) {
+  if (bookmarkXml.empty()) {
     if (!(hBookmark_ = EvtCreateBookmark(0))) {
       logger_->log_error("!EvtCreateBookmark error: %d", GetLastError());
       return;
     }
+
+    hasBookmarkXml_ = false;
   } else {
-    if (!(hBookmark_ = EvtCreateBookmark(bookmarkXml_.c_str()))) {
-      logger_->log_error("!EvtCreateBookmark error: %d bookmarkXml_ '%s'", GetLastError(), bookmarkXml_.c_str());
+    if (!(hBookmark_ = EvtCreateBookmark(bookmarkXml.c_str()))) {
+      logger_->log_error("!EvtCreateBookmark error: %d bookmarkXml_ '%s'", GetLastError(), bookmarkXml.c_str());
+
+      // BookmarkXml can be corrupted - create hBookmark_, and create empty file. 
+      if (!(hBookmark_ = EvtCreateBookmark(0))) {
+        logger_->log_error("!EvtCreateBookmark error: %d", GetLastError());
+        return;
+      }
+
+      hasBookmarkXml_ = false;
+
+      ok_ = createEmptyBookmarkXmlFile();
+
       return;
     }
+
+    hasBookmarkXml_ = true;
   }
 
   ok_ = true;
@@ -45,20 +62,31 @@ Bookmark::~Bookmark() {
   }
 }
 
-Bookmark::operator bool() {
+Bookmark::operator bool() const {
   return ok_;
 }
   
-bool Bookmark::hasBookmarkXml() {
-  return !bookmarkXml_.empty();
+bool Bookmark::hasBookmarkXml() const {
+  return hasBookmarkXml_;
 }
 
-EVT_HANDLE Bookmark::bookmarkHandle() {
+EVT_HANDLE Bookmark::bookmarkHandle() const {
   return hBookmark_;
 }
 
 bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
 {
+  std::wstring bookmarkXml;
+  if (!getNewBookmarkXml(hEvent, bookmarkXml)) {
+    return false;
+  }
+
+  saveBookmarkXml(bookmarkXml);
+
+  return true;
+}
+
+bool Bookmark::getNewBookmarkXml(EVT_HANDLE hEvent, std::wstring& bookmarkXml) {
   if (!EvtUpdateBookmark(hBookmark_, hEvent)) {
     logger_->log_error("!EvtUpdateBookmark error: %d.", GetLastError());
     return false;
@@ -80,12 +108,9 @@ bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
         return false;
       }
 
-      file_.seekp(std::ios::beg);
+      bookmarkXml = &buf[0];
 
-      // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'.
-      file_ << &buf[0] << L'!';
-
-      file_.flush();
+      return true;
     }
     else if (ERROR_SUCCESS != (status = GetLastError())) {
       logger_->log_error("!EvtRender error: %d.", GetLastError());
@@ -93,8 +118,18 @@ bool Bookmark::saveBookmark(EVT_HANDLE hEvent)
     }
   }
 
-  return true;
+  return false;
 }
+
+void Bookmark::saveBookmarkXml(std::wstring& bookmarkXml) {
+  // Write new bookmark over old and in the end write '!'. Then new bookmark is read until '!'. This is faster than truncate.
+  file_.seekp(std::ios::beg);
+
+  file_ << bookmarkXml << L'!';
+
+  file_.flush();
+}
+
 
 bool Bookmark::createEmptyBookmarkXmlFile() {
   if (file_.is_open()) {
@@ -102,77 +137,48 @@ bool Bookmark::createEmptyBookmarkXmlFile() {
   }
 
   file_.open(filePath_, std::ios::out);
-
-  auto ret = file_.is_open();
-  if (!ret) {
+  if (!file_.is_open()) {
     logger_->log_error("Cannot open %s", filePath_.c_str());
-  }
-
-  return ret;
-}
-
-// Creates directory "processor_repository\ConsumeWindowsEventLog\uuid\{uuid}" under "bin" directory.
-bool Bookmark::createUUIDDir(const std::string& uuid, std::string& dir)
-{
-  auto getRootDirectory = [](std::string& rootDir, std::shared_ptr<logging::Logger> logger)
-  {
-    char dir[MAX_PATH + 1];
-    auto length = GetModuleFileName(0, dir, _countof(dir) - 1);
-    if (!length) {
-      logger->log_error("!GetModuleFileName error: %x", GetLastError());
-      return false;
-    }
-    dir[length] = '\0';
-
-    auto pBackslash = strrchr(dir, '\\');
-    if (!pBackslash) {
-      logger->log_error("!pBackslash");
-      return false;
-    }
-    *(pBackslash + 1) = '\0';
-
-    rootDir = dir;
-
-    return true;
-  };
-
-  dir.clear();
-
-  if (!getRootDirectory(dir, logger_))
     return false;
-
-  for (const auto& curDir : std::vector<std::string>{ "processor_repository", "ConsumeWindowsEventLog", "uuid", uuid }) {
-    dir += curDir + '\\';
-
-    if (GetFileAttributes(dir.c_str()) == INVALID_FILE_ATTRIBUTES) {
-      if (_mkdir(dir.c_str())) {
-        logger_->log_error("!_mkdir directory '%s'", dir.c_str());
-        dir.clear();
-        return false;
-      }
-    }
   }
 
   return true;
 }
 
-std::string Bookmark::filePath(const std::string& uuid) {
-  static auto s_filePath = [&uuid, this]() {
-    std::string uuidDir;
-    return createUUIDDir(uuid, uuidDir) ? uuidDir + "Bookmark.txt" : uuidDir;
-  }();
+bool Bookmark::createUUIDDir(const std::string& bookmarkRootDir, const std::string& uuid, std::string& dir)
+{
+  if (bookmarkRootDir.empty()) {
+    dir.clear();
+    return false;
+  }
 
-  return s_filePath;
+  auto dirWithBackslash = bookmarkRootDir;
+  if (bookmarkRootDir.back() != '\\') {
+    dirWithBackslash += '\\';
+  }
+  
+  dir = dirWithBackslash + "uuid\\" + uuid + "\\";
+
+  utils::file::FileUtils::create_dir(dir);
+
+  auto dirCreated = utils::file::FileUtils::is_directory(dir.c_str());
+  if (!dirCreated) {
+    logger_->log_error("Cannot create %s", dir.c_str());
+    dir.clear();
+  }
+
+  return dirCreated;
 }
 
-bool Bookmark::getBookmarkXmlFromFile() {
-  bookmarkXml_.clear();
+bool Bookmark::getBookmarkXmlFromFile(std::wstring& bookmarkXml) {
+  bookmarkXml.clear();
 
   std::wifstream file(filePath_);
   if (!file.is_open()) {
     return createEmptyBookmarkXmlFile();
   }
 
+  // Generically is not efficient, but bookmarkXML is small ~100 bytes. 
   wchar_t c;
   do {
     file.read(&c, 1);
@@ -180,7 +186,7 @@ bool Bookmark::getBookmarkXmlFromFile() {
       break;
     }
 
-    bookmarkXml_ += c;
+    bookmarkXml += c;
   } while (true);
 
   file.close();
@@ -188,24 +194,24 @@ bool Bookmark::getBookmarkXmlFromFile() {
   file_.open(filePath_);
   if (!file_.is_open()) {
     logger_->log_error("Cannot open %s", filePath_.c_str());
-    bookmarkXml_.clear();
+    bookmarkXml.clear();
     return false;
   }
 
-  if (bookmarkXml_.empty()) {
+  if (bookmarkXml.empty()) {
     return true;
   }
 
   // '!' should be at the end of bookmark.
-  auto pos = bookmarkXml_.find(L'!');
+  auto pos = bookmarkXml.find(L'!');
   if (std::wstring::npos == pos) {
-    logger_->log_error("No '!' in bookmarXml '%s'", bookmarkXml_.c_str());
-    bookmarkXml_.clear();
+    logger_->log_error("No '!' in bookmarXml '%s'", bookmarkXml.c_str());
+    bookmarkXml.clear();
     return createEmptyBookmarkXmlFile();
   }
 
   // Remove '!'.
-  bookmarkXml_.resize(pos);
+  bookmarkXml.resize(pos);
 
   return true;
 }

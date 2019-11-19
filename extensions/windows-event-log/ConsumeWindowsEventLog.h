@@ -33,9 +33,7 @@
 #include <codecvt>
 #include "utils/OsUtils.h"
 #include <Objbase.h>
-
-
-//#import <msxml6.dll>
+#include <mutex>
 
 namespace org {
 namespace apache {
@@ -47,6 +45,7 @@ struct EventRender {
 	std::map<std::string, std::string> matched_fields_;
 	std::string text_;
 	std::string rendered_text_;
+  std::wstring bookmarkXml_;
 };
 
 class Bookmark;
@@ -80,6 +79,7 @@ public:
   static core::Property EventHeader;
   static core::Property OutputFormat;
   static core::Property BatchCommitSize;
+  static core::Property BookmarkRootDirectory;
 
   //! Supported Relationships
   static core::Relationship Success;
@@ -134,12 +134,12 @@ private:
   std::shared_ptr<core::ProcessSessionFactory> sessionFactory_;
   std::mutex cache_mutex_;
   std::map<std::string, wel::WindowsEventLogHandler > providers_;
-
   uint64_t batch_commit_size_;
 
   bool writeXML_;
   bool writePlainText_;
   std::unique_ptr<Bookmark> pBookmark_;
+  std::mutex onTriggerMutex_;
 };
 
 REGISTER_RESOURCE(ConsumeWindowsEventLog, "Windows Event Log Subscribe Callback to receive FlowFiles from Events on Windows.");

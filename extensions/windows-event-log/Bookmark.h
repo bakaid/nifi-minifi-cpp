@@ -17,34 +17,36 @@ namespace processors {
 class Bookmark
 {
 public:
-  Bookmark(const std::string& uuid, std::shared_ptr<logging::Logger> logger);
+  Bookmark(const std::string& bookmarkRootDir, const std::string& uuid, std::shared_ptr<logging::Logger> logger);
   ~Bookmark();
 
-  operator bool();
+  operator bool() const;
   
-  bool hasBookmarkXml();
+  bool hasBookmarkXml() const;
 
-  EVT_HANDLE bookmarkHandle();
+  EVT_HANDLE bookmarkHandle() const;
 
   bool saveBookmark(EVT_HANDLE hEvent);
 
+  bool getNewBookmarkXml(EVT_HANDLE hEvent, std::wstring& bookmarkXml);
+
+  void saveBookmarkXml(std::wstring& bookmarkXml);
 private:
   bool createEmptyBookmarkXmlFile();
 
-  // Creates directory "processor_repository\ConsumeWindowsEventLog\uuid\{uuid}" under "bin" directory.
-  bool createUUIDDir(const std::string& uuid, std::string& dir);
+  bool createUUIDDir(const std::string& bookmarkRootDir, const std::string& uuid, std::string& dir);
 
   std::string filePath(const std::string& uuid);
 
-  bool getBookmarkXmlFromFile();
+  bool getBookmarkXmlFromFile(std::wstring& bookmarkXml);
 
 private:
+  std::shared_ptr<logging::Logger> logger_;
+  std::string filePath_;
   bool ok_{};
   EVT_HANDLE hBookmark_{};
-  std::wstring bookmarkXml_;
-  std::string filePath_;
   std::wfstream file_;
-  std::shared_ptr<logging::Logger> logger_;
+  bool hasBookmarkXml_{};
 };
 
 } /* namespace processors */

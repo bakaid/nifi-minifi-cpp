@@ -140,11 +140,17 @@ core::Property ConsumeWindowsEventLog::BatchCommitSize(
   withDescription("Maximum number of Events to consume and create to Flow Files from before committing.")->
   build());
 
+core::Property ConsumeWindowsEventLog::BookmarkRootDirectory(
+  core::PropertyBuilder::createProperty("State Directory")->
+  isRequired(false)->
+  withDefaultValue("CWELState")->
+  withDescription("Directory which contains processor state data.")->
+  build());
+
 core::Relationship ConsumeWindowsEventLog::Success("success", "Relationship for successfully consumed events.");
 
 ConsumeWindowsEventLog::ConsumeWindowsEventLog(const std::string& name, utils::Identifier uuid)
   : core::Processor(name, uuid), logger_(logging::LoggerFactory<ConsumeWindowsEventLog>::getLogger()), apply_identifier_function_(false), batch_commit_size_(0U) {
-
   char buff[MAX_COMPUTERNAME_LENGTH + 1];
   DWORD size = sizeof(buff);
   if (GetComputerName(buff, &size)) {
@@ -155,11 +161,6 @@ ConsumeWindowsEventLog::ConsumeWindowsEventLog(const std::string& name, utils::I
 
   writeXML_ = false;
   writePlainText_ = false;
-
-  pBookmark_ = std::make_unique<Bookmark>(getUUIDStr(), logger_);
-  if (!*pBookmark_) {
-    pBookmark_.release();
-  }
 }
 
 ConsumeWindowsEventLog::~ConsumeWindowsEventLog() {
@@ -167,7 +168,9 @@ ConsumeWindowsEventLog::~ConsumeWindowsEventLog() {
 
 void ConsumeWindowsEventLog::initialize() {
   //! Set the supported properties
-  setSupportedProperties({Channel, Query, MaxBufferSize, InactiveDurationToReconnect, IdentifierMatcher, IdentifierFunction, ResolveAsAttributes, EventHeaderDelimiter, EventHeader, OutputFormat, BatchCommitSize});
+  setSupportedProperties(
+    {Channel, Query, MaxBufferSize, InactiveDurationToReconnect, IdentifierMatcher, IdentifierFunction, ResolveAsAttributes, EventHeaderDelimiter, EventHeader, OutputFormat, BatchCommitSize, BookmarkRootDirectory}
+  );
 
   //! Set the supported relationships
   setSupportedRelationships({Success});
@@ -190,6 +193,17 @@ void ConsumeWindowsEventLog::onSchedule(const std::shared_ptr<core::ProcessConte
   context->getProperty(IdentifierFunction.getName(), apply_identifier_function_);
   context->getProperty(EventHeaderDelimiter.getName(), header_delimiter_);
   context->getProperty(BatchCommitSize.getName(), batch_commit_size_);
+
+  std::string bookmarkDir;
+  context->getProperty(BookmarkRootDirectory.getName(), bookmarkDir);
+  if (bookmarkDir.empty()) {
+    logger_->log_error("State Directory is empty");
+  } else {
+    pBookmark_ = std::make_unique<Bookmark>(bookmarkDir, getUUIDStr(), logger_);
+    if (!*pBookmark_) {
+      pBookmark_.reset();
+    }
+  }
 
   std::string header;
   context->getProperty(EventHeader.getName(), header);
@@ -234,6 +248,12 @@ void ConsumeWindowsEventLog::onTrigger(const std::shared_ptr<core::ProcessContex
       context->yield();
       return;
     }
+  }
+
+  std::unique_lock<std::mutex> lock(onTriggerMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    logger_->log_warn("processor was triggered before previous listing finished, configuration should be revised!");
+    return;
   }
 
   const auto flowFileCount = processQueue(session);
@@ -335,7 +355,10 @@ void ConsumeWindowsEventLog::processEvent(EVT_HANDLE hEvent) {
       }
 
       if (pBookmark_) {
-        pBookmark_->saveBookmark(hEvent);
+        std::wstring bookmarkXml;
+        if (pBookmark_->getNewBookmarkXml(hEvent, bookmarkXml)) {
+          renderedData.bookmarkXml_ = bookmarkXml;
+        }
       }
 
       listRenderedData_.enqueue(std::move(renderedData));
@@ -397,35 +420,36 @@ bool ConsumeWindowsEventLog::subscribe(const std::shared_ptr<core::ProcessContex
   auto channel = std::wstring(channel_.begin(), channel_.end());
   auto query = std::wstring(query_.begin(), query_.end());
 
-  [&channel, &query, this]() {
+  do {
     auto hEventResults = EvtQuery(0, channel.c_str(), query.c_str(), EvtQueryChannelPath);
     if (!hEventResults) {
       logger_->log_error("!EvtQuery error: %d.", GetLastError());
-      return;
+      // Consider it as a serious error.
+      return false;
     }
     const utils::ScopeGuard guard_hEventResults([hEventResults]() { EvtClose(hEventResults); });
 
     if (pBookmark_->hasBookmarkXml()) {
       if (!processEventsAfterBookmark(hEventResults, channel, query)) {
-        return;
+        break;
       }
     } else {
       // Seek to the last event in the hEventResults.
       if (!EvtSeek(hEventResults, 0, 0, 0, EvtSeekRelativeToLast)) {
         logger_->log_error("!EvtSeek error: %d.", GetLastError());
-        return;
+        break;
       }
 
       DWORD dwReturned{};
       EVT_HANDLE hEvent{};
       if (!EvtNext(hEventResults, 1, &hEvent, INFINITE, 0, &dwReturned)) {
         logger_->log_error("!EvtNext error: %d.", GetLastError());
-        return;
+        break;
       }
 
       pBookmark_->saveBookmark(hEvent);
     }
-  }();
+  } while (false);
 
   subscriptionHandle_ = EvtSubscribe(
       NULL,
@@ -497,8 +521,12 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
                       std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - before_time).count());
   });
 
+  bool commitAndSaveBookmark = false;
+
   EventRender evt;
   while (listRenderedData_.try_dequeue(evt)) {
+    commitAndSaveBookmark = true;
+
     if (writeXML_) {
       auto flowFile = session->create();
 
@@ -531,6 +559,20 @@ int ConsumeWindowsEventLog::processQueue(const std::shared_ptr<core::ProcessSess
       session->commit();
       logger_->log_debug("processQueue commit took %llu ms",
                         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - before_commit).count());
+
+      if (pBookmark_) {
+        pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
+      }
+
+      commitAndSaveBookmark = false;
+    }
+  }
+
+  if (commitAndSaveBookmark) {
+    session->commit();
+
+    if (pBookmark_) {
+      pBookmark_->saveBookmarkXml(evt.bookmarkXml_);
     }
   }
 
