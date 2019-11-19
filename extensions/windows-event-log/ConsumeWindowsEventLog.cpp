@@ -196,10 +196,13 @@ void ConsumeWindowsEventLog::onSchedule(const std::shared_ptr<core::ProcessConte
 
   std::string bookmarkDir;
   context->getProperty(BookmarkRootDirectory.getName(), bookmarkDir);
-
-  pBookmark_ = std::make_unique<Bookmark>(bookmarkDir, getUUIDStr(), logger_);
-  if (!*pBookmark_) {
-    pBookmark_.reset();
+  if (bookmarkDir.empty()) {
+    logger_->log_error("State Directory is empty");
+  } else {
+    pBookmark_ = std::make_unique<Bookmark>(bookmarkDir, getUUIDStr(), logger_);
+    if (!*pBookmark_) {
+      pBookmark_.reset();
+    }
   }
 
   std::string header;

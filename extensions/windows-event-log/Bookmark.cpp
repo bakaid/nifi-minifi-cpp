@@ -12,9 +12,10 @@ namespace processors {
 
 Bookmark::Bookmark(const std::string& bookmarkRootDir, const std::string& uuid, std::shared_ptr<logging::Logger> logger)
   :logger_(logger) {
-  if (createUUIDDir(bookmarkRootDir, uuid, filePath_)) {
-    filePath_ += "Bookmark.txt";
-  }
+  if (!createUUIDDir(bookmarkRootDir, uuid, filePath_))
+    return;
+
+  filePath_ += "Bookmark.txt";
 
   std::wstring bookmarkXml;
   if (!filePath_.empty() && !getBookmarkXmlFromFile(bookmarkXml)) {
@@ -162,6 +163,7 @@ bool Bookmark::createUUIDDir(const std::string& bookmarkRootDir, const std::stri
 
   auto dirCreated = utils::file::FileUtils::is_directory(dir.c_str());
   if (!dirCreated) {
+    logger_->log_error("Cannot create %s", dir.c_str());
     dir.clear();
   }
   return dirCreated;;
