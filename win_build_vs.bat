@@ -45,9 +45,9 @@ for %%x in (%*) do (
 	if [%%~x] EQU [/J] ( 
 	set build_JNI=ON
     )
-	rem if [%%~x] EQU [/C] ( 
-	rem set build_coap=ON
-    rem )
+	if [%%~x] EQU [/C] (
+	set build_coap=ON
+    )
 	if [%%~x] EQU [/64] ( 
 	set generator="Visual Studio 15 2017 Win64"
     )
