@@ -79,3 +79,15 @@ diff -rupN orig/CMakeLists.txt patched/CMakeLists.txt
 +)
 +
 +install(FILES ${PUBLIC_HEADERS} DESTINATION include/coap2)
+diff -rupN orig/coap_config.h.windows patched/coap_config.h.windows
+--- orig/coap_config.h.windows	2019-11-21 17:42:00.000000000 +0100
++++ patched/coap_config.h.windows	2019-11-22 09:11:43.000000000 +0100
+@@ -67,7 +67,7 @@
+ #define snprintf _snprintf
+ #endif
+ 
+-#define HAVE_OPENSSL 1
++/* #define HAVE_OPENSSL 1 */
+ 
+ /* Define to the address where bug reports for this package should be sent. */
+ #define PACKAGE_BUGREPORT "libcoap-developers@lists.sourceforge.net"
