@@ -38,7 +38,7 @@ target_link_libraries(minifi-coap ${LIBMINIFI})
 target_link_libraries(minifi-coap nanofi-coap-c COAP::libcoap minifi-http-curl)
 if (WIN32)
     set_target_properties(minifi-coap PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE"
+        LINK_FLAGS "/WHOLEARCHIVE:minifi-coap"
     )
 elseif (APPLE)
     set_target_properties(minifi-coap PROPERTIES
