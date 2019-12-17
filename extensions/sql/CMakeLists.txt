@@ -98,14 +98,14 @@ find_package(Patch)
 set(PC "${Patch_EXECUTABLE}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patch/soci.patch")
 
 # Define byproducts
-if ((WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8) OR (NOT (WIN32 OR APPLE) AND LIB64))
+if(NOT APPLE AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set(LIBSUFFIX 64)
 endif()
 
 if (WIN32)
-	set(BYPRODUCT_SUFFIX "_4_0.lib" CACHE STRING "" FORCE)
+	set(BYPRODUCT_SUFFIX "_4_0.lib")
 else()
-	set(BYPRODUCT_SUFFIX ".a" CACHE STRING "" FORCE)
+	set(BYPRODUCT_SUFFIX ".a")
 endif()
 
 set(SOCI_BYPRODUCTS
