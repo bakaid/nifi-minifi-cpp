@@ -40,8 +40,11 @@ endif()
 # Get whether we should use lib64/ library paths
 get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
 
-# Build iODBC if necessary
-if(NOT WIN32)
+if(WIN32)
+	find_package(ODBC REQUIRED)
+else()
+	# Build iODBC
+
 	# Define byproducts
 	if(LIB64 AND NOT APPLE)
 		set(IODBC_BYPRODUCT "lib64/libiodbc.a")
@@ -95,7 +98,7 @@ find_package(Patch)
 set(PC "${Patch_EXECUTABLE}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patch/soci.patch")
 
 # Define byproducts
-if (LIB64 AND NOT APPLE)
+if ((WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8) OR (NOT (WIN32 OR APPLE) AND LIB64))
 	set(LIBSUFFIX 64)
 endif()
 
@@ -167,9 +170,7 @@ set_target_properties(SOCI::libsoci_odbc PROPERTIES IMPORTED_LOCATION "${SOCI_BY
 set_target_properties(SOCI::libsoci_odbc PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${SOCI_INCLUDE_DIR}")
 add_dependencies(SOCI::libsoci_odbc soci-external)
 set_property(TARGET SOCI::libsoci_odbc APPEND PROPERTY INTERFACE_LINK_LIBRARIES SOCI::libsoci_core)
-if(NOT WIN32)
-	set_property(TARGET SOCI::libsoci_odbc APPEND PROPERTY INTERFACE_LINK_LIBRARIES ODBC::ODBC)
-endif()
+set_property(TARGET SOCI::libsoci_odbc APPEND PROPERTY INTERFACE_LINK_LIBRARIES ODBC::ODBC)
 
 target_link_libraries(minifi-sql SOCI::libsoci_odbc SOCI::libsoci_core)
 
