@@ -109,6 +109,7 @@ void dumpDocs(const std::shared_ptr<minifi::Configure> &configuration, const std
 }
 
 int main(int argc, char **argv) {
+  MessageBox(0, "QAZ", "QAZ", MB_OK);
 #ifdef WIN32
   CheckRunAsService();
 #endif
