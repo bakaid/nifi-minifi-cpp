@@ -40,6 +40,13 @@
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_sinks.h"
 #include "spdlog/sinks/null_sink.h"
+
+#ifdef WIN32
+#include "WindowsEventLogSink.h"
+#else
+#include "spdlog/sinks/syslog_sink.h"
+#endif
+
 #ifdef WIN32
 #include <direct.h>
 #define _WINSOCKAPI_
@@ -55,6 +62,8 @@ namespace core {
 namespace logging {
 
 const char* LoggerConfiguration::spdlog_default_pattern = "[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v";
+
+bool LoggerConfiguration::service_mode = false;
 
 std::vector<std::string> LoggerProperties::get_keys_of_type(const std::string &type) {
   std::vector<std::string> appenders;
@@ -123,6 +132,7 @@ std::shared_ptr<Logger> LoggerConfiguration::getLogger(const std::string &name) 
 
   std::shared_ptr<LoggerImpl> result = std::make_shared<LoggerImpl>(adjusted_name, controller_, get_logger(logger_, root_namespace_, adjusted_name, formatter_));
   loggers.push_back(result);
+  logger_->log_info("Current size of LoggerConfiguration::loggers is %zu", loggers.size());
   return result;
 }
 
@@ -180,6 +190,14 @@ std::shared_ptr<internal::LoggerNamespace> LoggerConfiguration::initialize_names
       sink_map[appender_name] = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(file_name, max_file_size, max_files);
     } else if ("stdout" == appender_type) {
       sink_map[appender_name] = spdlog::sinks::stdout_sink_mt::instance();
+    } else if ("stderr" == appender_type) {
+      sink_map[appender_name] = spdlog::sinks::stderr_sink_mt::instance();
+    } else if ("syslog" == appender_type) {
+#ifdef WIN32
+      sink_map[appender_name] = std::make_shared<internal::windowseventlog_sink>("ApacheNiFiMiNiFi");
+#else
+      sink_map[appender_name] = std::make_shared<spdlog::sinks::syslog_sink>("ApacheNiFiMiNiFi");
+#endif
     } else {
       sink_map[appender_name] = spdlog::sinks::stderr_sink_mt::instance();
     }

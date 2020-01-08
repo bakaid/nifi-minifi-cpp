@@ -110,15 +110,26 @@ void dumpDocs(const std::shared_ptr<minifi::Configure> &configuration, const std
 
 int main(int argc, char **argv) {
 #ifdef WIN32
-  CheckRunAsService();
-#endif
+  RunAsServiceIfNeeded();
 
-	std::shared_ptr<logging::Logger> logger = logging::LoggerConfiguration::getConfiguration().getLogger("main");
-
-#ifdef WIN32
-  if (!CreateServiceTerminationThread(logger)) {
+  bool isStartedByService = false;
+  HANDLE terminationEventHandler = GetTerminationEventHandle(&isStartedByService);
+  if (terminationEventHandler == nullptr) {
     return -1;
   }
+#endif
+
+  logging::LoggerConfiguration::service_mode = true;
+  std::shared_ptr<logging::Logger> logger = logging::LoggerConfiguration::getConfiguration().getLogger("main");
+
+#ifdef WIN32
+	if (isStartedByService) {
+    if (!CreateServiceTerminationThread(logger, terminationEventHandler)) {
+      return -1;
+    }
+  } else {
+	  CloseHandle(terminationEventHandler);
+	}
 #endif
 
 	uint16_t stop_wait_time = STOP_WAIT_TIME_MS;

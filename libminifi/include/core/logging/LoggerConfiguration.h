@@ -30,7 +30,6 @@
 #include "core/Core.h"
 #include "core/logging/Logger.h"
 #include "properties/Properties.h"
-#include "WindowsEventLogSink.h"
 
 namespace org {
 namespace apache {
@@ -119,7 +118,10 @@ class LoggerConfiguration {
    * Can be used to get arbitrarily named Logger, LoggerFactory should be preferred within a class.
    */
   std::shared_ptr<Logger> getLogger(const std::string &name);
+
   static const char *spdlog_default_pattern;
+
+  static bool service_mode;
  protected:
   static std::shared_ptr<internal::LoggerNamespace> initialize_namespaces(const std::shared_ptr<LoggerProperties> &logger_properties);
   static std::shared_ptr<spdlog::logger> get_logger(std::shared_ptr<Logger> logger, const std::shared_ptr<internal::LoggerNamespace> &root_namespace, const std::string &name,
