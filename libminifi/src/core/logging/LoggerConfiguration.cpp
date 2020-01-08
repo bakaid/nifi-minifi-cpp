@@ -19,6 +19,11 @@
  */
 
 #include "core/logging/LoggerConfiguration.h"
+
+#ifdef WIN32
+#include <Windows.h>
+#endif
+
 #include <sys/stat.h>
 #include <algorithm>
 #include <vector>
@@ -284,6 +289,24 @@ std::shared_ptr<spdlog::logger> LoggerConfiguration::get_logger(std::shared_ptr<
 std::shared_ptr<internal::LoggerNamespace> LoggerConfiguration::create_default_root() {
   std::shared_ptr<internal::LoggerNamespace> result = std::make_shared<internal::LoggerNamespace>();
   result->sinks = std::vector<std::shared_ptr<spdlog::sinks::sink>>();
+#ifdef WIN32
+  bool should_use_stderr = true;
+  HWND console_handle = GetConsoleWindow();
+  if (console_handle == nullptr) {
+	  should_use_stderr = false;
+	  std::cerr << "Failed to get console windows handler" << std::endl;
+  } else {
+/* 	DWORD process_id;
+	GetWindowThreadProcessId(console_handle, &process_id);
+	if (GetCurrentProcessId() != process_id) {
+		std::cerr << "Windows process id does not match current process id, " << process_id << " vs. " << GetCurrentProcessId() << std::endl;
+		should_use_stderr = false;
+	} */
+  }
+  if (!should_use_stderr)
+	result->sinks.push_back(std::make_shared<internal::windowseventlog_sink>());
+  else
+#endif
   result->sinks.push_back(spdlog::sinks::stderr_sink_mt::instance());
   result->level = spdlog::level::info;
   return result;

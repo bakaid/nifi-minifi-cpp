@@ -21,8 +21,9 @@
 #ifdef WIN32
 
 #include "spdlog/common.h"
-#include "spdlog/sinks/sink.h"
+#include "spdlog/sinks/base_sink.h"
 #include "spdlog/details/log_msg.h"
+#include "spdlog/details/null_mutex.h"
 
 #include <Windows.h>
 
@@ -37,62 +38,26 @@ namespace core {
 namespace logging {
 namespace internal {
 
-class windowseventlog_sink : public spdlog::sinks::sink {
+class windowseventlog_sink : public spdlog::sinks::base_sink<spdlog::details::null_mutex> {
  private:
   HANDLE event_source_;
 
-  WORD type_from_level(const spdlog::details::log_msg& msg) const {
-    switch (static_cast<int>(msg.level)) {
-      case spdlog::level::trace:
-      case spdlog::level::debug:
-      case spdlog::level::info:
-        return EVENTLOG_INFORMATION_TYPE;
-      case spdlog::level::warn:
-        return EVENTLOG_WARNING_TYPE;
-      case spdlog::level::err:
-      case spdlog::level::critical:
-        return EVENTLOG_ERROR_TYPE;
-      default:
-        return EVENTLOG_ERROR_TYPE;
-    }
-  }
+  WORD type_from_level(const spdlog::details::log_msg& msg) const;
 
- public:
-  //
-  windowseventlog_sink(const std::string& source_name = "MiNiFi")
-  : event_source_(nullptr)
-  {
-    event_source_ = RegisterEventSourceA(nullptr, source_name.c_str());
-    if (event_source_ == nullptr) {
-      throw "Failed to create event source"; // TODO
-    }
-  }
+  protected:
+   void _sink_it(const spdlog::details::log_msg& msg) override;
 
-  ~windowseventlog_sink() {
-    if (event_source_ != nullptr) {
-      DeregisterEventSource(event_source_);
-    }
-  }
+   void _flush() override;
 
-  windowseventlog_sink(const syslog_sink&) = delete;
-  windowseventlog_sink& operator=(const syslog_sink &) = delete;
-  windowseventlog_sink(syslog_sink&&) = delete;
-  windowseventlog_sink& operator=(syslog_sink&&) = delete;
+  public:
+   windowseventlog_sink(const std::string& source_name = "ApacheNiFiMiNiFi");
 
-  void log(const spdlog::details::log_msg& msg) override {
-    ReportEventA(event_source_,
-                 type_from_level(msg) /*wType*/,
-                 0U /*wCategory*/,
-                 1U /*dwEventID*/,
-                 nullptr /* lpUserSid */,
-                 1U /*wNumStrings*/,
-                 0U /*dwDataSize*/,
-                 &msg.raw.str().c_str() /*lpStrings*/,
-                 nullptr /*lpRawData*/);
-  }
+   virtual ~windowseventlog_sink();
 
-  void flush() override {
-  }
+   windowseventlog_sink(const windowseventlog_sink&) = delete;
+   windowseventlog_sink& operator=(const windowseventlog_sink&) = delete;
+   windowseventlog_sink(windowseventlog_sink&&) = delete;
+   windowseventlog_sink& operator=(windowseventlog_sink&&) = delete;
 };
 }
 }

@@ -54,7 +54,7 @@ endif()
 
 endif()
 
-add_executable(minifiexe MiNiFiMain.cpp MiNiFiWindowsService.cpp AgentDocs.cpp)
+add_executable(minifiexe MiNiFiMain.cpp MiNiFiWindowsService.cpp AgentDocs.cpp "${CMAKE_BINARY_DIR}/libminifi/src/core/logging/WindowsMessageTextFile.rc")
 
 if (NOT USE_SHARED_LIBS)
 	if (LIBC_STATIC)

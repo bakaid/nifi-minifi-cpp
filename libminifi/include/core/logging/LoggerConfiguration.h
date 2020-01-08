@@ -30,6 +30,7 @@
 #include "core/Core.h"
 #include "core/logging/Logger.h"
 #include "properties/Properties.h"
+#include "WindowsEventLogSink.h"
 
 namespace org {
 namespace apache {
