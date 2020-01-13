@@ -24,7 +24,9 @@
 #include <map>
 #include <mutex>
 #include <string>
-#include "spdlog/spdlog.h"
+#include "spdlog/common.h"
+#include "spdlog/sinks/sink.h"
+#include "spdlog/logger.h"
 #include "spdlog/formatter.h"
 
 #include "core/Core.h"
@@ -121,7 +123,6 @@ class LoggerConfiguration {
 
   static const char *spdlog_default_pattern;
 
-  static bool service_mode;
  protected:
   static std::shared_ptr<internal::LoggerNamespace> initialize_namespaces(const std::shared_ptr<LoggerProperties> &logger_properties);
   static std::shared_ptr<spdlog::logger> get_logger(std::shared_ptr<Logger> logger, const std::shared_ptr<internal::LoggerNamespace> &root_namespace, const std::string &name,

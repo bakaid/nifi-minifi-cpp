@@ -54,6 +54,7 @@
 #include "core/ConfigurationFactory.h"
 #include "core/RepositoryFactory.h"
 #include "utils/file/PathUtils.h"
+#include "utils/Environment.h"
 #include "FlowController.h"
 #include "AgentDocs.h"
 #include "Main.h"
@@ -119,7 +120,10 @@ int main(int argc, char **argv) {
   }
 #endif
 
-  logging::LoggerConfiguration::service_mode = true;
+  if (!utils::Environment::setRunningAsService(true /*TODO*/)) {
+    std::cerr << "Unexepcted error: Service environment is already set. Exiting." << std::endl;
+    return -1;
+  }
   std::shared_ptr<logging::Logger> logger = logging::LoggerConfiguration::getConfiguration().getLogger("main");
 
 #ifdef WIN32

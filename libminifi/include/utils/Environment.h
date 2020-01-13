@@ -29,13 +29,10 @@ namespace utils {
 
 class Environment {
  private:
-  static std::atomic<bool> runningAsService;
+  static bool runningAsService_;
+  static bool runningAsServiceSet_;
 
-  static void accessEnvironment(const std::function<void(void)>& func) {
-    static std::mutex environmentMutex;
-    std::lock_guard<std::mutex>(environmentMutex);
-    func();
-  }
+  static void accessEnvironment(const std::function<void(void)>& func);
 
  public:
   static std::pair<bool, std::string> getEnvironmentVariable(const char* name);

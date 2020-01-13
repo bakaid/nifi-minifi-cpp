@@ -29,13 +29,20 @@ namespace nifi {
 namespace minifi {
 namespace utils {
 
-std::atomic<bool> Environment::runningAsService(false);
+bool Environment::runningAsService_(false);
+bool Environment::runningAsServiceSet_(false);
+
+void Environment::accessEnvironment(const std::function<void(void)>& func) {
+  static std::mutex environmentMutex;
+  std::lock_guard<std::mutex> lock(environmentMutex);
+  func();
+}
 
 std::pair<bool, std::string> Environment::getEnvironmentVariable(const char* name) {
   bool exists = false;
   std::string value;
 
-  Environment::accessEnvironment([&exists, &value](){
+  Environment::accessEnvironment([&exists, &value, name](){
 #ifdef WIN32
     std::vector<char> buffer(32767U); // https://docs.microsoft.com/en-gb/windows/win32/api/processenv/nf-processenv-getenvironmentvariablea
     uint32_t ret = GetEnvironmentVariableA(name, buffer.data(), buffer.size());
@@ -58,7 +65,7 @@ std::pair<bool, std::string> Environment::getEnvironmentVariable(const char* nam
 bool Environment::setEnvironmentVariable(const char* name, const char* value) {
   bool success = false;
 
-  Environment::accessEnvironment([&success](){
+  Environment::accessEnvironment([&success, name, value](){
 #ifdef WIN32
     success = SetEnvironmentVariableA(name, value);
 #else
@@ -73,7 +80,7 @@ bool Environment::setEnvironmentVariable(const char* name, const char* value) {
 bool Environment::unsetEnvironmentVariable(const char* name) {
   bool success = false;
 
-  Environment::accessEnvironment([&success](){
+  Environment::accessEnvironment([&success, name](){
 #ifdef WIN32
     success = SetEnvironmentVariableA(name, nullptr);
 #else
@@ -85,10 +92,32 @@ bool Environment::unsetEnvironmentVariable(const char* name) {
   return success;
 }
 
+bool /*success*/ Environment::setRunningAsService(bool runningAsService) {
+  bool success = false;
+
+  Environment::accessEnvironment([&success, runningAsService](){
+    if (!runningAsServiceSet_) {
+      runningAsService_ = runningAsService;
+      runningAsServiceSet_ = true;
+      success = true;
+    }
+  });
+
+  return success;
+}
+
+bool Environment::isRunningAsService() {
+  bool runningAsService = false;
+
+  Environment::accessEnvironment([&runningAsService](){
+    runningAsService = runningAsService_;
+  });
+
+  return runningAsService;
+}
+
 } /* namespace utils */
 } /* namespace minifi */
 } /* namespace nifi */
 } /* namespace apache */
 } /* namespace org */
-
-#endif /* LIBMINIFI_INCLUDE_UTILS_ENVIRONMENT_H_ */

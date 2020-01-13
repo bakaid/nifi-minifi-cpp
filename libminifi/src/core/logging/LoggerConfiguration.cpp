@@ -36,6 +36,7 @@
 #include "utils/StringUtils.h"
 #include "utils/ClassUtils.h"
 #include "utils/file/FileUtils.h"
+#include "utils/Environment.h"
 
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_sinks.h"
@@ -62,8 +63,6 @@ namespace core {
 namespace logging {
 
 const char* LoggerConfiguration::spdlog_default_pattern = "[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v";
-
-bool LoggerConfiguration::service_mode = false;
 
 std::vector<std::string> LoggerProperties::get_keys_of_type(const std::string &type) {
   std::vector<std::string> appenders;
@@ -307,25 +306,15 @@ std::shared_ptr<spdlog::logger> LoggerConfiguration::get_logger(std::shared_ptr<
 std::shared_ptr<internal::LoggerNamespace> LoggerConfiguration::create_default_root() {
   std::shared_ptr<internal::LoggerNamespace> result = std::make_shared<internal::LoggerNamespace>();
   result->sinks = std::vector<std::shared_ptr<spdlog::sinks::sink>>();
+  if (utils::Environment::isRunningAsService()) {
 #ifdef WIN32
-  bool should_use_stderr = true;
-  HWND console_handle = GetConsoleWindow();
-  if (console_handle == nullptr) {
-	  should_use_stderr = false;
-	  std::cerr << "Failed to get console windows handler" << std::endl;
-  } else {
-/* 	DWORD process_id;
-	GetWindowThreadProcessId(console_handle, &process_id);
-	if (GetCurrentProcessId() != process_id) {
-		std::cerr << "Windows process id does not match current process id, " << process_id << " vs. " << GetCurrentProcessId() << std::endl;
-		should_use_stderr = false;
-	} */
-  }
-  if (!should_use_stderr)
-	result->sinks.push_back(std::make_shared<internal::windowseventlog_sink>());
-  else
+    result->sinks.push_back(std::make_shared<internal::windowseventlog_sink>());
+#else
+    result->sinks.push_back(std::make_shared<spdlog::sinks::syslog_sink>("ApacheNiFiMiNiFi"));
 #endif
-  result->sinks.push_back(spdlog::sinks::stderr_sink_mt::instance());
+  } else {
+    result->sinks.push_back(spdlog::sinks::stderr_sink_mt::instance());
+  }
   result->level = spdlog::level::info;
   return result;
 }
