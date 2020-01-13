@@ -33,8 +33,8 @@ bool Environment::runningAsService_(false);
 bool Environment::runningAsServiceSet_(false);
 
 void Environment::accessEnvironment(const std::function<void(void)>& func) {
-  static std::mutex environmentMutex;
-  std::lock_guard<std::mutex> lock(environmentMutex);
+  static std::recursive_mutex environmentMutex;
+  std::lock_guard<std::recursive_mutex> lock(environmentMutex);
   func();
 }
 
@@ -67,7 +67,11 @@ bool Environment::setEnvironmentVariable(const char* name, const char* value, bo
 
   Environment::accessEnvironment([&success, name, value, overwrite](){
 #ifdef WIN32
-    success = SetEnvironmentVariableA(name, value);
+    if (!overwrite && Environment::getEnvironmentVariable(name).first) {
+      success = true;
+    } else {
+      success = SetEnvironmentVariableA(name, value);
+    }
 #else
     int ret = setenv(name, value, static_cast<int>(overwrite));
     success = ret == 0;
