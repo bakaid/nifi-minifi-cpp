@@ -62,14 +62,14 @@ std::pair<bool, std::string> Environment::getEnvironmentVariable(const char* nam
   return std::make_pair(exists, std::move(value));
 }
 
-bool Environment::setEnvironmentVariable(const char* name, const char* value) {
+bool Environment::setEnvironmentVariable(const char* name, const char* value, bool overwrite /*= true*/) {
   bool success = false;
 
-  Environment::accessEnvironment([&success, name, value](){
+  Environment::accessEnvironment([&success, name, value, overwrite](){
 #ifdef WIN32
     success = SetEnvironmentVariableA(name, value);
 #else
-    int ret = setenv(name, value, 1 /*overwrite*/);
+    int ret = setenv(name, value, static_cast<int>(overwrite));
     success = ret == 0;
 #endif
   });

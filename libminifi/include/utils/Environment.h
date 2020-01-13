@@ -36,7 +36,7 @@ class Environment {
 
  public:
   static std::pair<bool, std::string> getEnvironmentVariable(const char* name);
-  static bool setEnvironmentVariable(const char* name, const char* value);
+  static bool setEnvironmentVariable(const char* name, const char* value, bool overwrite = true);
   static bool unsetEnvironmentVariable(const char* name);
 
   static bool /*success*/ setRunningAsService(bool runningAsService);

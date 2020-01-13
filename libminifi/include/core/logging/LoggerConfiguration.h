@@ -128,6 +128,9 @@ class LoggerConfiguration {
   static std::shared_ptr<spdlog::logger> get_logger(std::shared_ptr<Logger> logger, const std::shared_ptr<internal::LoggerNamespace> &root_namespace, const std::string &name,
                                                     std::shared_ptr<spdlog::formatter> formatter, bool remove_if_present = false);
  private:
+  static std::shared_ptr<spdlog::sinks::sink> create_syslog_sink();
+  static std::shared_ptr<spdlog::sinks::sink> create_fallback_sink();
+
   static std::shared_ptr<internal::LoggerNamespace> create_default_root();
 
   class LoggerImpl : public Logger {

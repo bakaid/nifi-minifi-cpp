@@ -54,6 +54,7 @@
 #include "core/ConfigurationFactory.h"
 #include "core/RepositoryFactory.h"
 #include "utils/file/PathUtils.h"
+#include "utils/file/FileUtils.h"
 #include "utils/Environment.h"
 #include "FlowController.h"
 #include "AgentDocs.h"
@@ -118,12 +119,13 @@ int main(int argc, char **argv) {
   if (terminationEventHandler == nullptr) {
     return -1;
   }
-#endif
 
-  if (!utils::Environment::setRunningAsService(true /*TODO*/)) {
-    std::cerr << "Unexepcted error: Service environment is already set. Exiting." << std::endl;
+  if (!utils::Environment::setRunningAsService(isStartedByService)) {
+    std::cerr << "Unexpected error: RunningAsService environment is already set. Exiting." << std::endl;
     return -1;
   }
+#endif
+
   std::shared_ptr<logging::Logger> logger = logging::LoggerConfiguration::getConfiguration().getLogger("main");
 
 #ifdef WIN32
@@ -157,33 +159,32 @@ int main(int argc, char **argv) {
 #ifdef WIN32
 	if (!SetConsoleCtrlHandler(consoleSignalHandler, TRUE)) {
 		logger->log_error("Cannot install signal handler");
-		std::cerr << "Cannot install signal handler" << std::endl;
-		return 1;
+		return -1;
 	}
 
 	if (signal(SIGINT, sigHandler) == SIG_ERR || signal(SIGTERM, sigHandler) == SIG_ERR ) {
-		std::cerr << "Cannot install signal handler" << std::endl;
+		logger->log_error("Cannot install signal handler");
 		return -1;
 	}
 #ifdef SIGBREAK
 	if (signal(SIGBREAK, sigHandler) == SIG_ERR) {
-		std::cerr << "Cannot install signal handler" << std::endl;
+		logger->log_error("Cannot install signal handler");
 		return -1;
 	}
 #endif
 #else
 	if (signal(SIGINT, sigHandler) == SIG_ERR || signal(SIGTERM, sigHandler) == SIG_ERR || signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-		std::cerr << "Cannot install signal handler" << std::endl;
+    logger->log_error("Cannot install signal handler");
 		return -1;
 	}
 #endif
 	// assumes POSIX compliant environment
+	bool minifiHomeSet = false;
 	std::string minifiHome;
-	if (const char *env_p = std::getenv(MINIFI_HOME_ENV_KEY)) {
-		minifiHome = env_p;
+	std::tie(minifiHomeSet, minifiHome) = utils::Environment::getEnvironmentVariable(MINIFI_HOME_ENV_KEY);
+	if (minifiHomeSet) {
 		logger->log_info("Using MINIFI_HOME=%s from environment.", minifiHome);
-	}
-	else {
+	} else {
 		logger->log_info("MINIFI_HOME is not set; determining based on environment.");
 		char *path = nullptr;
 		char full_path[PATH_MAX];
@@ -201,37 +202,27 @@ int main(int argc, char **argv) {
 			}
 		}
 
-		// attempt to use cwd as MINIFI_HOME
 		if (minifiHome.empty() || !validHome(minifiHome)) {
-			char cwd[PATH_MAX];
 #ifdef WIN32
-			_getcwd(cwd, PATH_MAX);
-			auto handle = GetModuleHandle(0);
-			GetModuleFileNameA(NULL, cwd, sizeof(cwd));
-			std::string fullPath = cwd;
+      // attempt to use the path of the executable as MINIFI_HOME
+			std::string fullPath = utils::file::FileUtils::get_executable_path();
 			std::string minifiFileName, minifiPath;
 			minifi::utils::file::PathUtils::getFileNameAndPath(fullPath, minifiPath, minifiFileName);
 			if (utils::StringUtils::endsWith(minifiPath, "bin")) {
 				minifiHome = minifiPath.substr(0, minifiPath.size()-3);
-			}
-			else {
+			} else {
 				minifiHome = minifiPath;
 			}
-		
 #else
+      // attempt to use cwd as MINIFI_HOME
+      char cwd[PATH_MAX];
 			getcwd(cwd, PATH_MAX);
 			minifiHome = cwd;
 #endif
-			
 		}
 
-
 		logger->log_debug("Setting %s to %s", MINIFI_HOME_ENV_KEY, minifiHome);
-#ifdef WIN32
-		SetEnvironmentVariable(MINIFI_HOME_ENV_KEY, minifiHome.c_str());
-#else
-		setenv(MINIFI_HOME_ENV_KEY, minifiHome.c_str(), 0);
-#endif
+		utils::Environment::setEnvironmentVariable(MINIFI_HOME_ENV_KEY, minifiHome.c_str());
 	}
 
 	if (!validHome(minifiHome)) {
@@ -242,8 +233,6 @@ int main(int argc, char **argv) {
 			return -1;
 		}
 	}
-
-
 
 	std::shared_ptr<logging::LoggerProperties> log_properties = std::make_shared<logging::LoggerProperties>();
 	log_properties->setHome(minifiHome);

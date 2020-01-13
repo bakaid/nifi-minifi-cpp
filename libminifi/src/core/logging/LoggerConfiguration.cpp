@@ -131,7 +131,6 @@ std::shared_ptr<Logger> LoggerConfiguration::getLogger(const std::string &name) 
 
   std::shared_ptr<LoggerImpl> result = std::make_shared<LoggerImpl>(adjusted_name, controller_, get_logger(logger_, root_namespace_, adjusted_name, formatter_));
   loggers.push_back(result);
-  logger_->log_info("Current size of LoggerConfiguration::loggers is %zu", loggers.size());
   return result;
 }
 
@@ -192,13 +191,9 @@ std::shared_ptr<internal::LoggerNamespace> LoggerConfiguration::initialize_names
     } else if ("stderr" == appender_type) {
       sink_map[appender_name] = spdlog::sinks::stderr_sink_mt::instance();
     } else if ("syslog" == appender_type) {
-#ifdef WIN32
-      sink_map[appender_name] = std::make_shared<internal::windowseventlog_sink>("ApacheNiFiMiNiFi");
-#else
-      sink_map[appender_name] = std::make_shared<spdlog::sinks::syslog_sink>("ApacheNiFiMiNiFi");
-#endif
+      sink_map[appender_name] = LoggerConfiguration::create_syslog_sink();
     } else {
-      sink_map[appender_name] = spdlog::sinks::stderr_sink_mt::instance();
+      sink_map[appender_name] = LoggerConfiguration::create_fallback_sink();
     }
   }
 
@@ -303,18 +298,26 @@ std::shared_ptr<spdlog::logger> LoggerConfiguration::get_logger(std::shared_ptr<
   return spdlog::get(name);
 }
 
+std::shared_ptr<spdlog::sinks::sink> LoggerConfiguration::create_syslog_sink() {
+#ifdef WIN32
+  return std::make_shared<internal::windowseventlog_sink>("ApacheNiFiMiNiFi");
+#else
+  return std::make_shared<spdlog::sinks::syslog_sink>("ApacheNiFiMiNiFi");
+#endif
+}
+
+std::shared_ptr<spdlog::sinks::sink> LoggerConfiguration::create_fallback_sink() {
+  if (utils::Environment::isRunningAsService()) {
+    return LoggerConfiguration::create_syslog_sink();
+  } else {
+    return spdlog::sinks::stderr_sink_mt::instance();
+  }
+}
+
 std::shared_ptr<internal::LoggerNamespace> LoggerConfiguration::create_default_root() {
   std::shared_ptr<internal::LoggerNamespace> result = std::make_shared<internal::LoggerNamespace>();
   result->sinks = std::vector<std::shared_ptr<spdlog::sinks::sink>>();
-  if (utils::Environment::isRunningAsService()) {
-#ifdef WIN32
-    result->sinks.push_back(std::make_shared<internal::windowseventlog_sink>());
-#else
-    result->sinks.push_back(std::make_shared<spdlog::sinks::syslog_sink>("ApacheNiFiMiNiFi"));
-#endif
-  } else {
-    result->sinks.push_back(spdlog::sinks::stderr_sink_mt::instance());
-  }
+  result->sinks.push_back(LoggerConfiguration::create_fallback_sink());
   result->level = spdlog::level::info;
   return result;
 }
