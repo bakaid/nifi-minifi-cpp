@@ -18,6 +18,7 @@
 #ifndef MAIN_MAIN_H_
 #define MAIN_MAIN_H_
 
+#include "core/logging/LoggerConfiguration.h"
 
 #ifdef WIN32
 #define FILE_SEPARATOR "\\"
@@ -136,7 +137,15 @@ bool validHome(const std::string &home_path) {
   return (stat(properties_file_path.c_str(), &stat_result) == 0);
 }
 
-
+/**
+ * Configures the logger to log everything to syslog/Windows Event Log, and for the minimum log level to INFO
+ */
+void setSyslogLogger() {
+  std::shared_ptr<logging::LoggerProperties> service_logger = std::make_shared<logging::LoggerProperties>();
+  service_logger->set("appender.syslog", "syslog");
+  service_logger->set("logger.root", "INFO,syslog");
+  logging::LoggerConfiguration::getConfiguration().initialize(service_logger);
+}
 
 
 

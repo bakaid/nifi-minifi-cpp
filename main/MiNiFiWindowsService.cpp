@@ -24,6 +24,7 @@
 #include <tuple>
 #include <tlhelp32.h>
 
+#include "Main.h"
 #include "core/FlowConfiguration.h"
 
 //#define DEBUG_SERVICE
@@ -80,6 +81,8 @@ void RunAsServiceIfNeeded() {
       SERVICE_NAME,
       [](DWORD argc, LPTSTR *argv)
       {
+        setSyslogLogger();
+
         LOG_INFO("ServiceCtrlDispatcher");
 
         s_hEvent = CreateEvent(0, TRUE, FALSE, SERVICE_TERMINATION_EVENT_NAME);

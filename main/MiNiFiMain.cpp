@@ -123,10 +123,7 @@ int main(int argc, char **argv) {
   utils::Environment::setRunningAsService(isStartedByService);
 
   if (utils::Environment::isRunningAsService()) {
-    std::shared_ptr<logging::LoggerProperties> service_logger = std::make_shared<logging::LoggerProperties>();
-    service_logger->set("appender.syslog", "syslog");
-    service_logger->set("logger.root", "INFO,syslog");
-    logging::LoggerConfiguration::getConfiguration().initialize(service_logger);
+    setSyslogLogger();
   }
 #endif
 
