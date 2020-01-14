@@ -105,6 +105,7 @@ if(WIN32)
 	if(NOT CMAKE_MC_COMPILER)
 		message(FATAL_ERROR "Failed to find message compiler (mc.exe)")
 	endif()
+	message("CMAKE_MC_COMPILER is ${CMAKE_MC_COMPILER}")
 	add_custom_target(message-strings
                           COMMAND "${CMAKE_MC_COMPILER}" -U "${CMAKE_CURRENT_SOURCE_DIR}/src/core/logging/WindowsMessageTextFile.mc" -h "${CMAKE_CURRENT_BINARY_DIR}/include/core/logging" -r "${CMAKE_CURRENT_BINARY_DIR}/src/core/logging"
                           DEPENDS "src/core/logging/WindowsMessageTextFile.mc"
