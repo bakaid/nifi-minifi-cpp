@@ -18,6 +18,11 @@
 
 #include "MainHelper.h"
 
+#include "utils/Environment.h"
+#include "utils/StringUtils.h"
+#include "utils/file/FileUtils.h"
+#include "utils/file/PathUtils.h"
+
 #ifdef WIN32
 FILE* __cdecl _imp____iob_func()
 {
@@ -75,11 +80,6 @@ FILE* __cdecl __imp___iob_func()
 
 #endif
 
-/**
- * Validates a MINIFI_HOME value.
- * @param home_path
- * @return true if home_path represents a valid MINIFI_HOME
- */
 bool validHome(const std::string &home_path) {
   struct stat stat_result { };
   std::string sep;
@@ -91,12 +91,67 @@ bool validHome(const std::string &home_path) {
   return (stat(properties_file_path.c_str(), &stat_result) == 0);
 }
 
-/**
- * Configures the logger to log everything to syslog/Windows Event Log, and for the minimum log level to INFO
- */
 void setSyslogLogger() {
   std::shared_ptr<logging::LoggerProperties> service_logger = std::make_shared<logging::LoggerProperties>();
   service_logger->set("appender.syslog", "syslog");
   service_logger->set("logger.root", "INFO,syslog");
   logging::LoggerConfiguration::getConfiguration().initialize(service_logger);
 }
+
+std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger){
+  /* Try to determine MINIFI_HOME */
+  std::string minifiHome = [&logger]() -> std::string {
+    /* If MINIFI_HOME is set as an environment variable, we will use that */
+    bool minifiHomeSet = false;
+    std::string minifiHome;
+    std::tie(minifiHomeSet, minifiHome) = utils::Environment::getEnvironmentVariable(MINIFI_HOME_ENV_KEY);
+    if (minifiHomeSet) {
+      logger->log_info("Found " MINIFI_HOME_ENV_KEY "=%s in environment", minifiHome);
+      return minifiHome;
+    } else {
+      logger->log_info(MINIFI_HOME_ENV_KEY " is not set; trying to infer it");
+    }
+
+    /* Try to determine MINIFI_HOME relative to the location of the minifi executable */
+    std::string executablePath = utils::file::FileUtils::get_executable_path();
+    if (executablePath.empty()) {
+      logger->log_error("Failed to determine location of the minifi executable");
+    } else {
+      std::string minifiPath, minifiFileName;
+      minifi::utils::file::PathUtils::getFileNameAndPath(executablePath, minifiPath, minifiFileName);
+      logger->log_info("Inferred " MINIFI_HOME_ENV_KEY "=%s based on the minifi executable location %s", minifiPath, executablePath);
+      return minifiPath;
+    }
+
+#ifndef WIN32
+    /* Try to determine MINIFI_HOME relative to the current working directory */
+    std::string cwd = utils::Environment::getCurrentWorkingDirectory();
+    if (cwd.empty()) {
+      logger->log_error("Failed to determine current working directory");
+    } else {
+      return cwd;
+    }
+#endif
+
+    return "";
+  }();
+
+  if (minifiHome.empty()) {
+    logger->log_error("No " MINIFI_HOME_ENV_KEY " could be inferred. "
+                      "Please set " MINIFI_HOME_ENV_KEY " or run minifi from a valid location.");
+    return "";
+  }
+
+  /* Verify that MINIFI_HOME is valid */
+  if (!validHome(minifiHome)) {
+    logger->log_info("%s is not a valid " MINIFI_HOME_ENV_KEY ", because there is no TODO");
+    minifiHome = minifiHome.substr(0, minifiHome.find_last_of("/\\"));    //Remove /bin from path
+    if (!validHome(minifiHome)) {
+
+    }
+  }
+
+  logger->log_info("Determined MINIFI_HOME=%s", MINIFI_HOME_ENV_KEY, minifiHome);
+  utils::Environment::setEnvironmentVariable(MINIFI_HOME_ENV_KEY, minifiHome.c_str());
+}
+

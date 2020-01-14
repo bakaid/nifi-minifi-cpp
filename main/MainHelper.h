@@ -19,6 +19,9 @@
 #define MAIN_MAINHELPER_H_
 
 #include "core/logging/LoggerConfiguration.h"
+#include "core/logging/Logger.h"
+
+#include <string>
 
 #ifdef WIN32
 #define FILE_SEPARATOR "\\"
@@ -83,6 +86,12 @@ bool validHome(const std::string &home_path);
  * Configures the logger to log everything to syslog/Windows Event Log, and for the minimum log level to INFO
  */
 void setSyslogLogger();
+
+/**
+ * Determines the full path of MINIFI_HOME
+ * @return MINIFI_HOME on success, empty string on failure
+ */
+std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger);
 
 
 

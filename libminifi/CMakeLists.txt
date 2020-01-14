@@ -100,18 +100,18 @@ if(WIN32)
 		message(FATAL_ERROR "Could not determine architecture, CMAKE_SIZEOF_VOID_P is unexpected: ${CMAKE_SIZEOF_VOID_P}")
 	endif()
 	find_program(CMAKE_MC_COMPILER mc.exe
-			      HINTS "${MC_COMPILER_SEARCH_PATH}"
-                  DOC "path to message compiler")
+					HINTS "${MC_COMPILER_SEARCH_PATH}"
+					DOC "path to message compiler")
 	if(NOT CMAKE_MC_COMPILER)
 		message(FATAL_ERROR "Failed to find message compiler (mc.exe)")
 	endif()
 	message("CMAKE_MC_COMPILER is ${CMAKE_MC_COMPILER}")
 	add_custom_target(message-strings
-                          COMMAND "${CMAKE_MC_COMPILER}" -U "${CMAKE_CURRENT_SOURCE_DIR}/src/core/logging/WindowsMessageTextFile.mc" -h "${CMAKE_CURRENT_BINARY_DIR}/include/core/logging" -r "${CMAKE_CURRENT_BINARY_DIR}/src/core/logging"
-                          DEPENDS "src/core/logging/WindowsMessageTextFile.mc"
-                          BYPRODUCTS "include/core/logging/WindowsMessageTextFile.h" "src/core/logging/WindowsMessageTextFile.rc")
-        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/src/core/logging")
-        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/core/logging")
+						COMMAND "${CMAKE_MC_COMPILER}" -U "${CMAKE_CURRENT_SOURCE_DIR}/src/core/logging/WindowsMessageTextFile.mc" -h "${CMAKE_CURRENT_BINARY_DIR}/include/core/logging" -r "${CMAKE_CURRENT_BINARY_DIR}/src/core/logging"
+						DEPENDS "src/core/logging/WindowsMessageTextFile.mc"
+						BYPRODUCTS "include/core/logging/WindowsMessageTextFile.h" "src/core/logging/WindowsMessageTextFile.rc")
+	file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/src/core/logging")
+	file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/core/logging")
 endif()
 
 file(GLOB PROCESSOR_SOURCES  "src/processors/*.cpp" )

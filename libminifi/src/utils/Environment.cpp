@@ -21,6 +21,8 @@
 #include <Windows.h>
 #else
 #include <cstdlib>
+#include <cerrno>
+#include <unistd.h>
 #endif
 #include <mutex>
 #include <vector>
@@ -98,6 +100,68 @@ bool Environment::unsetEnvironmentVariable(const char* name) {
     success = SetEnvironmentVariableA(name, nullptr);
 #else
     int ret = unsetenv(name);
+    success = ret == 0;
+#endif
+  });
+
+  return success;
+}
+
+std::string Environment::getCurrentWorkingDirectory() {
+  std::string cwd;
+
+  Environment::accessEnvironment([&cwd](){
+#ifdef WIN32
+    uint32_t len = 0U;
+    std::vector<char> buffer;
+    // https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getcurrentdirectory
+    // "If the buffer that is pointed to by lpBuffer is not large enough,
+    // the return value specifies the required size of the buffer,
+    // in characters, including the null-terminating character."
+    while (true) {
+      len = GetCurrentDirectoryA(buffer.size(), buffer.data());
+      if (len == 0U) {
+        break;
+      } else if (len > buffer.size()) {
+        buffer.resize(len);
+      }
+    }
+    if (len > 0U) {
+      cwd = std::string(buffer.data(), len);
+    }
+#else
+    std::vector<char> buffer(1024U);
+    char* path = nullptr;
+    while (true) {
+      path = getcwd(buffer.data(), buffer.size());
+      if (path == nullptr) {
+        if (errno == ERANGE) {
+          buffer.resize(buffer.size() * 2);
+          continue;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    if (path != nullptr) {
+      cwd = path;
+    }
+#endif
+  });
+
+  return cwd;
+}
+
+bool Environment::setCurrentWorkingDirectory(const char* directory) {
+  bool success = false;
+
+  Environment::accessEnvironment([&success, directory](){
+#ifdef WIN32
+    success = Environment::SetCurrentDirectoryA(directory);
+#else
+    int ret = chdir(directory);
     success = ret == 0;
 #endif
   });

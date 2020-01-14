@@ -64,6 +64,19 @@ class Environment {
   static bool unsetEnvironmentVariable(const char* name);
 
   /**
+   * Determines the current working directory
+   * @return current working directory on success, empty string on failure
+   */
+  static std::string getCurrentWorkingDirectory();
+
+  /**
+   * Changes the current working directory
+   * @param directory the directory to change to
+   * @return true on success
+   */
+  static bool setCurrentWorkingDirectory(const char* directory);
+
+  /**
    * Sets whether the current process is running as a service
    * @param runningAsService true if the current process is running as a service
    */
