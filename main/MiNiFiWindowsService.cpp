@@ -24,7 +24,7 @@
 #include <tuple>
 #include <tlhelp32.h>
 
-#include "Main.h"
+#include "MainHelper.h"
 #include "core/FlowConfiguration.h"
 
 //#define DEBUG_SERVICE

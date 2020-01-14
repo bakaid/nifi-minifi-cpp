@@ -31,7 +31,7 @@
 #include "core/ConfigurationFactory.h"
 #include "core/RepositoryFactory.h"
 #include "FlowController.h"
-#include "Main.h"
+#include "MainHelper.h"
 #include "properties/Configure.h"
 #include "Controller.h"
 #include "c2/ControllerSocketProtocol.h"

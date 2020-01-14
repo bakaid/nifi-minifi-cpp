@@ -58,7 +58,7 @@
 #include "utils/Environment.h"
 #include "FlowController.h"
 #include "AgentDocs.h"
-#include "Main.h"
+#include "MainHelper.h"
 
  // Variables that allow us to avoid a timed wait.
 sem_t *running;
