@@ -22,6 +22,9 @@
 #else
 #include <cstdlib>
 #endif
+#include <mutex>
+#include <vector>
+#include <iostream>
 
 namespace org {
 namespace apache {
@@ -45,10 +48,16 @@ std::pair<bool, std::string> Environment::getEnvironmentVariable(const char* nam
   Environment::accessEnvironment([&exists, &value, name](){
 #ifdef WIN32
     std::vector<char> buffer(32767U); // https://docs.microsoft.com/en-gb/windows/win32/api/processenv/nf-processenv-getenvironmentvariablea
+    // GetEnvironmentVariableA does not set last error to 0 on success, so an error from a pervious API call would influence the GetLastError() later,
+    // so we set the last error to 0 before calling
+    SetLastError(ERROR_SUCCESS);
     uint32_t ret = GetEnvironmentVariableA(name, buffer.data(), buffer.size());
     if (ret > 0U) {
       exists = true;
       value = std::string(buffer.data(), ret);
+    } else if (GetLastError() == ERROR_SUCCESS) {
+      // Exists, but empty
+      exists = true;
     }
 #else
     char* ret = getenv(name);
@@ -96,18 +105,10 @@ bool Environment::unsetEnvironmentVariable(const char* name) {
   return success;
 }
 
-bool /*success*/ Environment::setRunningAsService(bool runningAsService) {
-  bool success = false;
-
-  Environment::accessEnvironment([&success, runningAsService](){
-    if (!runningAsServiceSet_) {
-      runningAsService_ = runningAsService;
-      runningAsServiceSet_ = true;
-      success = true;
-    }
+void Environment::setRunningAsService(bool runningAsService) {
+  Environment::accessEnvironment([runningAsService](){
+    runningAsService_ = runningAsService;
   });
-
-  return success;
 }
 
 bool Environment::isRunningAsService() {

@@ -20,10 +20,6 @@
 
 #include "core/logging/LoggerConfiguration.h"
 
-#ifdef WIN32
-#include <Windows.h>
-#endif
-
 #include <sys/stat.h>
 #include <algorithm>
 #include <vector>
@@ -43,7 +39,7 @@
 #include "spdlog/sinks/null_sink.h"
 
 #ifdef WIN32
-#include "WindowsEventLogSink.h"
+#include "core/logging/WindowsEventLogSink.h"
 #else
 #include "spdlog/sinks/syslog_sink.h"
 #endif
@@ -317,7 +313,7 @@ std::shared_ptr<spdlog::sinks::sink> LoggerConfiguration::create_fallback_sink()
 std::shared_ptr<internal::LoggerNamespace> LoggerConfiguration::create_default_root() {
   std::shared_ptr<internal::LoggerNamespace> result = std::make_shared<internal::LoggerNamespace>();
   result->sinks = std::vector<std::shared_ptr<spdlog::sinks::sink>>();
-  result->sinks.push_back(LoggerConfiguration::create_fallback_sink());
+  result->sinks.push_back(spdlog::sinks::stderr_sink_mt::instance());
   result->level = spdlog::level::info;
   return result;
 }

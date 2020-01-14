@@ -120,22 +120,26 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  if (!utils::Environment::setRunningAsService(isStartedByService)) {
-    std::cerr << "Unexpected error: RunningAsService environment is already set. Exiting." << std::endl;
-    return -1;
+  utils::Environment::setRunningAsService(isStartedByService);
+
+  if (utils::Environment::isRunningAsService()) {
+    std::shared_ptr<logging::LoggerProperties> service_logger = std::make_shared<logging::LoggerProperties>();
+    service_logger->set("appender.syslog", "syslog");
+    service_logger->set("logger.root", "INFO,syslog");
+    logging::LoggerConfiguration::getConfiguration().initialize(service_logger);
   }
 #endif
 
   std::shared_ptr<logging::Logger> logger = logging::LoggerConfiguration::getConfiguration().getLogger("main");
 
 #ifdef WIN32
-	if (isStartedByService) {
+  if (isStartedByService) {
     if (!CreateServiceTerminationThread(logger, terminationEventHandler)) {
       return -1;
     }
   } else {
-	  CloseHandle(terminationEventHandler);
-	}
+    CloseHandle(terminationEventHandler);
+  }
 #endif
 
 	uint16_t stop_wait_time = STOP_WAIT_TIME_MS;

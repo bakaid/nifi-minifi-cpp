@@ -24,6 +24,6 @@
 
 void RunAsServiceIfNeeded();
 HANDLE GetTerminationEventHandle(bool* isStartedByService);
-bool CreateServiceTerminationThread(std::shared_ptr<logging::Logger> logger);
+bool CreateServiceTerminationThread(std::shared_ptr<logging::Logger> logger, HANDLE terminationEventHandle);
 
 #endif
