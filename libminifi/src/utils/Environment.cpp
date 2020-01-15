@@ -35,7 +35,6 @@ namespace minifi {
 namespace utils {
 
 bool Environment::runningAsService_(false);
-bool Environment::runningAsServiceSet_(false);
 
 void Environment::accessEnvironment(const std::function<void(void)>& func) {
   static std::recursive_mutex environmentMutex;

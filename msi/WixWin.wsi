@@ -344,9 +344,9 @@ Licensed to the Apache Software Foundation (ASF) under one or more
                                 Stop="both"
                                 Remove="uninstall"
                                 Wait="yes" />
-				<Util:EventSource Log="Application"
-								  Name="ApacheNiFiMiNiFi"
-								  EventMessageFile="[#MiNiFiExe]" />
+                <Util:EventSource Log="Application"
+                                  Name="ApacheNiFiMiNiFi"
+                                  EventMessageFile="[#MiNiFiExe]" />
                 <Condition><![CDATA[SERVICEACCOUNT="LocalSystem"]]></Condition>
               </Component>
               <Component Id="minifiServiceNotLocal" Guid="87658309-0339-425c-8633-f54ffaaa4922">
@@ -375,9 +375,9 @@ Licensed to the Apache Software Foundation (ASF) under one or more
                                 Stop="both"
                                 Remove="uninstall"
                                 Wait="yes" />
-				<Util:EventSource Log="Application"
-								  Name="ApacheNiFiMiNiFi"
-								  EventMessageFile="[#MiNiFiExeWithPassword]" />
+                <Util:EventSource Log="Application"
+                                  Name="ApacheNiFiMiNiFi"
+                                  EventMessageFile="[#MiNiFiExeWithPassword]" />
                 <Condition><![CDATA[SERVICEACCOUNT<>"LocalSystem"]]></Condition>
               </Component>
             </Directory>

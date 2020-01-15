@@ -34,7 +34,6 @@ namespace utils {
 class Environment {
  private:
   static bool runningAsService_;
-  static bool runningAsServiceSet_;
 
   static void accessEnvironment(const std::function<void(void)>& func);
 
