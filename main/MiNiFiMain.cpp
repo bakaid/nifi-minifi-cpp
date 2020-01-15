@@ -179,60 +179,12 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 #endif
-	// assumes POSIX compliant environment
-	bool minifiHomeSet = false;
-	std::string minifiHome;
-	std::tie(minifiHomeSet, minifiHome) = utils::Environment::getEnvironmentVariable(MINIFI_HOME_ENV_KEY);
-	if (minifiHomeSet) {
-		logger->log_info("Using MINIFI_HOME=%s from environment.", minifiHome);
-	} else {
-		logger->log_info("MINIFI_HOME is not set; determining based on environment.");
-		char *path = nullptr;
-		char full_path[PATH_MAX];
-#ifndef WIN32
-		path = realpath(argv[0], full_path);
-#else
-		path = nullptr;
-#endif
 
-		if (path != nullptr) {
-			std::string minifiHomePath(path);
-			if (minifiHomePath.find_last_of("/\\") != std::string::npos) {
-				minifiHomePath = minifiHomePath.substr(0, minifiHomePath.find_last_of("/\\"));  //Remove /minifi from path
-				minifiHome = minifiHomePath.substr(0, minifiHomePath.find_last_of("/\\"));    //Remove /bin from path
-			}
-		}
-
-		if (minifiHome.empty() || !validHome(minifiHome)) {
-#ifdef WIN32
-      // attempt to use the path of the executable as MINIFI_HOME
-			std::string fullPath = utils::file::FileUtils::get_executable_path();
-			std::string minifiFileName, minifiPath;
-			minifi::utils::file::PathUtils::getFileNameAndPath(fullPath, minifiPath, minifiFileName);
-			if (utils::StringUtils::endsWith(minifiPath, "bin")) {
-				minifiHome = minifiPath.substr(0, minifiPath.size()-3);
-			} else {
-				minifiHome = minifiPath;
-			}
-#else
-      // attempt to use cwd as MINIFI_HOME
-      char cwd[PATH_MAX];
-			getcwd(cwd, PATH_MAX);
-			minifiHome = cwd;
-#endif
-		}
-
-		logger->log_debug("Setting %s to %s", MINIFI_HOME_ENV_KEY, minifiHome);
-		utils::Environment::setEnvironmentVariable(MINIFI_HOME_ENV_KEY, minifiHome.c_str());
-	}
-
-	if (!validHome(minifiHome)) {
-		minifiHome = minifiHome.substr(0, minifiHome.find_last_of("/\\"));    //Remove /bin from path
-		if (!validHome(minifiHome)) {
-			logger->log_error("No valid MINIFI_HOME could be inferred. "
-				"Please set MINIFI_HOME or run minifi from a valid location. minifiHome is %s", minifiHome);
-			return -1;
-		}
+	// Determine MINIFI_HOME
+  const std::string minifiHome = determineMinifiHome(logger);
+	if (minifiHome.empty()) {
+	  // determineMinifiHome already logged everything we need
+	  return -1;
 	}
 
 	std::shared_ptr<logging::LoggerProperties> log_properties = std::make_shared<logging::LoggerProperties>();

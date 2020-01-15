@@ -24,23 +24,17 @@
 #include <string>
 
 #ifdef WIN32
-#define FILE_SEPARATOR "\\"
-
-
 extern "C" {
 	FILE* __cdecl _imp____iob_func();
 
 	FILE* __cdecl __imp___iob_func();
 }
+#endif
 
-#else
-#ifndef FILE_SEPARATOR
-#define FILE_SEPARATOR "/"
-#endif
-#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+
  //! Main thread sleep interval 1 second
 #define SLEEP_INTERVAL 1
 //! Main thread stop wait time
@@ -59,6 +53,7 @@ extern "C" {
 #define DEFAULT_LOG_PROPERTIES_FILE "./conf/minifi-log.properties"
 #define DEFAULT_UID_PROPERTIES_FILE "./conf/minifi-uid.properties"
 #endif
+
 //! Define home environment variable
 #define MINIFI_HOME_ENV_KEY "MINIFI_HOME"
 
@@ -91,7 +86,7 @@ void setSyslogLogger();
  * Determines the full path of MINIFI_HOME
  * @return MINIFI_HOME on success, empty string on failure
  */
-std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger);
+std::string determineMinifiHome(const std::shared_ptr<logging::Logger>& logger);
 
 
 

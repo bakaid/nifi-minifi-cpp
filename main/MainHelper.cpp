@@ -21,7 +21,6 @@
 #include "utils/Environment.h"
 #include "utils/StringUtils.h"
 #include "utils/file/FileUtils.h"
-#include "utils/file/PathUtils.h"
 
 #ifdef WIN32
 FILE* __cdecl _imp____iob_func()
@@ -82,13 +81,8 @@ FILE* __cdecl __imp___iob_func()
 
 bool validHome(const std::string &home_path) {
   struct stat stat_result { };
-  std::string sep;
-  sep += FILE_SEPARATOR;
-#ifdef WIN32
-  sep = "";
-#endif
-  auto properties_file_path = home_path + sep + DEFAULT_NIFI_PROPERTIES_FILE;
-  return (stat(properties_file_path.c_str(), &stat_result) == 0);
+  const std::string properties_file_path = utils::file::FileUtils::concat_path(home_path, DEFAULT_NIFI_PROPERTIES_FILE);
+  return stat(properties_file_path.c_str(), &stat_result) == 0;
 }
 
 void setSyslogLogger() {
@@ -98,7 +92,7 @@ void setSyslogLogger() {
   logging::LoggerConfiguration::getConfiguration().initialize(service_logger);
 }
 
-std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger){
+std::string determineMinifiHome(const std::shared_ptr<logging::Logger>& logger){
   /* Try to determine MINIFI_HOME */
   std::string minifiHome = [&logger]() -> std::string {
     /* If MINIFI_HOME is set as an environment variable, we will use that */
@@ -118,7 +112,7 @@ std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger){
       logger->log_error("Failed to determine location of the minifi executable");
     } else {
       std::string minifiPath, minifiFileName;
-      minifi::utils::file::PathUtils::getFileNameAndPath(executablePath, minifiPath, minifiFileName);
+      std::tie(minifiPath, minifiFileName) = minifi::utils::file::FileUtils::split_path(executablePath);
       logger->log_info("Inferred " MINIFI_HOME_ENV_KEY "=%s based on the minifi executable location %s", minifiPath, executablePath);
       return minifiPath;
     }
@@ -129,6 +123,7 @@ std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger){
     if (cwd.empty()) {
       logger->log_error("Failed to determine current working directory");
     } else {
+      logger->log_info("Inferred " MINIFI_HOME_ENV_KEY "=%s based on the current working directory %s", cwd, cwd);
       return cwd;
     }
 #endif
@@ -143,15 +138,35 @@ std::string getMinifiHome(const std::shared_ptr<logging::Logger> &logger){
   }
 
   /* Verify that MINIFI_HOME is valid */
-  if (!validHome(minifiHome)) {
-    logger->log_info("%s is not a valid " MINIFI_HOME_ENV_KEY ", because there is no TODO");
-    minifiHome = minifiHome.substr(0, minifiHome.find_last_of("/\\"));    //Remove /bin from path
-    if (!validHome(minifiHome)) {
+  bool minifiHomeValid = false;
+  if (validHome(minifiHome)) {
+    minifiHomeValid = true;
+  } else {
+    logger->log_info("%s is not a valid " MINIFI_HOME_ENV_KEY ", because there is no " DEFAULT_NIFI_PROPERTIES_FILE " file in it.", minifiHome);
 
+    std::string minifiHomeWithoutBin, binDir;
+    std::tie(minifiHomeWithoutBin, binDir) = minifi::utils::file::FileUtils::split_path(minifiHome);
+    if (minifiHomeWithoutBin != "" && (binDir == "bin" || binDir == std::string("bin") + minifi::utils::file::FileUtils::get_separator())) {
+      if (validHome(minifiHomeWithoutBin)) {
+        logger->log_info("%s is a valid " MINIFI_HOME_ENV_KEY ", falling back to it.", minifiHomeWithoutBin);
+        minifiHomeValid = true;
+        minifiHome = std::move(minifiHomeWithoutBin);
+      } else {
+        logger->log_info("%s is not a valid " MINIFI_HOME_ENV_KEY ", because there is no " DEFAULT_NIFI_PROPERTIES_FILE " file in it.", minifiHomeWithoutBin);
+      }
     }
   }
 
-  logger->log_info("Determined MINIFI_HOME=%s", MINIFI_HOME_ENV_KEY, minifiHome);
-  utils::Environment::setEnvironmentVariable(MINIFI_HOME_ENV_KEY, minifiHome.c_str());
-}
+  /* Fail if not */
+  if (!minifiHomeValid) {
+    logger->log_error("Cannot find a valid " MINIFI_HOME_ENV_KEY " containing a " DEFAULT_NIFI_PROPERTIES_FILE " file in it. "
+                      "Please set " MINIFI_HOME_ENV_KEY " or run minifi from a valid location.");
+    return "";
+  }
 
+  /* Set the valid MINIFI_HOME in our environment */
+  logger->log_info("Using " MINIFI_HOME_ENV_KEY "=%s", minifiHome);
+  utils::Environment::setEnvironmentVariable(MINIFI_HOME_ENV_KEY, minifiHome.c_str());
+
+  return minifiHome;
+}

@@ -120,13 +120,7 @@ void Properties::loadConfigureFile(const char *fileName) {
     return;
   }
 
-  std::string adjustedFilename = getHome();
-  // perform a naive determination if this is a relative path
-  if (fileName[0] != utils::file::FileUtils::get_separator()) {
-    adjustedFilename += utils::file::FileUtils::get_separator();
-  }
-
-  adjustedFilename += fileName;
+  std::string adjustedFilename = utils::file::FileUtils::concat_path(getHome(), fileName);
 
   const char *path = NULL;
 #ifndef WIN32
