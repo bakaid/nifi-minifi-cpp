@@ -159,7 +159,7 @@ bool Environment::setCurrentWorkingDirectory(const char* directory) {
 
   Environment::accessEnvironment([&success, directory](){
 #ifdef WIN32
-    success = Environment::SetCurrentDirectoryA(directory);
+    success = SetCurrentDirectoryA(directory);
 #else
     int ret = chdir(directory);
     success = ret == 0;
