@@ -33,8 +33,8 @@ namespace processors {
 
 class OutputFormat {
  protected:
-  static constexpr const char* const s_outputFormatJSON = "JSON";
-  static constexpr const char* const s_outputFormatJSONPretty = "JSON-Pretty";
+  static constexpr const char s_outputFormatJSON[] = "JSON";
+  static constexpr const char s_outputFormatJSONPretty[] = "JSON-Pretty";
 
   static const core::Property& outputFormat();
 

@@ -23,8 +23,8 @@ namespace nifi {
 namespace minifi {
 namespace processors {
 
-const char* const OutputFormat::s_outputFormatJSON;
-const char* const OutputFormat::s_outputFormatJSONPretty;
+constexpr const char OutputFormat::s_outputFormatJSON[];
+constexpr const char OutputFormat::s_outputFormatJSONPretty[];
 
 const core::Property& OutputFormat::outputFormat() {
   static const core::Property s_outputFormat =
