@@ -1,0 +1,19 @@
+diff -rupN orig/port/win/port_win.h patched/port/win/port_win.h
+--- orig/port/win/port_win.h	2017-11-20 22:51:43.000000000 +0100
++++ patched/port/win/port_win.h	2020-01-26 12:09:36.000000000 +0100
+@@ -316,13 +316,13 @@ inline int pthread_setspecific(pthread_k
+ 
+ inline void* pthread_getspecific(pthread_key_t key) {
+   void* result = TlsGetValue(key);
+-  if (!result) {
++  /*if (!result) {
+     if (GetLastError() != ERROR_SUCCESS) {
+       errno = EINVAL;
+     } else {
+       errno = NOERROR;
+     }
+-  }
++  }*/
+   return result;
+ }
+ 
