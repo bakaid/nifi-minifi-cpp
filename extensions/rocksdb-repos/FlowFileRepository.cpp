@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 #include "FlowFileRepository.h"
+#include "rocksdb/options.h"
 #include "rocksdb/write_batch.h"
 #include "rocksdb/slice.h"
 #include <memory>
@@ -35,7 +36,6 @@ namespace repository {
 
 void FlowFileRepository::flush() {
   rocksdb::WriteBatch batch;
-  uint64_t decrement_total = 0;
   rocksdb::ReadOptions options;
 
   std::vector<std::shared_ptr<FlowFileRecord>> purgeList;
@@ -60,7 +60,6 @@ void FlowFileRepository::flush() {
       continue;
     }
 
-    decrement_total += values[i].size();
     std::shared_ptr<FlowFileRecord> eventRead = std::make_shared<FlowFileRecord>(shared_from_this(), content_repo_);
     if (eventRead->DeSerialize(reinterpret_cast<const uint8_t *>(values[i].data()), values[i].size())) {
       purgeList.push_back(eventRead);
@@ -69,14 +68,8 @@ void FlowFileRepository::flush() {
     batch.Delete(keys[i]);
   }
 
-
-  if (db_->Write(rocksdb::WriteOptions(), &batch).ok()) {
-    logger_->log_trace("Decrementing %u from a repo size of %u", decrement_total, repo_size_.load());
-    if (decrement_total > repo_size_.load()) {
-      repo_size_ = 0;
-    } else {
-      repo_size_ -= decrement_total;
-    }
+  if (!db_->Write(rocksdb::WriteOptions(), &batch).ok()) {
+    logger_->log_warn("Failed to execute batch operation when flushing FlowFileRepository");
   }
 
   if (nullptr != content_repo_) {
@@ -89,23 +82,28 @@ void FlowFileRepository::flush() {
   }
 }
 
-void FlowFileRepository::run() {
-  // threshold for purge
+void FlowFileRepository::printStats() {
+  logger_->log_info("FlowFileRepository stats:");
 
+  std::string out;
+  db_->GetProperty("rocksdb.estimate-num-keys", &out);
+  logger_->log_info("\\--Estimated key count: %s", out);
+
+  db_->GetProperty("rocksdb.estimate-table-readers-mem", &out);
+  logger_->log_info("\\--Estimated table readers memory consumption: %s", out);
+
+  db_->GetProperty("rocksdb.cur-size-all-mem-tables", &out);
+  logger_->log_info("\\--Size of all memory tables: %s", out);
+}
+
+void FlowFileRepository::run() {
   if (running_) {
     prune_stored_flowfiles();
   }
   while (running_) {
     std::this_thread::sleep_for(std::chrono::milliseconds(purge_period_));
-
     flush();
-
-    uint64_t size = getRepoSize();
-
-    if (size > (uint64_t) max_partition_bytes_)
-      repo_full_ = true;
-    else
-      repo_full_ = false;
+    printStats();
   }
 }
 
@@ -134,7 +132,6 @@ void FlowFileRepository::prune_stored_flowfiles() {
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
     std::shared_ptr<FlowFileRecord> eventRead = std::make_shared<FlowFileRecord>(shared_from_this(), content_repo_);
     std::string key = it->key().ToString();
-    repo_size_ += it->value().size();
     if (eventRead->DeSerialize(reinterpret_cast<const uint8_t *>(it->value().data()), it->value().size())) {
       logger_->log_debug("Found connection for %s, path %s ", eventRead->getConnectionUuid(), eventRead->getContentFullPath());
       auto search = connectionMap.find(eventRead->getConnectionUuid());
