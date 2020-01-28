@@ -30,6 +30,7 @@
 #include <winevt.h>
 #include <sstream>
 #include <regex>
+#include <memory>
 #include <codecvt>
 #include "utils/OsUtils.h"
 #include <Objbase.h>
@@ -124,7 +125,7 @@ private:
   std::string regex_;
   bool resolve_as_attributes_;
   bool apply_identifier_function_;
-  moodycamel::ConcurrentQueue<EventRender> listRenderedData_;
+  moodycamel::ConcurrentQueue<std::unique_ptr<EventRender>> listRenderedData_;
   std::string provenanceUri_;
   std::string computerName_;
   int64_t inactiveDurationToReconnect_{};
