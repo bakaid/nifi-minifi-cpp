@@ -16,63 +16,54 @@
 #include "utils/BackTrace.h"
 #ifdef HAS_EXECINFO
 #include <execinfo.h>
+#include <dlfcn.h>
 #include <iostream>
 #include <utility>
+#include <cstring>
 #include <cxxabi.h>
 #endif
 
 void pull_trace(const uint8_t frames_to_skip) {
 #ifdef HAS_EXECINFO
-  void *stackBuffer[TRACE_BUFFER_SIZE + 1];
+  void* stack_buffer[TRACE_BUFFER_SIZE + 1];
 
   // retrieve current stack addresses
-  int trace_size = backtrace(stackBuffer, TRACE_BUFFER_SIZE);
+  int trace_size = backtrace(stack_buffer, TRACE_BUFFER_SIZE);
 
-  char **symboltable = backtrace_symbols(stackBuffer, trace_size);
   /**
    * we can skip the signal handler, call to pull_trace, and the first entry for backtrace_symbols
    */
   for (int i = frames_to_skip; i < trace_size; i++) {
-    char *start_parenthetical = nullptr;
-    char *functor = nullptr;
-    char *stop_parenthetical = nullptr;
+    const char* file_name = "???";
+    const char* symbol_name = nullptr;
+    uintptr_t symbol_offset = 0;
 
-    for (char *p = symboltable[i]; *p; ++p) {
-      if (*p == '(') {
-        start_parenthetical = p;
-      } else if (*p == '+') {
-        functor = p;
-      } else if (*p == ')' && functor) {
-        stop_parenthetical = p;
-        break;
+    Dl_info dl_info{};
+    int res = dladdr(stack_buffer[i], &dl_info);
+    if (res != 0) {
+      if (dl_info.dli_fname != nullptr) {
+        const char* last_slash = nullptr;
+        if ((last_slash = strrchr(dl_info.dli_fname, '/')) != nullptr) {
+          file_name = last_slash + 1;
+        } else {
+          file_name = dl_info.dli_fname;
+        }
       }
+      symbol_name = dl_info.dli_sname;
+      symbol_offset = reinterpret_cast<uintptr_t>(stack_buffer[i]) - reinterpret_cast<uintptr_t>(dl_info.dli_saddr);
     }
-    bool hasFunc = start_parenthetical && functor && stop_parenthetical;
-    if (hasFunc && start_parenthetical < functor) {
-      *start_parenthetical++ = '\0';
-      *functor++ = '\0';
-      *stop_parenthetical = '\0';
-
-      /**
-       * Demangle the names -- this requires calling cxx api to demangle the function name.
-       * not sending an allocated buffer, so we'll deallocate if status is zero.
-       */
-
+    std::string demangled_symbol_name;
+    if (symbol_name != nullptr) {
       int status;
-
-      auto demangled = abi::__cxa_demangle(start_parenthetical, nullptr, nullptr, &status);
+      char* demangled = abi::__cxa_demangle(symbol_name, nullptr, nullptr, &status);
       if (status == 0) {
-        TraceResolver::getResolver().addTraceLine(symboltable[i], demangled);
+        demangled_symbol_name = demangled;
         free(demangled);
-      } else {
-        TraceResolver::getResolver().addTraceLine(symboltable[i], start_parenthetical);
+        symbol_name = demangled_symbol_name.c_str();
       }
-    } else {
-      TraceResolver::getResolver().addTraceLine(symboltable[i], "");
     }
+    TraceResolver::getResolver().addTraceLine(file_name, symbol_name, symbol_offset);
   }
-
-  free(symboltable);
 #endif
 }
 

@@ -130,6 +130,20 @@ class TraceResolver {
   }
 
   /**
+   * Adds a trace line with an optional function
+   * @param symbol_line symbol line that was produced
+   * @param func function name
+   */
+  void addTraceLine(const char* file_name, const char* symbol_name, uintptr_t symbol_offset) {
+    std::stringstream line;
+    line << file_name;
+    if (symbol_name != nullptr) {
+      line << " @ " << symbol_name << " + " << symbol_offset;
+    }
+    trace_.addLine(line.str());
+  }
+
+  /**
    * Returns the thread handle reference in the native format.
    */
   std::thread::native_handle_type getThreadHandle() {
