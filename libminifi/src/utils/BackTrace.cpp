@@ -16,7 +16,9 @@
 #include "utils/BackTrace.h"
 #ifdef HAS_EXECINFO
 #include <execinfo.h>
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #ifdef __linux__
 #include <link.h>
