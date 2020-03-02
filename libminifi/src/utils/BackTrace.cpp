@@ -111,7 +111,7 @@ void pull_trace(uint8_t frames_to_skip /* = 1 */) {
        * glibc uses l_addr from the link map instead of dli_fbase in backtrace_symbols for calculating this offset.
        * I could not find a difference between the two in my limited measurements, but we will use it too, just to be sure.
        */
-      if (l_map != nullptr && l_map->l_addr != nullptr) {
+      if (l_map != nullptr) {
         dl_info.dli_fbase = reinterpret_cast<void*>(l_map->l_addr);
       }
 #endif
