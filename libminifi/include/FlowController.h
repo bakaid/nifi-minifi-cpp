@@ -290,6 +290,11 @@ class FlowController : public core::controller::ControllerServiceProvider, publi
   virtual void enableAllControllerServices();
 
   /**
+   * Disables all controller services for the provider.
+   */
+  virtual void disableAllControllerServices();
+
+  /**
    * Retrieves all root response nodes from this source.
    * @param metric_vector -- metrics will be placed in this vector.
    * @return result of the get operation.
