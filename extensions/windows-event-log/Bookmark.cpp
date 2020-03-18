@@ -20,20 +20,20 @@ Bookmark::Bookmark(const std::wstring& channel, const std::wstring& query, const
   if (state_manager_->get(state_map) && state_map.count(BOOKMARK_KEY) == 1U) {
     bookmarkXml_ = wel::to_wstring(state_map[BOOKMARK_KEY].c_str());
   } else if (!bookmarkRootDir.empty()) {
-		filePath_ = utils::file::FileUtils::concat_path(
-			utils::file::FileUtils::concat_path(
-				utils::file::FileUtils::concat_path(bookmarkRootDir, "uuid"), uuid), "Bookmark.txt");
+    filePath_ = utils::file::FileUtils::concat_path(
+      utils::file::FileUtils::concat_path(
+        utils::file::FileUtils::concat_path(bookmarkRootDir, "uuid"), uuid), "Bookmark.txt");
 
     std::wstring bookmarkXml;
-		if (getBookmarkXmlFromFile(bookmarkXml)) {
+    if (getBookmarkXmlFromFile(bookmarkXml)) {
       if (saveBookmarkXml(bookmarkXml) && state_manager_->persist()) {
         logger_->log_info("State migration successful");
         rename(filePath_.c_str(), (filePath_ + "-migrated").c_str());
       } else {
         logger_->log_warn("Could not migrate state from specified State Directory %s", bookmarkRootDir);
       }
-		}
-	}
+    }
+  }
 
   if (!bookmarkXml_.empty()) {
     if (hBookmark_ = EvtCreateBookmark(bookmarkXml_.c_str())) {
@@ -184,7 +184,7 @@ bool Bookmark::getBookmarkXmlFromFile(std::wstring& bookmarkXml) {
   if (std::wstring::npos == pos) {
     logger_->log_error("No '!' in bookmarXml '%ls'", bookmarkXml.c_str());
     bookmarkXml.clear();
-	return false;
+    return false;
   }
 
   // Remove '!'.
