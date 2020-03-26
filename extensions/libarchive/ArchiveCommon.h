@@ -22,6 +22,8 @@
 
 #ifdef WIN32
 #define mode_t uint16_t
+#define uid_t int64_t
+#define gid_t int64_t
 #endif
 
 #endif /* EXTENSIONS_LIBARCHIVE_ARCHIVECOMMON_H_ */
