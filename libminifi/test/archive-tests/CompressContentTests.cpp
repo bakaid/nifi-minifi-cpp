@@ -22,6 +22,7 @@
 #include <utility>
 #include <string>
 #include <set>
+#include <random>
 #include "FlowController.h"
 #include "../TestBase.h"
 #include "core/Core.h"
@@ -40,7 +41,6 @@
 
 static const char* EXPECT_COMPRESS_CONTENT = "/tmp/minifi-expect-compresscontent.txt";
 static const char* COMPRESS_CONTENT = "/tmp/minifi-compresscontent";
-static unsigned int globalSeed;
 
 class ReadCallback: public org::apache::nifi::minifi::InputStreamCallback {
  public:
@@ -94,8 +94,9 @@ TEST_CASE("CompressFileGZip", "[compressfiletest1]") {
     std::ofstream expectfile;
     expectfile.open(EXPECT_COMPRESS_CONTENT);
 
+    std::mt19937 gen(std::random_device { }());
     for (int i = 0; i < 100000; i++) {
-      expectfile << std::to_string(rand_r(&globalSeed)%100);
+      expectfile << std::to_string(gen() % 100);
     }
     expectfile.close();
 
@@ -299,8 +300,9 @@ TEST_CASE("CompressFileBZip", "[compressfiletest3]") {
     std::ofstream expectfile;
     expectfile.open(EXPECT_COMPRESS_CONTENT);
 
+    std::mt19937 gen(std::random_device { }());
     for (int i = 0; i < 100000; i++) {
-      expectfile << std::to_string(rand_r(&globalSeed)%100);
+      expectfile << std::to_string(gen() % 100);
     }
     expectfile.close();
 
@@ -503,8 +505,9 @@ TEST_CASE("CompressFileLZMA", "[compressfiletest5]") {
     std::ofstream expectfile;
     expectfile.open(EXPECT_COMPRESS_CONTENT);
 
+    std::mt19937 gen(std::random_device { }());
     for (int i = 0; i < 100000; i++) {
-      expectfile << std::to_string(rand_r(&globalSeed)%100);
+      expectfile << std::to_string(gen() % 100);
     }
     expectfile.close();
 
@@ -720,8 +723,9 @@ TEST_CASE("CompressFileXYLZMA", "[compressfiletest7]") {
     std::ofstream expectfile;
     expectfile.open(EXPECT_COMPRESS_CONTENT);
 
+    std::mt19937 gen(std::random_device { }());
     for (int i = 0; i < 100000; i++) {
-      expectfile << std::to_string(rand_r(&globalSeed)%100);
+      expectfile << std::to_string(gen() % 100);
     }
     expectfile.close();
 

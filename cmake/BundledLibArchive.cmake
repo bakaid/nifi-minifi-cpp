@@ -21,7 +21,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
 
     # Define byproducts
     if (WIN32)
-        set(BYPRODUCT "lib/libarchive.lib")
+        set(BYPRODUCT "lib/archive_static.lib")
     else()
         set(BYPRODUCT "lib/libarchive.a")
     endif()
@@ -29,6 +29,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
     # Set build options
     set(LIBARCHIVE_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/libarchive-install"
+            -DLIBARCHIVE_STATIC=1
             -DENABLE_MBEDTLS=OFF
             -DENABLE_NETTLE=OFF
             -DENABLE_LIBB2=OFF
@@ -116,4 +117,5 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
     endif()
     file(MAKE_DIRECTORY ${LIBARCHIVE_INCLUDE_DIRS})
     set_property(TARGET LibArchive::LibArchive APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBARCHIVE_INCLUDE_DIRS})
+	set_property(TARGET LibArchive::LibArchive APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS "LIBARCHIVE_STATIC=1")
 endfunction(use_bundled_libarchive)
