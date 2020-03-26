@@ -176,7 +176,7 @@ public:
       return ret;
     }
 
-    static ssize_t archive_read(struct archive *arch, void *context, const void **buff) {
+    static la_ssize_t archive_read(struct archive *arch, void *context, const void **buff) {
       WriteCallback *callback = (WriteCallback *) context;
       callback->session_->read(callback->flow_, &callback->readDecompressCb_);
       if (callback->readDecompressCb_.read_size_ >= 0) {
