@@ -80,8 +80,7 @@ public:
     ~ReadCallbackCompress() {
     }
     int64_t process(std::shared_ptr<io::BaseStream> stream) {
-      int max_read = getpagesize();
-      uint8_t buffer[max_read];
+      uint8_t buffer[4096U];
       int64_t ret = 0;
       uint64_t read_size = 0;
 
