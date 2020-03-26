@@ -52,8 +52,6 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
 
     append_third_party_passthrough_args(LIBARCHIVE_CMAKE_ARGS "${LIBARCHIVE_CMAKE_ARGS}")
 
-    message("LIBARCHIVE_CMAKE_ARGS: ${LIBARCHIVE_CMAKE_ARGS}")
-
     # Build project
     ExternalProject_Add(
             libarchive-external
