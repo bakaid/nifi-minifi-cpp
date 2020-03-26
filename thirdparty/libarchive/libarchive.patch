@@ -92,3 +92,30 @@ diff -rupN orig/libarchive/CMakeLists.txt patched/libarchive/CMakeLists.txt
  ENDIF()
 -
 -add_subdirectory(test)
+diff -rupN orig/libarchive/archive_read_support_format_rar5.c patched/libarchive/archive_read_support_format_rar5.c
+--- orig/libarchive/archive_read_support_format_rar5.c	2020-02-11 00:30:01.000000000 +0100
++++ patched/libarchive/archive_read_support_format_rar5.c	2020-03-26 14:47:16.000000000 +0100
+@@ -3084,12 +3084,22 @@ static int do_uncompress_block(struct ar
+ 
+ 			continue;
+ 		}
+-
++#ifdef _MSC_VER
++/*
++ * This is unreachable code (seemingly by design), and compilation on MSVC fails because of that,
++ * so we disable that warning for this part
++ */
++#pragma warning( push )
++#pragma warning( disable : 4702 )
++#endif
+ 		/* The program counter shouldn't reach here. */
+ 		archive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,
+ 		    "Unsupported block code: 0x%x", num);
+ 
+ 		return ARCHIVE_FATAL;
++#ifdef _MSC_VER
++#pragma warning( pop )
++#endif
+ 	}
+ 
+ 	return ARCHIVE_OK;
