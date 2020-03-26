@@ -44,7 +44,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
             -DENABLE_PCREPOSIX=OFF
             -DENABLE_TAR=ON
             -DENABLE_CPIO=OFF
-            -DENABLE_CAT=ON
+            -DENABLE_CAT=OFF
             -DENABLE_XATTR=ON
             -DENABLE_ACL=ON
             -DENABLE_ICONV=OFF
