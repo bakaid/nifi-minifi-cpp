@@ -42,7 +42,7 @@ function(use_bundled_libarchive SOURCE_DIR BINARY_DIR)
             -DENABLE_LIBXML2=OFF
             -DENABLE_EXPAT=OFF
             -DENABLE_PCREPOSIX=OFF
-            -DENABLE_TAR=ON
+            -DENABLE_TAR=OFF # This does not disable the tar format, just the standalone tar command line utility
             -DENABLE_CPIO=OFF
             -DENABLE_CAT=OFF
             -DENABLE_XATTR=ON
