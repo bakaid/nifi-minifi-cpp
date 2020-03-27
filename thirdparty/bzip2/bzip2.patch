@@ -1,12 +1,10 @@
 diff -rupN orig/CMakeLists.txt patched/CMakeLists.txt
 --- orig/CMakeLists.txt	1970-01-01 01:00:00.000000000 +0100
-+++ patched/CMakeLists.txt	2020-03-27 13:09:03.000000000 +0100
-@@ -0,0 +1,25 @@
++++ patched/CMakeLists.txt	2020-03-27 15:47:11.000000000 +0100
+@@ -0,0 +1,27 @@
 +cmake_minimum_required(VERSION 3.10)
 +
 +project(bzip2)
-+
-+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64")
 +
 +set(SOURCES blocksort.c
 +            huffman.c
@@ -21,6 +19,10 @@ diff -rupN orig/CMakeLists.txt patched/CMakeLists.txt
 +add_library(bz2 STATIC ${SOURCES})
 +
 +set_property(TARGET bz2 PROPERTY POSITION_INDEPENDENT_CODE ON)
++
++target_compile_definitions(bz2
++                            PRIVATE
++                              _FILE_OFFSET_BITS=64)
 +
 +install(TARGETS bz2
 +    ARCHIVE DESTINATION lib
