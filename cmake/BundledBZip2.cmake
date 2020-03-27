@@ -20,25 +20,43 @@
 function(use_bundled_bzip2 SOURCE_DIR BINARY_DIR)
     message("Using bundled bzip2")
 
+    # Define patch step
+    set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/bzip2/bzip2.patch")
+
     # Define byproduct
     set(BYPRODUCT "lib/libbz2.a")
 
+    # Set build options
     set(BZIP2_BIN_DIR "${BINARY_DIR}/thirdparty/bzip2-install" CACHE STRING "" FORCE)
 
+    set(BZIP2_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
+            "-DCMAKE_INSTALL_PREFIX=${BZIP2_BIN_DIR}")
+
     # Build project
+#    ExternalProject_Add(
+#            bzip2-external
+#            URL https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
+#            URL_HASH "SHA256=ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"
+#            BUILD_IN_SOURCE true
+#            SOURCE_DIR "${BINARY_DIR}/thirdparty/bzip2-src"
+#            BUILD_COMMAND make
+#            CMAKE_COMMAND ""
+#            UPDATE_COMMAND ""
+#            INSTALL_COMMAND make "PREFIX=${BZIP2_BIN_DIR}" install
+#            BUILD_BYPRODUCTS "${BZIP2_BIN_DIR}/${BYPRODUCT}"
+#            CONFIGURE_COMMAND ""
+#            STEP_TARGETS build
+#            EXCLUDE_FROM_ALL TRUE
+#    )
     ExternalProject_Add(
             bzip2-external
             URL https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
             URL_HASH "SHA256=ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"
-            BUILD_IN_SOURCE true
             SOURCE_DIR "${BINARY_DIR}/thirdparty/bzip2-src"
-            BUILD_COMMAND make
-            CMAKE_COMMAND ""
-            UPDATE_COMMAND ""
-            INSTALL_COMMAND make "PREFIX=${BZIP2_BIN_DIR}" install
+            LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
+            CMAKE_ARGS ${BZIP2_CMAKE_ARGS}
+            PATCH_COMMAND ${PC}
             BUILD_BYPRODUCTS "${BZIP2_BIN_DIR}/${BYPRODUCT}"
-            CONFIGURE_COMMAND ""
-            STEP_TARGETS build
             EXCLUDE_FROM_ALL TRUE
     )
 

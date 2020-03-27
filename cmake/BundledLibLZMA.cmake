@@ -20,33 +20,62 @@
 function(use_bundled_liblzma SOURCE_DIR BINARY_DIR)
     message("Using bundled liblzma")
 
-    # Define byproduct
-    set(BYPRODUCT "lib/liblzma.a")
-
-    set(LIBLZMA_BIN_DIR "${BINARY_DIR}/thirdparty/liblzma-install" CACHE STRING "" FORCE)
-
-    # Build project
-    set(CONFIGURE_COMMAND ./configure --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-lzma-links --disable-scripts --disable-doc --enable-shared=no "--prefix=${LIBLZMA_BIN_DIR}")
-    if(PORTABLE)
-        list(APPEND CONFIGURE_COMMAND "--disable-assembler")
+    # Define patch step
+    if (WIN32)
+        set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/liblzma/liblzma.patch")
     endif()
 
-    ExternalProject_Add(
-            liblzma-external
-            URL https://tukaani.org/xz/xz-5.2.5.tar.gz https://gentoo.osuosl.org/distfiles/xz-5.2.5.tar.gz
-            URL_HASH "SHA256=f6f4910fd033078738bd82bfba4f49219d03b17eb0794eb91efbae419f4aba10"
-            BUILD_IN_SOURCE true
-            SOURCE_DIR "${BINARY_DIR}/thirdparty/liblzma-src"
-            BUILD_COMMAND make
-            CMAKE_COMMAND ""
-            UPDATE_COMMAND ""
-            INSTALL_COMMAND make install
-            BUILD_BYPRODUCTS "${LIBLZMA_BIN_DIR}/${BYPRODUCT}"
-            CONFIGURE_COMMAND ""
-            PATCH_COMMAND ${CONFIGURE_COMMAND}
-            STEP_TARGETS build
-            EXCLUDE_FROM_ALL TRUE
-    )
+    # Define byproduct
+    if (WIN32)
+        set(BYPRODUCT "lib/lzma.lib")
+    else()
+        set(BYPRODUCT "lib/liblzma.a")
+    endif()
+
+    # Set build options
+    set(LIBLZMA_BIN_DIR "${BINARY_DIR}/thirdparty/liblzma-install" CACHE STRING "" FORCE)
+
+    if (WIN32)
+        set(LIBLZMA_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
+                "-DCMAKE_INSTALL_PREFIX=${LIBLZMA_BIN_DIR}")
+    endif()
+
+    # Build project
+    if (WIN32)
+        ExternalProject_Add(
+                liblzma-external
+                URL https://tukaani.org/xz/xz-5.2.5.tar.gz https://gentoo.osuosl.org/distfiles/xz-5.2.5.tar.gz
+                URL_HASH "SHA256=f6f4910fd033078738bd82bfba4f49219d03b17eb0794eb91efbae419f4aba10"
+                SOURCE_DIR "${BINARY_DIR}/thirdparty/liblzma-src"
+                LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
+                CMAKE_ARGS ${LIBLZMA_CMAKE_ARGS}
+                PATCH_COMMAND ${PC}
+                BUILD_BYPRODUCTS "${LIBLZMA_BIN_DIR}/${BYPRODUCT}"
+                EXCLUDE_FROM_ALL TRUE
+        )
+    else()
+        set(CONFIGURE_COMMAND ./configure --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-lzma-links --disable-scripts --disable-doc --enable-shared=no "--prefix=${LIBLZMA_BIN_DIR}")
+        if(PORTABLE)
+            list(APPEND CONFIGURE_COMMAND "--disable-assembler")
+        endif()
+
+        ExternalProject_Add(
+                liblzma-external
+                URL https://tukaani.org/xz/xz-5.2.5.tar.gz https://gentoo.osuosl.org/distfiles/xz-5.2.5.tar.gz
+                URL_HASH "SHA256=f6f4910fd033078738bd82bfba4f49219d03b17eb0794eb91efbae419f4aba10"
+                BUILD_IN_SOURCE true
+                SOURCE_DIR "${BINARY_DIR}/thirdparty/liblzma-src"
+                BUILD_COMMAND make
+                CMAKE_COMMAND ""
+                UPDATE_COMMAND ""
+                INSTALL_COMMAND make install
+                BUILD_BYPRODUCTS "${LIBLZMA_BIN_DIR}/${BYPRODUCT}"
+                CONFIGURE_COMMAND ""
+                PATCH_COMMAND ${CONFIGURE_COMMAND}
+                STEP_TARGETS build
+                EXCLUDE_FROM_ALL TRUE
+        )
+    endif()
 
     # Set variables
     set(LIBLZMA_FOUND "YES" CACHE STRING "" FORCE)
