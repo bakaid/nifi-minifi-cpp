@@ -24,7 +24,11 @@ function(use_bundled_bzip2 SOURCE_DIR BINARY_DIR)
     set(PC "${Patch_EXECUTABLE}" -p1 -i "${SOURCE_DIR}/thirdparty/bzip2/bzip2.patch")
 
     # Define byproduct
-    set(BYPRODUCT "lib/libbz2.a")
+    if (WIN32)
+        set(BYPRODUCT "lib/bz2.lib")
+    else()
+        set(BYPRODUCT "lib/libbz2.a")
+    endif()
 
     # Set build options
     set(BZIP2_BIN_DIR "${BINARY_DIR}/thirdparty/bzip2-install" CACHE STRING "" FORCE)
