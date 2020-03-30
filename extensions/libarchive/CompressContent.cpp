@@ -39,6 +39,11 @@ core::Property CompressContent::CompressLevel("Compression Level", "The compress
 core::Property CompressContent::CompressMode("Mode", "Indicates whether the processor should compress content or decompress content.", MODE_COMPRESS);
 core::Property CompressContent::CompressFormat("Compression Format", "The compression format to use.", COMPRESSION_FORMAT_ATTRIBUTE);
 core::Property CompressContent::UpdateFileName("Update Filename", "Determines if filename extension need to be updated", "false");
+core::Property CompressContent::EncapsulateInTar("Encapsulate in TAR", "If true, on compression the FlowFile is added to a TAR archive and then compressed, "
+                                                                       "and on decompression a compressed, TAR-encapsulated FlowFile is expected.\n"
+                                                                       "If false, on compression the content of the FlowFile simply gets compressed, and on decompression a simple compressed content is expected.\n"
+                                                                       "true is the behaviour compatible with older MiNiFi C++ versions, false is the behaviour compatible with NiFi.",
+                                                                       "true");
 core::Relationship CompressContent::Success("success", "FlowFiles will be transferred to the success relationship after successfully being compressed or decompressed");
 core::Relationship CompressContent::Failure("failure", "FlowFiles will be transferred to the failure relationship if they fail to compress/decompress");
 
@@ -49,6 +54,7 @@ void CompressContent::initialize() {
   properties.insert(CompressMode);
   properties.insert(CompressFormat);
   properties.insert(UpdateFileName);
+  properties.insert(EncapsulateInTar);
   setSupportedProperties(properties);
   // Set the supported relationships
   std::set<core::Relationship> relationships;
@@ -74,7 +80,13 @@ void CompressContent::onSchedule(core::ProcessContext *context, core::ProcessSes
   if (context->getProperty(UpdateFileName.getName(), value) && !value.empty()) {
     org::apache::nifi::minifi::utils::StringUtils::StringToBool(value, updateFileName_);
   }
-  logger_->log_info("Compress Content: Mode [%s] Format [%s] Level [%d] UpdateFileName [%d]", compressMode_, compressFormat_, compressLevel_, updateFileName_);
+  value = "";
+  if (context->getProperty(EncapsulateInTar.getName(), value) && !value.empty()) {
+    org::apache::nifi::minifi::utils::StringUtils::StringToBool(value, encapsulateInTar_);
+  }
+  logger_->log_info("Compress Content: Mode [%s] Format [%s] Level [%d] UpdateFileName [%d] EncapsulateInTar [%d]",
+      compressMode_, compressFormat_, compressLevel_, updateFileName_, encapsulateInTar_);
+
   // update the mimeTypeMap
   compressionFormatMimeTypeMap_["application/gzip"] = COMPRESSION_FORMAT_GZIP;
   compressionFormatMimeTypeMap_["application/bzip2"] = COMPRESSION_FORMAT_BZIP2;
@@ -85,6 +97,15 @@ void CompressContent::onSchedule(core::ProcessContext *context, core::ProcessSes
   fileExtension_[COMPRESSION_FORMAT_LZMA] = ".lzma";
   fileExtension_[COMPRESSION_FORMAT_BZIP2] = ".bz2";
   fileExtension_[COMPRESSION_FORMAT_XZ_LZMA2] = ".xz";
+
+  // Validate
+  std::string mimeType;
+  if (mimeType == "application/bzip2" && archive_bzlib_version() == nullptr) {
+    throw minifi::Exception(PROCESSOR_EXCEPTION, mimeType + " compression format is requested, but the agent was compiled without BZip2 support.");
+  }
+  if ((mimeType == "application/x-lzma" || mimeType == "application/x-xz") && archive_liblzma_version() == nullptr) {
+    throw minifi::Exception(PROCESSOR_EXCEPTION, mimeType + " compression format is requested, but the agent was compiled without LZMA support.");
+  }
 }
 
 void CompressContent::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
@@ -134,10 +155,11 @@ void CompressContent::onTrigger(const std::shared_ptr<core::ProcessContext> &con
     fileExtension = search->second;
   }
   std::shared_ptr<core::FlowFile> processFlowFile = session->create(flowFile);
-  CompressContent::WriteCallback callback(compressMode_, compressLevel_, compressFormat, flowFile, session);
+  //CompressContent::WriteCallback callback(compressMode_, compressLevel_, compressFormat, flowFile, session);
+  CompressContent::GzipWriteCallback callback(compressLevel_, flowFile, session);
   session->write(processFlowFile, &callback);
 
-  if (callback.status_ < 0) {
+  if (!callback.success_) {
     logger_->log_error("Compress Content processing fail for the flow with UUID %s", flowFile->getUUIDStr());
     session->transfer(flowFile, Failure);
     session->remove(processFlowFile);
