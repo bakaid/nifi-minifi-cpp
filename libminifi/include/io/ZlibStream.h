@@ -24,6 +24,7 @@
 #include <zlib.h>
 
 #include "BaseStream.h"
+#include "core/logging/LoggerConfiguration.h"
 
 namespace org {
 namespace apache {
@@ -73,6 +74,9 @@ class ZlibCompressStream : public ZlibBaseStream {
   int writeData(uint8_t* value, int size) override;
 
   void closeStream() override;
+
+ private:
+  std::shared_ptr<logging::Logger> logger_;
 };
 
 class ZlibDecompressStream : public ZlibBaseStream {
@@ -88,6 +92,9 @@ class ZlibDecompressStream : public ZlibBaseStream {
   ~ZlibDecompressStream() override;
 
   int writeData(uint8_t *value, int size) override;
+
+ private:
+  std::shared_ptr<logging::Logger> logger_;
 };
 
 } /* namespace io */

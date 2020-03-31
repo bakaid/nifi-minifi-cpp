@@ -942,8 +942,6 @@ TEST_CASE("RawGzipCompressionDecompression", "[compressfiletest8]") {
   TestController testController;
   LogTestController::getInstance().setTrace<org::apache::nifi::minifi::processors::CompressContent>();
   LogTestController::getInstance().setTrace<org::apache::nifi::minifi::processors::PutFile>();
-  LogTestController::getInstance().setTrace<org::apache::nifi::minifi::io::ZlibCompressStream>();
-  LogTestController::getInstance().setTrace<org::apache::nifi::minifi::io::ZlibDecompressStream>();
 
   // Create temporary directories
   char format_src[] = "/tmp/archives.XXXXXX";
@@ -1041,4 +1039,6 @@ TEST_CASE("RawGzipCompressionDecompression", "[compressfiletest8]") {
   std::ifstream decompressed(decompressed_file, std::ios::in | std::ios::binary);
   std::string decompressed_content((std::istreambuf_iterator<char>(decompressed)), std::istreambuf_iterator<char>());
   REQUIRE(content == decompressed_content);
+
+  LogTestController::getInstance().reset();
 }

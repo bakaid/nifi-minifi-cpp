@@ -41,11 +41,14 @@ function(use_bundled_liblzma SOURCE_DIR BINARY_DIR)
     endif()
 
     # Build project
+    set(LIBLZMA_URL https://tukaani.org/xz/xz-5.2.5.tar.gz https://gentoo.osuosl.org/distfiles/xz-5.2.5.tar.gz)
+    set(LIBLZMA_URL_HASH "SHA256=f6f4910fd033078738bd82bfba4f49219d03b17eb0794eb91efbae419f4aba10")
+
     if (WIN32)
         ExternalProject_Add(
                 liblzma-external
-                URL https://tukaani.org/xz/xz-5.2.5.tar.gz https://gentoo.osuosl.org/distfiles/xz-5.2.5.tar.gz
-                URL_HASH "SHA256=f6f4910fd033078738bd82bfba4f49219d03b17eb0794eb91efbae419f4aba10"
+                URL ${LIBLZMA_URL}
+                URL_HASH ${LIBLZMA_URL_HASH}
                 SOURCE_DIR "${BINARY_DIR}/thirdparty/liblzma-src"
                 LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
                 CMAKE_ARGS ${LIBLZMA_CMAKE_ARGS}
@@ -61,8 +64,8 @@ function(use_bundled_liblzma SOURCE_DIR BINARY_DIR)
 
         ExternalProject_Add(
                 liblzma-external
-                URL https://tukaani.org/xz/xz-5.2.5.tar.gz https://gentoo.osuosl.org/distfiles/xz-5.2.5.tar.gz
-                URL_HASH "SHA256=f6f4910fd033078738bd82bfba4f49219d03b17eb0794eb91efbae419f4aba10"
+                URL ${LIBLZMA_URL}
+                URL_HASH ${LIBLZMA_URL_HASH}
                 BUILD_IN_SOURCE true
                 SOURCE_DIR "${BINARY_DIR}/thirdparty/liblzma-src"
                 BUILD_COMMAND make
