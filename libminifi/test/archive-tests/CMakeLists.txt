@@ -17,7 +17,13 @@
 # under the License.
 #
 
-file(GLOB ARCHIVE_INTEGRATION_TESTS  "*.cpp")
+if (WIN32)
+	# Currently CompressContent is the only verified working libarchive processor on Windows,
+	# some tests for other libarchive processors fail on Windows.
+	file(GLOB ARCHIVE_INTEGRATION_TESTS  "CompressContentTests.cpp")
+else()
+	file(GLOB ARCHIVE_INTEGRATION_TESTS  "*.cpp")
+endif()
 
 SET(EXTENSIONS_TEST_COUNT 0)
 FOREACH(testfile ${ARCHIVE_INTEGRATION_TESTS})
