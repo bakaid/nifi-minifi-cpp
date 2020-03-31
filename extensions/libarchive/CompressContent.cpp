@@ -97,15 +97,6 @@ void CompressContent::onSchedule(core::ProcessContext *context, core::ProcessSes
   fileExtension_[COMPRESSION_FORMAT_LZMA] = ".lzma";
   fileExtension_[COMPRESSION_FORMAT_BZIP2] = ".bz2";
   fileExtension_[COMPRESSION_FORMAT_XZ_LZMA2] = ".xz";
-
-  // Validate
-  std::string mimeType;
-  if (mimeType == "application/bzip2" && archive_bzlib_version() == nullptr) {
-    throw minifi::Exception(PROCESSOR_EXCEPTION, mimeType + " compression format is requested, but the agent was compiled without BZip2 support.");
-  }
-  if ((mimeType == "application/x-lzma" || mimeType == "application/x-xz") && archive_liblzma_version() == nullptr) {
-    throw minifi::Exception(PROCESSOR_EXCEPTION, mimeType + " compression format is requested, but the agent was compiled without LZMA support.");
-  }
 }
 
 void CompressContent::onTrigger(const std::shared_ptr<core::ProcessContext> &context, const std::shared_ptr<core::ProcessSession> &session) {
@@ -149,17 +140,41 @@ void CompressContent::onTrigger(const std::shared_ptr<core::ProcessContext> &con
     return;
   }
 
+  // Validate
+  if (!encapsulateInTar_ && compressFormat != COMPRESSION_FORMAT_GZIP) {
+    logger_->log_error("non-TAR encapsulated format only supports GZIP compression");
+    session->transfer(flowFile, Failure);
+    return;
+  }
+  if (compressFormat == COMPRESSION_FORMAT_BZIP2 && archive_bzlib_version() == nullptr) {
+    logger_->log_error("%s compression format is requested, but the agent was compiled without BZip2 support", compressFormat);
+    session->transfer(flowFile, Failure);
+    return;
+  }
+  if ((compressFormat == COMPRESSION_FORMAT_LZMA || compressFormat == COMPRESSION_FORMAT_XZ_LZMA2) && archive_liblzma_version() == nullptr) {
+    logger_->log_error("%s compression format is requested, but the agent was compiled without LZMA support ", compressFormat);
+    session->transfer(flowFile, Failure);
+    return;
+  }
+
   std::string fileExtension;
   auto search = fileExtension_.find(compressFormat);
   if (search != fileExtension_.end()) {
     fileExtension = search->second;
   }
   std::shared_ptr<core::FlowFile> processFlowFile = session->create(flowFile);
-  //CompressContent::WriteCallback callback(compressMode_, compressLevel_, compressFormat, flowFile, session);
-  CompressContent::GzipWriteCallback callback(compressLevel_, flowFile, session);
-  session->write(processFlowFile, &callback);
+  bool success = false;
+  if (encapsulateInTar_) {
+    CompressContent::WriteCallback callback(compressMode_, compressLevel_, compressFormat, flowFile, session);
+    session->write(processFlowFile, &callback);
+    success = callback.status_ >= 0;
+  } else {
+    CompressContent::GzipWriteCallback callback(compressMode_, compressLevel_, flowFile, session);
+    session->write(processFlowFile, &callback);
+    success = callback.success_;
+  }
 
-  if (!callback.success_) {
+  if (!success) {
     logger_->log_error("Compress Content processing fail for the flow with UUID %s", flowFile->getUUIDStr());
     session->transfer(flowFile, Failure);
     session->remove(processFlowFile);

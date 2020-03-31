@@ -25,13 +25,33 @@ namespace nifi {
 namespace minifi {
 namespace io {
 
+/* ZlibBaseStream */
+
+ZlibBaseStream::ZlibBaseStream()
+    : ZlibBaseStream(this) {
+}
+
+ZlibBaseStream::ZlibBaseStream(DataStream* other)
+    : BaseStream(other)
+    , outputBuffer_(16384U)
+{
+  strm_.zalloc = Z_NULL;
+  strm_.zfree = Z_NULL;
+  strm_.opaque = Z_NULL;
+}
+
+bool ZlibBaseStream::isFinished() const {
+  return finished_;
+}
+
+/* ZlibCompressStream */
+
 ZlibCompressStream::ZlibCompressStream(bool gzip, int level)
   : ZlibCompressStream(this, gzip, level) {
 }
 
 ZlibCompressStream::ZlibCompressStream(DataStream* other, bool gzip, int level)
-  : BaseStream(other)
-  , outputBuffer_(16384U)
+  : ZlibBaseStream(other)
 {
   strm_.zalloc = Z_NULL;
   strm_.zfree = Z_NULL;
@@ -85,21 +105,22 @@ int ZlibCompressStream::writeData(uint8_t* value, int size) {
 void ZlibCompressStream::closeStream() {
   writeData(nullptr, 0U);
 
+  finished_ = true; // TODO
+
   if (valid_) {
     deflateEnd(&strm_);
     valid_ = false;
   }
 }
 
-////////////
+/* ZlibDecompressStream */
 
 ZlibDecompressStream::ZlibDecompressStream(bool gzip)
   : ZlibDecompressStream(this, gzip) {
 }
 
 ZlibDecompressStream::ZlibDecompressStream(DataStream* other, bool gzip)
-    : BaseStream(other)
-    , outputBuffer_(16384U)
+    : ZlibBaseStream(other)
 {
   strm_.zalloc = Z_NULL;
   strm_.zfree = Z_NULL;
@@ -157,10 +178,6 @@ void ZlibDecompressStream::closeStream() {
     inflateEnd(&strm_);
     valid_ = false;
   }
-}
-
-bool ZlibDecompressStream::isFinished() const {
-  return finished_;
 }
 
 } /* namespace io */

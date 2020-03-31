@@ -31,7 +31,23 @@ namespace nifi {
 namespace minifi {
 namespace io {
 
-class ZlibCompressStream : public BaseStream {
+class ZlibBaseStream : public BaseStream {
+ public:
+  ZlibBaseStream();
+  ZlibBaseStream(DataStream* other);
+
+  ~ZlibBaseStream() override = default;
+
+  virtual bool isFinished() const;
+
+ protected:
+  z_stream strm_{};
+  bool valid_{false};
+  bool finished_{false};
+  std::vector<uint8_t> outputBuffer_;
+};
+
+class ZlibCompressStream : public ZlibBaseStream {
  public:
   ZlibCompressStream(bool gzip = true, int level = Z_DEFAULT_COMPRESSION);
   ZlibCompressStream(DataStream* other, bool gzip = true, int level = Z_DEFAULT_COMPRESSION);
@@ -41,14 +57,9 @@ class ZlibCompressStream : public BaseStream {
   int writeData(uint8_t* value, int size) override;
 
   void closeStream() override;
-
- protected:
-  z_stream strm_{};
-  bool valid_{false};
-  std::vector<uint8_t> outputBuffer_;
 };
 
-class ZlibDecompressStream : public BaseStream {
+class ZlibDecompressStream : public ZlibBaseStream {
  public:
   ZlibDecompressStream(bool gzip = true);
   ZlibDecompressStream(DataStream* other, bool gzip = true);
@@ -58,14 +69,6 @@ class ZlibDecompressStream : public BaseStream {
   int writeData(uint8_t *value, int size) override;
 
   void closeStream() override;
-
-  bool isFinished() const;
-
- protected:
-  z_stream strm_{};
-  bool valid_{false};
-  bool finished_{false};
-  std::vector<uint8_t> outputBuffer_;
 };
 
 } /* namespace io */
