@@ -23,7 +23,7 @@
 #include "io/ZlibStream.h"
 #include "utils/StringUtils.h"
 
-using namespace org::apache::nifi::minifi;
+namespace io = org::apache::nifi::minifi::io;
 
 TEST_CASE("gzip compression and decompression", "[basic]") {
   /* Compression*/
