@@ -31,19 +31,30 @@ namespace nifi {
 namespace minifi {
 namespace io {
 
+enum class ZlibStreamState : uint8_t {
+  UNINITIALIZED,
+  INITIALIZED,
+  ERRORED,
+  FINISHED
+};
+
 class ZlibBaseStream : public BaseStream {
  public:
   ZlibBaseStream();
   ZlibBaseStream(DataStream* other);
+
+  ZlibBaseStream(const ZlibBaseStream&) = delete;
+  ZlibBaseStream& operator=(const ZlibBaseStream&) = delete;
+  ZlibBaseStream(ZlibBaseStream&& other) = delete;
+  ZlibBaseStream& operator=(ZlibBaseStream&& other) = delete;
 
   ~ZlibBaseStream() override = default;
 
   virtual bool isFinished() const;
 
  protected:
+  ZlibStreamState state_{ZlibStreamState::UNINITIALIZED};
   z_stream strm_{};
-  bool valid_{false};
-  bool finished_{false};
   std::vector<uint8_t> outputBuffer_;
 };
 
@@ -51,6 +62,11 @@ class ZlibCompressStream : public ZlibBaseStream {
  public:
   ZlibCompressStream(bool gzip = true, int level = Z_DEFAULT_COMPRESSION);
   ZlibCompressStream(DataStream* other, bool gzip = true, int level = Z_DEFAULT_COMPRESSION);
+
+  ZlibCompressStream(const ZlibCompressStream&) = delete;
+  ZlibCompressStream& operator=(const ZlibCompressStream&) = delete;
+  ZlibCompressStream(ZlibCompressStream&& other) = delete;
+  ZlibCompressStream& operator=(ZlibCompressStream&& other) = delete;
 
   ~ZlibCompressStream() override;
 
@@ -64,11 +80,14 @@ class ZlibDecompressStream : public ZlibBaseStream {
   ZlibDecompressStream(bool gzip = true);
   ZlibDecompressStream(DataStream* other, bool gzip = true);
 
+  ZlibDecompressStream(const ZlibDecompressStream&) = delete;
+  ZlibDecompressStream& operator=(const ZlibDecompressStream&) = delete;
+  ZlibDecompressStream(ZlibDecompressStream&& other) = delete;
+  ZlibDecompressStream& operator=(ZlibDecompressStream&& other) = delete;
+
   ~ZlibDecompressStream() override;
 
   int writeData(uint8_t *value, int size) override;
-
-  void closeStream() override;
 };
 
 } /* namespace io */

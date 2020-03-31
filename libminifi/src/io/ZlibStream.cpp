@@ -41,7 +41,7 @@ ZlibBaseStream::ZlibBaseStream(DataStream* other)
 }
 
 bool ZlibBaseStream::isFinished() const {
-  return finished_;
+  return state_ == ZlibStreamState::FINISHED;
 }
 
 /* ZlibCompressStream */
@@ -67,18 +67,17 @@ ZlibCompressStream::ZlibCompressStream(DataStream* other, bool gzip, int level)
     throw Exception(ExceptionType::GENERAL_EXCEPTION, "zlib deflateInit2 failed");
   }
 
-  valid_ = true;
+  state_ = ZlibStreamState::INITIALIZED;
 }
 
 ZlibCompressStream::~ZlibCompressStream() {
-  if (valid_) {
+  if (state_ != ZlibStreamState::UNINITIALIZED) {
     deflateEnd(&strm_);
-    valid_ = false;
   }
 }
 
 int ZlibCompressStream::writeData(uint8_t* value, int size) {
-  if (!valid_) {
+  if (state_ != ZlibStreamState::INITIALIZED) {
     return -1;
   }
 
@@ -91,10 +90,12 @@ int ZlibCompressStream::writeData(uint8_t* value, int size) {
 
     int ret = deflate(&strm_, value == nullptr ? Z_FINISH : Z_NO_FLUSH);
     if (ret == Z_STREAM_ERROR) {
+      state_ = ZlibStreamState::ERRORED;
       return -1;
     }
     int output_size = outputBuffer_.size() - strm_.avail_out;
     if (BaseStream::writeData(outputBuffer_.data(), output_size) != output_size) {
+      state_ = ZlibStreamState::ERRORED;
       return -1;
     }
   } while (strm_.avail_out == 0);
@@ -103,13 +104,10 @@ int ZlibCompressStream::writeData(uint8_t* value, int size) {
 }
 
 void ZlibCompressStream::closeStream() {
-  writeData(nullptr, 0U);
-
-  finished_ = true; // TODO
-
-  if (valid_) {
-    deflateEnd(&strm_);
-    valid_ = false;
+  if (state_ == ZlibStreamState::INITIALIZED) {
+    if (writeData(nullptr, 0U) == 0) {
+      state_ = ZlibStreamState::FINISHED;
+    }
   }
 }
 
@@ -130,18 +128,17 @@ ZlibDecompressStream::ZlibDecompressStream(DataStream* other, bool gzip)
     throw Exception(ExceptionType::GENERAL_EXCEPTION, "zlib inflateInit2 failed");
   }
 
-  valid_ = true;
+  state_ = ZlibStreamState::INITIALIZED;
 }
 
 ZlibDecompressStream::~ZlibDecompressStream() {
-  if (valid_) {
+  if (state_ != ZlibStreamState::UNINITIALIZED) {
     inflateEnd(&strm_);
-    valid_ = false;
   }
 }
 
 int ZlibDecompressStream::writeData(uint8_t* value, int size) {
-  if (!valid_ || finished_) {
+  if (state_ != ZlibStreamState::INITIALIZED) {
     return -1;
   }
 
@@ -158,26 +155,21 @@ int ZlibDecompressStream::writeData(uint8_t* value, int size) {
         ret == Z_NEED_DICT ||
         ret == Z_DATA_ERROR ||
         ret == Z_MEM_ERROR) {
+      state_ = ZlibStreamState::ERRORED;
       return -1;
     }
     int output_size = outputBuffer_.size() - strm_.avail_out;
     if (BaseStream::writeData(outputBuffer_.data(), output_size) != output_size) {
+      state_ = ZlibStreamState::ERRORED;
       return -1;
     }
   } while (strm_.avail_out == 0);
 
   if (ret == Z_STREAM_END) {
-    finished_ = true;
+    state_ = ZlibStreamState::FINISHED;
   }
 
   return size;
-}
-
-void ZlibDecompressStream::closeStream() {
-  if (valid_) {
-    inflateEnd(&strm_);
-    valid_ = false;
-  }
 }
 
 } /* namespace io */
