@@ -111,7 +111,7 @@ core::Property SourceInitiatedSubscriptionListener::InitialExistingEventsStrateg
 core::Property SourceInitiatedSubscriptionListener::SubscriptionExpirationInterval(
     core::PropertyBuilder::createProperty("Subscription Expiration Interval")->withDescription("The interval while a subscription is valid without renewal. "
     "Because in a source-initiated subscription, the collector can not cancel the subscription, "
-    "setting this too large could cause unecessary load on the source machine. "
+    "setting this too large could cause unnecessary load on the source machine. "
     "Setting this too small causes frequent reenumeration and resubscription which is ineffective.")
         ->isRequired(true)->withDefaultValue<core::TimePeriodValue>("10 min")->build());
 core::Property SourceInitiatedSubscriptionListener::HeartbeatInterval(
@@ -140,7 +140,6 @@ core::Relationship SourceInitiatedSubscriptionListener::Success("success", "All 
 SourceInitiatedSubscriptionListener::SourceInitiatedSubscriptionListener(std::string name, utils::Identifier uuid)
     : Processor(name, uuid)
     , logger_(logging::LoggerFactory<SourceInitiatedSubscriptionListener>::getLogger())
-    , id_generator_(utils::IdGenerator::getIdGenerator())
     , session_factory_(nullptr)
     , listen_port_(0U)
     , subscription_expiration_interval_(0)
@@ -406,7 +405,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
   // Header
   WsXmlNodeH response_header = ws_xml_get_soap_header(response);
   // Header/MessageID
-  utils::Identifier msg_id = processor_.id_generator_->generate();
+  utils::Identifier msg_id = utils::IdGenerator::getIdGenerator()->generate();
   ws_xml_add_child_format(response_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
 
   // Body
@@ -432,7 +431,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
   if (it != processor_.subscribers_.end() && it->second.subscription_ != nullptr) {
     subscription_version = it->second.subscription_version_;
   } else {
-    utils::Identifier id = processor_.id_generator_->generate();
+    utils::Identifier id = utils::IdGenerator::getIdGenerator()->generate();
     subscription_version = id.to_string();
   }
   ws_xml_add_child_format(subscription, XML_NS_CUSTOM_SUBSCRIPTION, "Version", "uuid:%s", subscription_version.c_str());
@@ -455,7 +454,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
     ws_xml_add_node_attr(node, XML_NS_SOAP_1_2, SOAP_MUST_UNDERSTAND, "true");
 
     // Header/MessageID
-    utils::Identifier msg_id = processor_.id_generator_->generate();
+    utils::Identifier msg_id = utils::IdGenerator::getIdGenerator()->generate();
     ws_xml_add_child_format(header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
 
     // Header/To
@@ -491,11 +490,11 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptionManager(str
 
     // Body/Delivery
     {
-      utils::Identifier id = processor_.id_generator_->generate();
+      utils::Identifier id = utils::IdGenerator::getIdGenerator()->generate();
       subscription_identifier = id.to_string();
     }
     {
-      utils::Identifier id = processor_.id_generator_->generate();
+      utils::Identifier id = utils::IdGenerator::getIdGenerator()->generate();
       subscription_endpoint = processor_.subscriptions_base_path_ + "/" + id.to_string();
     }
 
@@ -726,7 +725,7 @@ bool SourceInitiatedSubscriptionListener::Handler::handleSubscriptions(struct mg
     WsXmlNodeH ack_header = ws_xml_get_soap_header(ack);
 
     // Header/MessageID
-    utils::Identifier msg_id = processor_.id_generator_->generate();
+    utils::Identifier msg_id = utils::IdGenerator::getIdGenerator()->generate();
     ws_xml_add_child_format(ack_header, XML_NS_ADDRESSING, WSA_MESSAGE_ID, "uuid:%s", msg_id.to_string().c_str());
 
     // Send ACK

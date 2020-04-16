@@ -119,8 +119,6 @@ class SourceInitiatedSubscriptionListener : public core::Processor {
  protected:
   std::shared_ptr<logging::Logger> logger_;
   
-  std::shared_ptr<utils::IdGenerator> id_generator_;
-  
   std::shared_ptr<core::ProcessSessionFactory> session_factory_;
 
   std::string listen_hostname_;
