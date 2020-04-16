@@ -460,11 +460,11 @@ endif()
 option(ENABLE_OPENWSMAN "Enables the Openwsman extensions." OFF)
 if (ENABLE_OPENWSMAN AND NOT DISABLE_CIVET AND NOT DISABLE_CURL)
     find_package(LibXml2 REQUIRED)
+
+	include(BundledOpenWSMAN)
+	use_bundled_openwsman(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+
     createExtension(OPENWSMAN-EXTENSIONS "OPENWSMAN EXTENSIONS" "This enables Opwenwsman support" "extensions/openwsman" "extensions/openwsman/tests")
-    if(NOT USE_SYSTEM_CURL)
-        message("minifi-openwsman will depend on curl-external")
-        add_dependencies(minifi-openwsman curl-external)
-    endif()
 endif()
 
 ## NOW WE CAN ADD LIBRARIES AND EXTENSIONS TO MAIN
