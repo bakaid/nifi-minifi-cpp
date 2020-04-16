@@ -68,8 +68,8 @@ function(use_bundled_openwsman SOURCE_DIR BINARY_DIR)
     # Build project
     ExternalProject_Add(
             openwsman-external
-            URL "https://github.com/Openwsman/openwsman/archive/v2.6.9.tar.gz"
-            URL_HASH "SHA256=5f68d47ab6d1ed974c11bdb8807fce9b91e411c2b4dd294026109fade54e6fc3"
+            URL "https://github.com/Openwsman/openwsman/archive/v2.6.11.tar.gz"
+            URL_HASH "SHA256=895eaaae62925f9416766ea3e71a5368210e6cfe13b23e4e0422fa0e75c2541c"
             SOURCE_DIR "${BINARY_DIR}/thirdparty/openwsman-src"
             LIST_SEPARATOR % # This is needed for passing semicolon-separated lists
             CMAKE_ARGS ${OPENWSMAN_CMAKE_ARGS}

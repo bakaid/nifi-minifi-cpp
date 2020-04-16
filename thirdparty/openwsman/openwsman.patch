@@ -1,75 +1,54 @@
-diff -rupN openwsman-2.6.9/CMakeLists.txt openwsman-2.6.9-patched/CMakeLists.txt
---- openwsman-2.6.9/CMakeLists.txt	2018-11-20 09:09:43.000000000 +0100
-+++ openwsman-2.6.9-patched/CMakeLists.txt	2019-08-01 15:48:44.000000000 +0200
-@@ -22,7 +22,7 @@ if(COMMAND cmake_policy)
-   cmake_policy(SET CMP0046 OLD)
-   endif ( POLICY CMP0046 )
+diff -rupN orig/CMakeLists.txt patched/CMakeLists.txt
+--- orig/CMakeLists.txt	2019-09-17 11:38:38.000000000 +0200
++++ patched/CMakeLists.txt	2020-04-16 23:43:22.000000000 +0200
+@@ -24,7 +24,7 @@ if(COMMAND cmake_policy)
  endif(COMMAND cmake_policy)
--	      
-+
+ 	      
  # where to look first for cmake modules, before ${CMAKE_ROOT}/Modules/ is checked
- SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules ${CMAKE_MODULE_PATH})
+-SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules ${CMAKE_MODULE_PATH})
++LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
  
-@@ -84,7 +84,7 @@ MACRO(NO_HEADERS_WARNING_EXPL optionName
-    MESSAGE(STATUS "************************************")
-    SET(HAVE_WARNINGS YES)
- ENDMACRO(NO_HEADERS_WARNING_EXPL)
--    
-+
- # Macro for error message when header files not present, but build option
- # not explicitly declared
- MACRO(NO_HEADERS_WARNING optionName pkgName)
-@@ -170,6 +170,12 @@ INCLUDE(FindOpenSSL)
+ INCLUDE( ${CMAKE_SOURCE_DIR}/VERSION.cmake )
+ SET(VERSION "${OPENWSMAN_MAJOR}.${OPENWSMAN_MINOR}.${OPENWSMAN_PATCH}")
+@@ -168,8 +168,14 @@ ENDIF( USE_PAM )
+ 
+ INCLUDE(FindOpenSSL)
  IF(OPENSSL_FOUND)
++  MESSAGE("OpenSSL found")
++  MESSAGE("OPENSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
++  MESSAGE("OPENSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
    SET(HAVE_SSL 1)
    SET(USE_OPENSSL 1)
 +  INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
-+  message(OpenSSL found)
-+  message(OPENSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR})
-+  message(OPENSSL_LIBRARIES: ${OPENSSL_LIBRARIES})
 +ELSE(OPENSSL_FOUND)
 +  SET(HAVE_SSL 0)
  ENDIF(OPENSSL_FOUND)
  
  IF( BUILD_RUBY )
-@@ -260,7 +266,7 @@ ELSE ( NOT CURL_FOUND)
-     STRING(COMPARE LESS ${CURL_VERSION_STRING} "7.12.0" result)
-     IF(result LESS 0)
-       MESSAGE( FATAL_ERROR " curl version ${CURL_VERSION_STRING} is too low, need 7.12.0 or greater" )
--    ENDIF(result LESS 0)    
-+    ENDIF(result LESS 0)
-   ENDIF(CURL_VERSION_STRING)
- ENDIF( NOT CURL_FOUND)
+@@ -256,6 +262,9 @@ IF(UNIX)
+   IF ( NOT CURL_FOUND)
+    MESSAGE( FATAL_ERROR " curl not found" )
+   ELSE ( NOT CURL_FOUND)
++    MESSAGE("cURL found")
++    MESSAGE("CURL_INCLUDE_DIR: ${CURL_INCLUDE_DIR}")
++    MESSAGE("CURL_LIBRARIES: ${CURL_LIBRARIES}")
+     INCLUDE_DIRECTORIES(${CURL_INCLUDE_DIR})
+     IF(CURL_VERSION_STRING)
+       STRING(COMPARE LESS ${CURL_VERSION_STRING} "7.12.0" result)
+@@ -272,6 +281,9 @@ INCLUDE(FindLibXml2)
+ IF ( NOT LIBXML2_FOUND)
+   MESSAGE( FATAL_ERROR " libxml2 not found" )
+ ELSE ( NOT LIBXML2_FOUND)
++  MESSAGE("Libxml2 found")
++  MESSAGE("LIBXML2_INCLUDE_DIR: ${LIBXML2_INCLUDE_DIR}")
++  MESSAGE("LIBXML2_LIBRARIES: ${LIBXML2_LIBRARIES}")
+   INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
+ ENDIF( NOT LIBXML2_FOUND)
  
-@@ -439,7 +445,7 @@ IF(HAVE_SA_LEN)
- ELSE(HAVE_SA_LEN)
-   SET(HAVE_SA_LEN 0)
- ENDIF(HAVE_SA_LEN)
--  
-+
- IF (ENABLE_IPV6)
-   # Check if struct sockaddr_in6 contains sin6
-   CHECK_STRUCT_HAS_MEMBER("struct sockaddr_in6" sin6_addr netinet/in.h HAVE_IPV6)
-@@ -592,7 +598,7 @@ IF(HAVE_WARNINGS)
-  MESSAGE(STATUS "   ************ NOTE: ************")
-  MESSAGE(STATUS "   Warnings occurred during cmake configuration... Please see output")
-  MESSAGE(STATUS "   *******************************")
--ENDIF(HAVE_WARNINGS) 
-+ENDIF(HAVE_WARNINGS)
- 
- ####################################################################
- # RPM SPEC                                                         #
-diff -rupN openwsman-2.6.9/src/lib/wsman-soap.c openwsman-2.6.9-patched/src/lib/wsman-soap.c
---- openwsman-2.6.9/src/lib/wsman-soap.c	2018-11-20 09:09:43.000000000 +0100
-+++ openwsman-2.6.9-patched/src/lib/wsman-soap.c	2019-08-01 15:28:56.000000000 +0200
-@@ -935,16 +935,18 @@ unsigned long get_total_enum_context(WsC
-  * to libwsman.la. So when a call is made to the following methods
-  * from the openwsmand binary, they should be present.
-  *
-- * However, if they are dlopened from somewhere other than 
-+ * However, if they are dlopened from somewhere other than
-  * openwsmand library or linked to some other
-  * binary or shared object, then these methods may or may not be
+diff -rupN orig/src/lib/wsman-soap.c patched/src/lib/wsman-soap.c
+--- orig/src/lib/wsman-soap.c	2019-09-17 11:38:38.000000000 +0200
++++ patched/src/lib/wsman-soap.c	2020-04-16 23:21:49.000000000 +0200
+@@ -991,10 +991,12 @@ unsigned long get_total_enum_context(WsC
   * preset, hence marking them as weak symbols and testing to see
   * if they are resolved before using them.
   */
@@ -82,20 +61,20 @@ diff -rupN openwsman-2.6.9/src/lib/wsman-soap.c openwsman-2.6.9-patched/src/lib/
  
  /**
   * Enumeration Stub for processing enumeration requests
-@@ -975,9 +977,17 @@ wsenum_enumerate_stub(SoapOpH op,
+@@ -1030,9 +1032,17 @@ wsenum_enumerate_stub(SoapOpH op,
          int max_threads = 0;
          int max_connections_per_thread = 0;
          int(* fptr)(void);
 +#if 0
          if((fptr = wsmand_options_get_max_threads) != 0){
 +#else
-+				if (0) {
++        if(0){
 +#endif
                  max_threads = (* fptr)();
 +#if 0
                  if((fptr = wsmand_options_get_max_connections_per_thread) != 0){
 +#else
-+								if (0) {
++                if(0){
 +#endif
                          max_connections_per_thread = (* fptr)();
                  }
