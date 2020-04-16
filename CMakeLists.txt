@@ -459,7 +459,9 @@ endif()
 ## Openwsman Extesions
 option(ENABLE_OPENWSMAN "Enables the Openwsman extensions." OFF)
 if (ENABLE_OPENWSMAN AND NOT DISABLE_CIVET AND NOT DISABLE_CURL)
-    find_package(LibXml2 REQUIRED)
+	include(BundledLibXml2)
+	use_bundled_libxml2(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/libxml2/dummy")
 
 	include(BundledOpenWSMAN)
 	use_bundled_openwsman(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
