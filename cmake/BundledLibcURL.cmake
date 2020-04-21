@@ -37,7 +37,6 @@ function(use_bundled_curl SOURCE_DIR BINARY_DIR)
     # Set build options
     set(CURL_CMAKE_ARGS ${PASSTHROUGH_CMAKE_ARGS}
             "-DCMAKE_INSTALL_PREFIX=${BINARY_DIR}/thirdparty/curl-install"
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
             -DBUILD_CURL_EXE=OFF
             -DBUILD_TESTING=OFF
             -DBUILD_SHARED_LIBS=OFF
