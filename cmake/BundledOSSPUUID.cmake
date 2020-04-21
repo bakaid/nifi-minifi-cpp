@@ -34,7 +34,7 @@ function(use_bundled_osspuuid SOURCE_DIR BINARY_DIR)
     ENDFOREACH(BYPRODUCT)
 
     # Build project
-    set(CONFIGURE_COMMAND ./configure "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" --with-cxx --without-perl --without-php --without-pgsql "--prefix=${BINARY_DIR}/thirdparty/ossp-uuid-install")
+    set(CONFIGURE_COMMAND ./configure "CFLAGS=${CMAKE_C_FLAGS} -fPIC" "CXXFLAGS=${CMAKE_CXX_FLAGS} -fPIC" --with-cxx --without-perl --without-php --without-pgsql "--prefix=${BINARY_DIR}/thirdparty/ossp-uuid-install")
     string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
     if(NOT build_type MATCHES debug)
         list(APPEND CONFIGURE_COMMAND --enable-debug=yes)
