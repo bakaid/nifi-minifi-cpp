@@ -91,7 +91,7 @@ function(use_bundled_civetweb SOURCE_DIR BINARY_DIR)
     set_property(TARGET CIVETWEB::c-library APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CIVETWEB_INCLUDE_DIR})
     add_dependencies(CIVETWEB::c-library civetweb-external)
     if (NOT OPENSSL_OFF)
-        set_property(TARGET CIVETWEB::c-library APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+        set_property(TARGET CIVETWEB::c-library APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
     endif()
 
     add_library(CIVETWEB::civetweb-cpp STATIC IMPORTED)

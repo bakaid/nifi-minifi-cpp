@@ -55,6 +55,8 @@ option(DISABLE_CURL "Disables libCurl Properties." OFF)
 option(USE_GOLD_LINKER "Use Gold Linker" OFF)
 option(INSTALLER_MERGE_MODULES "Creates installer with merge modules" OFF)
 
+cmake_dependent_option(ASAN_BUILD "Uses AddressSanitizer to instrument the code" OFF "NOT WIN32" OFF)
+
 # Use ccache if present
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
@@ -123,6 +125,15 @@ endif()
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Use ASAN if instructed
+if (ASAN_BUILD)
+	set(ASAN_FLAGS "-g -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ASAN_FLAGS}")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ASAN_FLAGS}")
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ASAN_FLAGS}")
+	set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${ASAN_FLAGS}")
+endif()
+
 #### Third party dependencies ####
 
 # Define function for passing dependencies
@@ -149,6 +160,8 @@ set(PASSTHROUGH_CMAKE_ARGS -DANDROID_ABI=${ANDROID_ABI}
 		-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
 		-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+		-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}
+		-DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS}
 		-DCMAKE_FIND_ROOT_PATH=${CMAKE_FIND_ROOT_PATH}
 		-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}
 		-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=${CMAKE_FIND_ROOT_PATH_MODE_LIBRARY}
@@ -167,11 +180,12 @@ if(NOT WIN32)
 		endif()
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_JNI")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_JNI")
-
 	endif()
 endif()
 
 # thread library
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
 # Simple-Windows-Posix-Semaphore
